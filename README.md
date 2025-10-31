@@ -26,6 +26,8 @@ This project builds on the fantastic work by [Ryan Alden’s original Jura compo
 
 > **⚠️ Warning:** Incorrect wiring can permanently damage your Jura machine or your ESP device.  
 > ESP pins are **not 5 V tolerant**. Always use a level-shifter if unsure.
+<img width="468" height="324" alt="image" src="https://github.com/user-attachments/assets/6f2bb48f-e853-409c-b768-2b08b87c70d2" />
+
 
 | Pin | Description | Notes |
 |-----|--------------|-------|
