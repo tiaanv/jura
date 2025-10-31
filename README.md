@@ -61,7 +61,7 @@ Example YAML:
 external_components:
   - source:
       type: git
-      url: https://github.com/<yourusername>/esphome-jura-component
+      url: https://github.com/tiaanv/jura
     components: [ jura, jura_coolcontrol ] #You only need one!
 
 uart:
