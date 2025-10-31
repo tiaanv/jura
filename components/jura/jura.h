@@ -17,6 +17,8 @@ class Jura : public PollingComponent, public uart::UARTDevice {
   void set_coffee_made_sensor(sensor::Sensor *s) { this->coffee_made_sensor_ = s; }
   void set_double_coffee_made_sensor(sensor::Sensor *s) { this->double_coffee_made_sensor_ = s; }
   void set_cleanings_performed_sensor(sensor::Sensor *s) { this->cleanings_performed_sensor_ = s; }
+  void set_brews_performed_sensor(sensor::Sensor *s) { this->brews_performed_sensor_ = s; }
+  void set_grounds_remaining_capacity_sensor(sensor::Sensor *s) { this->grounds_remaining_capacity_sensor_ = s; }
 
   void set_tray_status_sensor(text_sensor::TextSensor *s) { this->tray_status_sensor_ = s; }
   void set_water_tank_status_sensor(text_sensor::TextSensor *s) { this->water_tank_status_sensor_ = s; }
@@ -158,6 +160,8 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     if (coffee_made_sensor_ != nullptr)   coffee_made_sensor_->publish_state(num_coffee);
     if (double_coffee_made_sensor_ != nullptr)   double_coffee_made_sensor_->publish_state(num_double_coffee);
     if (cleanings_performed_sensor_ != nullptr)   cleanings_performed_sensor_->publish_state(num_clean);
+    if (brews_performed_sensor_ != nullptr)   brews_performed_sensor_->publish_state(num_brews);
+    if (grounds_remaining_capacity_sensor_ != nullptr)   grounds_remaining_capacity_sensor_->publish_state(num_grounds_remaining);
 
     if (tray_status_sensor_ != nullptr)   tray_status_sensor_->publish_state(tray_status);
     if (water_tank_status_sensor_ != nullptr)   water_tank_status_sensor_->publish_state(tank_status);
@@ -176,6 +180,8 @@ class Jura : public PollingComponent, public uart::UARTDevice {
    sensor::Sensor *coffee_made_sensor_{nullptr};
    sensor::Sensor *double_coffee_made_sensor_{nullptr};
    sensor::Sensor *cleanings_performed_sensor_{nullptr};
+   sensor::Sensor *brews_performed_sensor_{nullptr};
+   sensor::Sensor *grounds_remaining_capacity_sensor_{nullptr};
 
    text_sensor::TextSensor *tray_status_sensor_{nullptr};
    text_sensor::TextSensor *water_tank_status_sensor_{nullptr};
