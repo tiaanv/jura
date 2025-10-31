@@ -130,10 +130,16 @@ jura:
     name: "Jura Double Coffee Made"
   cleanings_performed:
     name: "Jura Cleanings Performed"
+  #You can comment out any of them. They are all optional  
+  #brews_performed:
+  #  name: "Jura Brews Performed"
+  grounds_remaining_capacity:
+    name: "Jura Grounds Remaining Capacity"    
   tray_status:
     name: "Jura Tray Status"
   water_tank_status:
     name: "Jura Water Tank Status"
   machine_status:
     name: "Jura E8 Status"
+
   
