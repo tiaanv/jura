@@ -19,6 +19,8 @@ CONF_DOUBLE_ESPRESSO_MADE = "double_espresso_made"
 CONF_COFFEE_MADE = "coffee_made"
 CONF_DOUBLE_COFFEE_MADE = "double_coffee_made"
 CONF_CLEANINGS_PERFORMED = "cleanings_performed"
+CONF_BREWS_PERFORMED = "brews_performed"
+CONF_GROUNDS_REMAINING_CAPACITY = "grounds_remaining_capacity"
 
 CONF_TRAY_STATUS = "tray_status"
 CONF_WATER_TANK_STATUS = "water_tank_status"
@@ -56,12 +58,12 @@ CONFIG_SCHEMA = cv.Schema({
         icon=ICON_WATER,
         accuracy_decimals=0,
     ),
-    cv.Optional(CONF_CLEANINGS_PERFORMED): sensor.sensor_schema(
+    cv.Optional(CONF_BREWS_PERFORMED): sensor.sensor_schema(
         unit_of_measurement=UNIT_EMPTY,
         icon=ICON_WATER,
         accuracy_decimals=0,
     ),
-    cv.Optional(CONF_CLEANINGS_PERFORMED): sensor.sensor_schema(
+    cv.Optional(CONF_GROUNDS_REMAINING_CAPACITY): sensor.sensor_schema(
         unit_of_measurement=UNIT_EMPTY,
         icon=ICON_WATER,
         accuracy_decimals=0,
@@ -103,6 +105,14 @@ async def to_code(config):
             cleanings_performed = await sensor.new_sensor(config[CONF_CLEANINGS_PERFORMED])
             cg.add(var.set_cleanings_performed_sensor(cleanings_performed))
 
+    if CONF_BREWS_PERFORMED in config:
+            brews_performed = await sensor.new_sensor(config[CONF_BREWS_PERFORMED])
+            cg.add(var.set_brews_performed_sensor(brews_performed))
+
+    if CONF_GROUNDS_REMAINING_CAPACITY in config:
+            grounds_remaining_capacity = await sensor.new_sensor(config[CONF_GROUNDS_REMAINING_CAPACITY])
+            cg.add(var.set_grounds_remaining_capacity_sensor(grounds_remaining_capacity))
+    
     if CONF_TRAY_STATUS in config:
             tray_status = await text_sensor.new_text_sensor(config[CONF_TRAY_STATUS])
             cg.add(var.set_tray_status_sensor(tray_status))
@@ -114,5 +124,6 @@ async def to_code(config):
     if CONF_MACHINE_STATUS in config:
             machine_status = await text_sensor.new_text_sensor(config[CONF_MACHINE_STATUS])
             cg.add(var.set_machine_status_sensor(machine_status))
+
 
 

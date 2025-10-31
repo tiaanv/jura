@@ -99,6 +99,8 @@ The **Jura component** polls the machine every **2 seconds**, sending two serial
 | `Coffee Made` | Total count |
 | `Double Coffee Made` | Total count |
 | `Cleanings Performed` | Total cycles |
+| `Brews Performed` | Total count |
+| `Grounds Capacity Remaining` | Remaining ground cycles |
 | `Tray Status` | “Present” / “Missing” |
 | `Water Tank Status` | “OK” / “Fill Tank” |
 | `Machine Status` | Ready, Busy, Tray Missing, etc. |
