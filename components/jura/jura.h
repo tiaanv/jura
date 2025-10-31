@@ -21,7 +21,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
   void set_tray_status_sensor(text_sensor::TextSensor *s) { this->tray_status_sensor_ = s; }
   void set_water_tank_status_sensor(text_sensor::TextSensor *s) { this->water_tank_status_sensor_ = s; }
   void set_machine_status_sensor(text_sensor::TextSensor *s) { this->machine_status_sensor_ = s; }
-  long num_single_espresso, num_double_espresso, num_coffee, num_double_coffee, num_clean;
+  long num_single_espresso, num_double_espresso, num_coffee, num_double_coffee, num_clean, num_brews, num_grounds_remaining;
   std::string tray_status, tank_status, machine_status;  
 
 // Sends 'out' plus CRLF using Jura's bit placement, then reads until CRLF or timeout.
@@ -101,7 +101,16 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     substring = result.substr(35,4);
     num_clean = strtol(substring.c_str(),NULL,16);
 
-    // Tray & water tank status
+    // TODO:  These still need to be implemented
+    // Brew Unit Movements
+    substring = result.substr(31,4);
+    num_brews = strtol(substring.c_str(),NULL,16);
+
+   // Grounds, remaining capacity
+    substring = result.substr(59,4);
+    num_grounds_remaining = strtol(substring.c_str(),NULL,16);
+
+   // Tray & water tank status
     result = cmd2jura("IC:");
 
     
