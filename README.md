@@ -62,7 +62,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/<yourusername>/esphome-jura-component
-    components: [ jura, jura_coolcontrol ]
+    components: [ jura, jura_coolcontrol ] #You only need one!
 
 uart:
   id: uart_bus
@@ -70,10 +70,13 @@ uart:
   rx_pin: GPIO20
   baud_rate: 9600
 
+#Only define one! One ESP. One Machine
+#Use this one for coffee machines
 jura:
   id: jura_main
   uart_id: uart_bus
 
+#Use this one for the Milk Cooler!
 jura_coolcontrol:
   id: jura_cool
   uart_id: uart_bus
