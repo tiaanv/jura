@@ -148,6 +148,14 @@ ESP_LOGD("jura", "Raw IC result: %s", result.c_str());
 
 ---
 
+## 🧰 Future Improvements
+
+- Figure out more "bit-flag" meanings from **CI:**
+- Clarify more quantity Values from **RT:**
+- Implement "Machine Type" property, so that people with different machines don't need to clone and customise the code 
+
+
+---
 ## ⚠️ Final Thoughts
 
 > ☕ “Just because you *can*, doesn’t mean you *should*.”  
