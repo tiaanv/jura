@@ -20,6 +20,8 @@ CONF_COFFEE_MADE = "coffee_made"
 CONF_DOUBLE_COFFEE_MADE = "double_coffee_made"
 CONF_CLEANINGS_PERFORMED = "cleanings_performed"
 CONF_BREWS_PERFORMED = "brews_performed"
+
+CONF_GROUNDS_CAPACITY_CFG = "grounds_capacity"
 CONF_GROUNDS_REMAINING_CAPACITY = "grounds_remaining_capacity"
 
 CONF_TRAY_STATUS = "tray_status"
@@ -67,6 +69,10 @@ CONFIG_SCHEMA = cv.Schema({
         unit_of_measurement=UNIT_EMPTY,
         icon=ICON_WATER,
         accuracy_decimals=0,
+    ).extend(
+    cv.Schema({
+        cv.Optional(CONF_GROUNDS_CAPACITY_CFG, default=12): cv.int_range(min=1, max=20),
+    })
     ),
     cv.Optional(CONF_TRAY_STATUS): text_sensor.text_sensor_schema(
         icon=ICON_TRAY,
@@ -110,7 +116,13 @@ async def to_code(config):
             cg.add(var.set_brews_performed_sensor(brews_performed))
 
     if CONF_GROUNDS_REMAINING_CAPACITY in config:
-            grounds_remaining_capacity = await sensor.new_sensor(config[CONF_GROUNDS_REMAINING_CAPACITY])
+            grc_cfg = dict(config[CONF_GROUNDS_REMAINING_CAPACITY])
+
+            # Extract capacity (sub-parameter) and set it on the C++ object
+            cap = grc_cfg.pop(CONF_GROUNDS_CAPACITY_CFG, 12)
+            cg.add(var.set_grounds_capacity(cap))        
+        
+            grounds_remaining_capacity = await sensor.new_sensor(grc_cfg)
             cg.add(var.set_grounds_remaining_capacity_sensor(grounds_remaining_capacity))
     
     if CONF_TRAY_STATUS in config:
@@ -124,6 +136,9 @@ async def to_code(config):
     if CONF_MACHINE_STATUS in config:
             machine_status = await text_sensor.new_text_sensor(config[CONF_MACHINE_STATUS])
             cg.add(var.set_machine_status_sensor(machine_status))
+
+
+
 
 
 

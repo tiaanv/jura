@@ -134,7 +134,8 @@ jura:
   #brews_performed:
   #  name: "Jura Brews Performed"
   grounds_remaining_capacity:
-    name: "Jura Grounds Remaining Capacity"    
+    name: "Jura Grounds Remaining Capacity"
+    grounds_capacity: 16
   tray_status:
     name: "Jura Tray Status"
   water_tank_status:
@@ -143,3 +144,5 @@ jura:
     name: "Jura E8 Status"
 
   
+
+
