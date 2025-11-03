@@ -113,7 +113,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     substring = result.substr(59,4);
     uint16_t used = strtol(substring.c_str(),NULL,16);
     uint16_t cap  = this->grounds_capacity_;
-    num_grounds_remaining == (used >= cap) ? 0 : (cap - used);
+    num_grounds_remaining = (used >= cap) ? 0 : (cap - used);
 
    // Tray & water tank status
     result = cmd2jura("IC:");
