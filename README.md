@@ -9,7 +9,7 @@
 
 ## 🌟 Overview
 
-This project builds on the fantastic work by [Ryan Alden’s original Jura component](https://github.com/ryanalden/esphome-jura-component), modernizing it for **ESPHome’s new external component architecture** and ensuring **cross-platform compatibility** (ESP8266 & ESP32).
+This project builds on the fantastic work by [Ryan Alden’s original Jura component](https://github.com/ryanalden/esphome-jura-component) more credits below, modernizing it for **ESPHome’s new external component architecture** and ensuring **cross-platform compatibility** (ESP8266 & ESP32).
 
 ### 🧰 Key Improvements
 
@@ -152,8 +152,13 @@ ESP_LOGD("jura", "Raw IC result: %s", result.c_str());
 
 - Figure out more "bit-flag" meanings from **CI:**
 - Clarify more quantity Values from **RT:**
-- Implement "Machine Type" property, so that people with different machines don't need to clone and customise the code 
+- Implement "Machine Type" property, so that people with different machines don't need to clone and customise the code
 
+## 🌟 Credits
+
+- [Ryan Alden's OG component that inspired this one](https://github.com/ryanalden/esphome-jura-component)
+- [AH Wood's fantastic component with much more!](https://github.com/alco28/Jura-F7-ESPHOME)
+- [Jura Proto project](https://github.com/Jutta-Proto/protocol-cpp?tab=readme-ov-file)
 
 ---
 ## ⚠️ Final Thoughts
