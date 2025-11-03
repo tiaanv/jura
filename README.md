@@ -83,6 +83,7 @@ jura_coolcontrol:
   id: jura_cool
   uart_id: uart_bus
 ```
+This is just the barebones structure to show you how to reference external components.  See the example YAML files for real examples.
 
 ---
 
