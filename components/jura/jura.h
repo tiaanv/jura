@@ -18,6 +18,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
   void set_double_coffee_made_sensor(sensor::Sensor *s) { this->double_coffee_made_sensor_ = s; }
   void set_cleanings_performed_sensor(sensor::Sensor *s) { this->cleanings_performed_sensor_ = s; }
   void set_brews_performed_sensor(sensor::Sensor *s) { this->brews_performed_sensor_ = s; }
+  void set_grounds_capacity(uint16_t v) { this->grounds_capacity_ = v; }
   void set_grounds_remaining_capacity_sensor(sensor::Sensor *s) { this->grounds_remaining_capacity_sensor_ = s; }
 
   void set_tray_status_sensor(text_sensor::TextSensor *s) { this->tray_status_sensor_ = s; }
@@ -110,7 +111,9 @@ class Jura : public PollingComponent, public uart::UARTDevice {
 
    // Grounds, remaining capacity
     substring = result.substr(59,4);
-    num_grounds_remaining = strtol(substring.c_str(),NULL,16);
+    uint16_t used = strtol(substring.c_str(),NULL,16);
+    uint16_t cap  = this->grounds_capacity_;
+    num_grounds_remaining == (used >= cap) ? 0 : (cap - used);
 
    // Tray & water tank status
     result = cmd2jura("IC:");
@@ -181,6 +184,8 @@ class Jura : public PollingComponent, public uart::UARTDevice {
    sensor::Sensor *double_coffee_made_sensor_{nullptr};
    sensor::Sensor *cleanings_performed_sensor_{nullptr};
    sensor::Sensor *brews_performed_sensor_{nullptr};
+
+   uint16_t grounds_capacity_{16};
    sensor::Sensor *grounds_remaining_capacity_sensor_{nullptr};
 
    text_sensor::TextSensor *tray_status_sensor_{nullptr};
