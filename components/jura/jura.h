@@ -185,7 +185,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
    sensor::Sensor *cleanings_performed_sensor_{nullptr};
    sensor::Sensor *brews_performed_sensor_{nullptr};
 
-   uint16_t grounds_capacity_{16};
+   uint16_t grounds_capacity_{12};
    sensor::Sensor *grounds_remaining_capacity_sensor_{nullptr};
 
    text_sensor::TextSensor *tray_status_sensor_{nullptr};
