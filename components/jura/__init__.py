@@ -71,7 +71,7 @@ CONFIG_SCHEMA = cv.Schema({
         accuracy_decimals=0,
     ).extend(
     cv.Schema({
-        cv.Optional(CONF_GROUNDS_CAPACITY_CFG, default=16): cv.int_range(min=1, max=500),
+        cv.Optional(CONF_GROUNDS_CAPACITY_CFG, default=12): cv.int_range(min=1, max=20),
     })
     ),
     cv.Optional(CONF_TRAY_STATUS): text_sensor.text_sensor_schema(
@@ -119,7 +119,7 @@ async def to_code(config):
             grc_cfg = dict(config[CONF_GROUNDS_REMAINING_CAPACITY])
 
             # Extract capacity (sub-parameter) and set it on the C++ object
-            cap = grc_cfg.pop(CONF_GROUNDS_CAPACITY_CFG, 16)
+            cap = grc_cfg.pop(CONF_GROUNDS_CAPACITY_CFG, 12)
             cg.add(var.set_grounds_capacity(cap))        
         
             grounds_remaining_capacity = await sensor.new_sensor(grc_cfg)
@@ -136,6 +136,7 @@ async def to_code(config):
     if CONF_MACHINE_STATUS in config:
             machine_status = await text_sensor.new_text_sensor(config[CONF_MACHINE_STATUS])
             cg.add(var.set_machine_status_sensor(machine_status))
+
 
 
 
