@@ -69,13 +69,13 @@ CONFIG_SCHEMA = cv.Schema({
         unit_of_measurement=UNIT_EMPTY,
         icon=ICON_WATER,
         accuracy_decimals=0,
-    ),
-    cv.Optional(CONF_TRAY_STATUS): text_sensor.text_sensor_schema(
-        icon=ICON_TRAY,
     ).extend(
     cv.Schema({
         cv.Optional(CONF_GROUNDS_CAPACITY_CFG, default=16): cv.int_range(min=1, max=500),
     })
+    ),
+    cv.Optional(CONF_TRAY_STATUS): text_sensor.text_sensor_schema(
+        icon=ICON_TRAY,
     ),
     cv.Optional(CONF_WATER_TANK_STATUS): text_sensor.text_sensor_schema(
         icon=ICON_WATER_CHECK,
@@ -136,6 +136,7 @@ async def to_code(config):
     if CONF_MACHINE_STATUS in config:
             machine_status = await text_sensor.new_text_sensor(config[CONF_MACHINE_STATUS])
             cg.add(var.set_machine_status_sensor(machine_status))
+
 
 
 
