@@ -35,7 +35,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     }
 
    // Parse all counters available (4 hex chars per field starting at pos=3)
-    std::vector<long> current = parse_all_counters_(rt);
+    std::vector<long> current = parse_all_counters_(result);
 
     // Publish the ones you already expose (examples below; keep as you had it)
     publish_number("counter_1", get_counter_n_(current, 1));
