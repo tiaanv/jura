@@ -27,6 +27,14 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     if (it != text_.end() && it->second) it->second->publish_state(value);
   }
 
+  // helper: get counter_n from RT string
+  static inline long get_counter_n(const std::string &rt, int n) {
+    // position = 3 + 4*(n-1)
+    const size_t pos = 3u + 4u * (size_t)(n - 1);
+    if (rt.size() < pos + 4u) return 0;
+    return strtol(rt.substr(pos, 4).c_str(), nullptr, 16);
+  }
+
   void update() override {
     // ---- counters ----
     std::string result = cmd2jura("RT:0000");
@@ -35,24 +43,28 @@ class Jura : public PollingComponent, public uart::UARTDevice {
       return;
     }
 
-    long num_single_espresso = strtol(result.substr( 3,4).c_str(), NULL, 16);
-    long num_double_espresso = strtol(result.substr( 7,4).c_str(), NULL, 16);
-    long num_coffee          = strtol(result.substr(11,4).c_str(), NULL, 16);
-    long num_double_coffee   = strtol(result.substr(15,4).c_str(), NULL, 16);
-    long num_brews           = strtol(result.substr(31,4).c_str(), NULL, 16);
-    long num_clean           = strtol(result.substr(35,4).c_str(), NULL, 16);
-
-    uint16_t used = strtol(result.substr(59,4).c_str(), NULL, 16);
-    uint16_t cap  = grounds_capacity_;
-    long num_grounds_remaining = (used >= cap) ? 0 : (cap - used);
-
-    publish_number("counter_1",        num_single_espresso);
-    publish_number("counter_2",        num_double_espresso);
-    publish_number("counter_3",        num_coffee);
-    publish_number("counter_4",        num_double_coffee);
-    publish_number("brews",            num_brews);
-    publish_number("cleanings",        num_clean);
-    publish_number("grounds_remaining",num_grounds_remaining);
+    // Parse by index
+    const long counter_1  = get_counter_n(rt, 1);
+    const long counter_2  = get_counter_n(rt, 2);
+    const long counter_3  = get_counter_n(rt, 3);
+    const long counter_4  = get_counter_n(rt, 4);
+    const long counter_8  = get_counter_n(rt, 8);  // was 'brews'
+    const long counter_9  = get_counter_n(rt, 9);  // was 'cleanings'
+    const long used_raw   = get_counter_n(rt, 15); // raw "used" count for grounds
+  
+    // Derive grounds_remaining from counter_15 and capacity
+    const uint16_t cap = grounds_capacity_;
+    const uint16_t used = (used_raw < 0) ? 0 : (uint16_t) used_raw;
+    const long grounds_remaining = (used >= cap) ? 0 : (cap - used);
+  
+    // Publish by generic keys only
+    publish_number("counter_1",         counter_1);
+    publish_number("counter_2",         counter_2);
+    publish_number("counter_3",         counter_3);
+    publish_number("counter_4",         counter_4);
+    publish_number("counter_8",         counter_8);
+    publish_number("counter_9",         counter_9);
+    publish_number("grounds_remaining", grounds_remaining);
 
     // ---- flags ----
     std::string ic = cmd2jura("IC:");
