@@ -26,10 +26,6 @@ MODEL_F7 = "F7"
 MODEL_E8 = "E8"
 MODEL_ENUM = cv.one_of(MODEL_F6, MODEL_F7, MODEL_E8, MODEL_UNKNOWN, upper=True)
 
-# Stable publish keys used by C++:
-#   counter_1, counter_2, counter_3, counter_4, cleanings, brews,
-#   grounds_remaining, tray_status, water_tank_status, machine_status
-
 # YAML field keys (unique per entity, used only to anchor IDs)
 F_SINGLE_ESPRESSO   = "single_espresso_made"
 F_DOUBLE_ESPRESSO   = "double_espresso_made"
@@ -201,6 +197,7 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
 
