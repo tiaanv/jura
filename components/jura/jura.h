@@ -5,40 +5,162 @@
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/log.h"
+#include <map>
 
 namespace esphome {
 namespace jura {
 
 class Jura : public PollingComponent, public uart::UARTDevice {
-
  public:
-  void set_single_espresso_made_sensor(sensor::Sensor *s) { this->single_espresso_made_sensor_ = s; }
-  void set_double_espresso_made_sensor(sensor::Sensor *s) { this->double_espresso_made_sensor_ = s; }
-  void set_coffee_made_sensor(sensor::Sensor *s) { this->coffee_made_sensor_ = s; }
-  void set_double_coffee_made_sensor(sensor::Sensor *s) { this->double_coffee_made_sensor_ = s; }
-  void set_cleanings_performed_sensor(sensor::Sensor *s) { this->cleanings_performed_sensor_ = s; }
-  void set_brews_performed_sensor(sensor::Sensor *s) { this->brews_performed_sensor_ = s; }
-  void set_grounds_capacity(uint16_t v) { this->grounds_capacity_ = v; }
-  void set_grounds_remaining_capacity_sensor(sensor::Sensor *s) { this->grounds_remaining_capacity_sensor_ = s; }
+  void set_model(const std::string &m) { model_ = m; }
 
-  void set_tray_status_sensor(text_sensor::TextSensor *s) { this->tray_status_sensor_ = s; }
-  void set_water_tank_status_sensor(text_sensor::TextSensor *s) { this->water_tank_status_sensor_ = s; }
-  void set_machine_status_sensor(text_sensor::TextSensor *s) { this->machine_status_sensor_ = s; }
-  long num_single_espresso, num_double_espresso, num_coffee, num_double_coffee, num_clean, num_brews, num_grounds_remaining;
-  std::string tray_status, tank_status, machine_status;  
+  void register_metric_sensor(const std::string &key, sensor::Sensor *s) { numeric_[key] = s; }
+  void register_text_sensor(const std::string &key, text_sensor::TextSensor *t) { text_[key] = t; }
 
-// Sends 'out' plus CRLF using Jura's bit placement, then reads until CRLF or timeout.
+  void publish_number(const std::string &key, float value) {
+    auto it = numeric_.find(key);
+    if (it != numeric_.end() && it->second) it->second->publish_state(value);
+  }
+  void publish_text(const std::string &key, const std::string &value) {
+    auto it = text_.find(key);
+    if (it != text_.end() && it->second) it->second->publish_state(value);
+  }
+
+  void update() override {
+    // ---- counters ----
+    std::string result = cmd2jura("RT:0000");
+    if (result.empty() || result.size() < 64) {
+      ESP_LOGW("jura", "Unexpected RT:0000 response len=%d", (int)result.size());
+      return;
+    }
+
+   // Parse all counters available (4 hex chars per field starting at pos=3)
+    std::vector<long> current = parse_all_counters_(result);
+
+    // Publish the ones you already expose (examples below; keep as you had it)
+    publish_number("counter_1", get_counter_n_(current, 1));
+    publish_number("counter_2", get_counter_n_(current, 2));
+    publish_number("counter_3", get_counter_n_(current, 3));
+    publish_number("counter_4", get_counter_n_(current, 4));
+    publish_number("counter_5", get_counter_n_(current, 5));
+    publish_number("counter_8", get_counter_n_(current, 8));
+    publish_number("counter_9", get_counter_n_(current, 9));
+    publish_number("counter_11", get_counter_n_(current, 11));
+    publish_number("counter_12", get_counter_n_(current, 12));
+    publish_number("counter_15", get_counter_n_(current, 15));
+
+    publish_counter_changes_(current);
+
+    // ---- flags ----
+    std::string ic = cmd2jura("IC:");
+    if (ic.size() >= 7) {
+      byte a = static_cast<byte>(strtol(ic.substr(3,2).c_str(), NULL, 16));
+      byte b = static_cast<byte>(strtol(ic.substr(5,2).c_str(), NULL, 16));
+
+      publish_ic_bits_if_changed_(a, b);     
+
+      byte trayBit       = bitRead(a, 4);
+      byte left_readyBit = bitRead(a, 2);
+      byte tankBit       = bitRead(b, 5);
+      byte right_busyBit = bitRead(b, 6);
+
+      std::string tray_status = (trayBit == 1) ? "Present" : "Missing";
+      std::string tank_status = (tankBit == 1) ? "Fill Tank" : "OK";
+      std::string machine_status = "Ready";
+      if (trayBit == 0)       machine_status = "Tray Missing";
+      if (tankBit == 1)       machine_status = "Fill Tank";
+      if (right_busyBit == 1) machine_status = "Busy (Milk Drink)";
+      if (left_readyBit == 0) machine_status = "Busy (Coffee Drink)";
+
+      publish_text("tray_status",        tray_status);
+      publish_text("water_tank_status",  tank_status);
+      publish_text("machine_status",     machine_status);
+    } else {
+      ESP_LOGW("jura", "Unexpected IC response len=%d", (int) ic.size());
+    }
+  }
+
+ protected:
+  // Return counter_n (1-based) from vector or -1 if missing
+  long get_counter_n_(const std::vector<long> &v, int n) const {
+    const size_t idx = (n >= 1) ? (size_t)(n - 1) : (size_t) -1;
+    if (idx < v.size()) return v[idx];
+    return -1;
+  }
+
+  // Parse all 4-hex counters from RT payload starting at pos=3
+  std::vector<long> parse_all_counters_(const std::string &rt) const {
+    std::vector<long> out;
+    // field i starts at pos = 3 + 4*i (i = 0..)
+    for (size_t pos = 3; pos + 4 <= rt.size(); pos += 4) {
+      long val = strtol(rt.substr(pos, 4).c_str(), nullptr, 16);
+      out.push_back(val);
+    }
+    return out;
+  }
+
+  void publish_counter_changes_(const std::vector<long> &current) {
+    if (!last_counters_initialized_) {
+      last_counters_ = current;
+      last_counters_initialized_ = true;
+      return;
+    }
+  
+    std::string msg;
+    bool any = false;
+    const size_t max_n = std::max(last_counters_.size(), current.size());
+    char buf[48];
+  
+    for (size_t i = 0; i < max_n; ++i) {
+      long prev = (i < last_counters_.size()) ? last_counters_[i] : -1;
+      long now  = (i < current.size())       ? current[i]          : -1;
+      if (prev != now) {
+        if (any) msg += ", ";
+        // "counter_%zu %ld→%ld"
+        snprintf(buf, sizeof(buf), "counter_%u %ld\u2192%ld", (unsigned)(i + 1), prev, now);
+        msg += buf;
+        any = true;
+      }
+    }
+  
+    if (any) {
+      publish_text("counters_changed", msg);
+      ESP_LOGD("jura", "Changed: %s", msg.c_str());
+    }
+  
+    last_counters_ = current;
+  }
+
+  static inline void byte_to_bits(uint8_t v, char out[9]) {
+    for (int i = 7; i >= 0; --i) out[7 - i] = (v & (1u << i)) ? '1' : '0';
+    out[8] = '\0';
+  }
+
+  void publish_ic_bits_if_changed_(uint8_t a, uint8_t b) {
+    if (!ic_bits_initialized_ || a != last_ic_a_ || b != last_ic_b_) {
+      char abits[9], bbits[9], buf[32];
+      byte_to_bits(a, abits);
+      byte_to_bits(b, bbits);
+      // "A=xxxxxxxx B=xxxxxxxx"
+      snprintf(buf, sizeof(buf), "A=%s B=%s", abits, bbits);
+      publish_text("ic_bits", std::string(buf));
+  
+      last_ic_a_ = a;
+      last_ic_b_ = b;
+      ic_bits_initialized_ = true;
+  
+      ESP_LOGD("jura", "IC bits changed: %s", buf);
+    }
+  }
+
   std::string cmd2jura(std::string outbytes) {
     std::string inbytes;
     int w = 0;
 
-    while (available()) {
-      read();
-    }
-
+    while (available()) { read(); }
     outbytes += "\r\n";
-    for (int i = 0; i < outbytes.size(); i++) {
-      uint8_t src = static_cast<uint8_t>(outbytes[i]);      
+    for (int i = 0; i < (int) outbytes.size(); i++) {
+      uint8_t src = static_cast<uint8_t>(outbytes[i]);
       for (int s = 0; s < 8; s += 2) {
         uint8_t rawbyte = 0xFF;
         bitWrite(rawbyte, 2, bitRead(src, s + 0));
@@ -50,9 +172,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
 
     int s = 0;
     uint8_t inbyte = 0;
-    while (!(inbytes.size() >= 2 &&
-           inbytes[inbytes.size() - 2] == '\r' &&
-           inbytes[inbytes.size() - 1] == '\n')) {
+    while (!(inbytes.size() >= 2 && inbytes[inbytes.size()-2] == '\r' && inbytes[inbytes.size()-1] == '\n')) {
       if (available()) {
         uint8_t rawbyte = static_cast<uint8_t>(read());
         bitWrite(inbyte, s + 0, bitRead(rawbyte, 2));
@@ -60,137 +180,27 @@ class Jura : public PollingComponent, public uart::UARTDevice {
         if ((s += 2) >= 8) {
           s = 0;
           inbytes.push_back(static_cast<char>(inbyte));
-          inbyte = 0;        }
+          inbyte = 0;
+        }
       } else {
         delay(10);
       }
-      if (w++ > 500) {
-        return "";
-      }
+      if (w++ > 500) return "";
     }
-
     return inbytes.substr(0, inbytes.size() - 2);
   }
 
-  //loop() and setup() are not used
+  std::string model_{"UNKNOWN"};
 
-  void update() override {
-    std::string result, hexString_a, hexString_b, substring;
-    byte hex_to_byte_a, hex_to_byte_b;
-    byte trayBit, tankBit, right_busyBit, left_readyBit;
-    // For Testing
-    byte read_bit0,read_bit1,read_bit2,read_bit3,read_bit4,read_bit5,read_bit6,read_bit7;
+  std::map<std::string, sensor::Sensor*>            numeric_;
+  std::map<std::string, text_sensor::TextSensor*>   text_;
 
-    // Fetch data
-    result = cmd2jura("RT:0000");
+  std::vector<long> last_counters_;
+  bool last_counters_initialized_{false};
 
-    // Get Single Espressos made
-    substring = result.substr(3,4);
-    num_single_espresso = strtol(substring.c_str(),NULL,16);
-
-    // Double Espressos made
-    substring = result.substr(7,4);
-    num_double_espresso = strtol(substring.c_str(),NULL,16);
-
-    // Coffees made
-    substring = result.substr(11,4);
-    num_coffee = strtol(substring.c_str(),NULL,16);
-
-    // Double Coffees made
-    substring = result.substr(15,4);
-    num_double_coffee = strtol(substring.c_str(),NULL,16);
-
-    // Cleanings done
-    substring = result.substr(35,4);
-    num_clean = strtol(substring.c_str(),NULL,16);
-
-    // TODO:  These still need to be implemented
-    // Brew Unit Movements
-    substring = result.substr(31,4);
-    num_brews = strtol(substring.c_str(),NULL,16);
-
-   // Grounds, remaining capacity
-    substring = result.substr(59,4);
-    uint16_t used = strtol(substring.c_str(),NULL,16);
-    uint16_t cap  = this->grounds_capacity_;
-    num_grounds_remaining = (used >= cap) ? 0 : (cap - used);
-
-   // Tray & water tank status
-    result = cmd2jura("IC:");
-
-    
-
-    //----------- DECODE FLAGS -------------
-    hexString_a = result.substr(3,2);
-    hexString_b = result.substr(5,2);
-    hex_to_byte_a = static_cast<byte>(strtol(hexString_a.c_str(), NULL, 16));
-    hex_to_byte_b = static_cast<byte>(strtol(hexString_b.c_str(), NULL, 16));
-    trayBit = bitRead(hex_to_byte_a, 4);
-    tankBit = bitRead(hex_to_byte_b, 5);
-    right_busyBit = bitRead(hex_to_byte_b, 6);
-    left_readyBit = bitRead(hex_to_byte_a, 2);
-    if (trayBit == 1) { tray_status = "Present"; } else { tray_status = "Missing"; }
-    if (tankBit == 1) { tank_status = "Fill Tank"; } else { tank_status = "OK"; }
-
-    //----------- TRACE/DEBUG BIT FLAGS -------------
-    // For Testing/ decoding your own machine's bit flags... Takes hours ;)
-    ESP_LOGD("main", "Raw IC result: %s", result.c_str());
-    ESP_LOGD("main", "A: %s", hexString_a.c_str());
-    read_bit0 = bitRead(hex_to_byte_a, 0);
-    read_bit1 = bitRead(hex_to_byte_a, 1);
-    read_bit2 = bitRead(hex_to_byte_a, 2);
-    read_bit3 = bitRead(hex_to_byte_a, 3);
-    read_bit4 = bitRead(hex_to_byte_a, 4);
-    read_bit5 = bitRead(hex_to_byte_a, 5);
-    read_bit6 = bitRead(hex_to_byte_a, 6);
-    read_bit7 = bitRead(hex_to_byte_a, 7);
-    ESP_LOGD("main", "A Bits: %d%d%d%d%d%d%d%d", read_bit7,read_bit6,read_bit5,read_bit4,read_bit3,read_bit2,read_bit1,read_bit0);
-    ESP_LOGD("main", "B: %s", hexString_b.c_str());
-    read_bit0 = bitRead(hex_to_byte_b, 0);
-    read_bit1 = bitRead(hex_to_byte_b, 1);
-    read_bit2 = bitRead(hex_to_byte_b, 2);
-    read_bit3 = bitRead(hex_to_byte_b, 3);
-    read_bit4 = bitRead(hex_to_byte_b, 4);
-    read_bit5 = bitRead(hex_to_byte_b, 5);
-    read_bit6 = bitRead(hex_to_byte_b, 6);
-    read_bit7 = bitRead(hex_to_byte_b, 7);
-    ESP_LOGD("main", "B Bits: %d%d%d%d%d%d%d%d", read_bit7,read_bit6,read_bit5,read_bit4,read_bit3,read_bit2,read_bit1,read_bit0);
-
-
-    //----------- UPDATE SENSORS -------------
-    if (single_espresso_made_sensor_ != nullptr)   single_espresso_made_sensor_->publish_state(num_single_espresso);
-    if (double_espresso_made_sensor_ != nullptr)   double_espresso_made_sensor_->publish_state(num_double_espresso);
-    if (coffee_made_sensor_ != nullptr)   coffee_made_sensor_->publish_state(num_coffee);
-    if (double_coffee_made_sensor_ != nullptr)   double_coffee_made_sensor_->publish_state(num_double_coffee);
-    if (cleanings_performed_sensor_ != nullptr)   cleanings_performed_sensor_->publish_state(num_clean);
-    if (brews_performed_sensor_ != nullptr)   brews_performed_sensor_->publish_state(num_brews);
-    if (grounds_remaining_capacity_sensor_ != nullptr)   grounds_remaining_capacity_sensor_->publish_state(num_grounds_remaining);
-
-    if (tray_status_sensor_ != nullptr)   tray_status_sensor_->publish_state(tray_status);
-    if (water_tank_status_sensor_ != nullptr)   water_tank_status_sensor_->publish_state(tank_status);
-
-    machine_status = "Ready";
-    if (trayBit == 0)       machine_status = "Tray Missing";
-    if (tankBit == 1)       machine_status = "Fill Tank";
-    if (right_busyBit == 1) machine_status = "Busy (Milk Drink)";
-    if (left_readyBit == 0) machine_status = "Busy (Coffee Drink)";
-
-    if (machine_status_sensor_ != nullptr)   machine_status_sensor_->publish_state(machine_status);
-  }
-  protected:    
-   sensor::Sensor *single_espresso_made_sensor_{nullptr};
-   sensor::Sensor *double_espresso_made_sensor_{nullptr};
-   sensor::Sensor *coffee_made_sensor_{nullptr};
-   sensor::Sensor *double_coffee_made_sensor_{nullptr};
-   sensor::Sensor *cleanings_performed_sensor_{nullptr};
-   sensor::Sensor *brews_performed_sensor_{nullptr};
-
-   uint16_t grounds_capacity_{12};
-   sensor::Sensor *grounds_remaining_capacity_sensor_{nullptr};
-
-   text_sensor::TextSensor *tray_status_sensor_{nullptr};
-   text_sensor::TextSensor *water_tank_status_sensor_{nullptr};
-   text_sensor::TextSensor *machine_status_sensor_{nullptr};
+  uint8_t last_ic_a_{0};
+  uint8_t last_ic_b_{0};
+  bool ic_bits_initialized_{false};
 };
 
 }  // namespace jura

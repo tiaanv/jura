@@ -16,9 +16,10 @@ This project builds on the fantastic work by [Ryan Alden’s original Jura compo
 - ✅ Migrated from `custom_component` → ESPHome’s **`external_component`** system  
 - ✅ Replaced Arduino `String` with C++ `std::string` → **works on ESP32 IDF**  
 - ✅ Fully self-contained component (no external sensors required)  
-- ✅ Updated **bit-flags** for the Jura E8 (your model may differ)  
+- ✅ Updated **bit-flags** for the Jura E8 (your model may differ)
+- ✅ Introduced model selection. With the help of the community, we will refine this for each machine type.
 - ✅ Added **Jura CoolControl** support (milk cooler integration)  
-- ✅ Clear debug logging for bit-flag discovery and machine diagnostics  
+- ✅ Diagnostic Sensors to help discover counter and flag meanings. See below 
 
 ---
 
@@ -77,6 +78,7 @@ uart:
 jura:
   id: jura_main
   uart_id: uart_bus
+  model: E8
 
 #Use this one for the Milk Cooler!
 jura_coolcontrol:
@@ -105,6 +107,11 @@ The **Jura component** polls the machine every **2 seconds**, sending two serial
 | `Tray Status` | “Present” / “Missing” |
 | `Water Tank Status` | “OK” / “Fill Tank” |
 | `Machine Status` | Ready, Busy, Tray Missing, etc. |
+| `Changed Counters` | Show the raw value changes between previous and current for diagnostics and discovery|
+| `IC Bits` | Show the raw bit/status flags for diagnostics and discovery |
+
+
+The sensors exposed by each machine may be different depending on the model selected.
 
 ### Example Dashboard
 
@@ -134,12 +141,41 @@ Monitors the official Jura **CoolControl milk cooler**, which continuously broad
 - The machine echoes responses ending with `\r\n`.  
 - Bit positions differ between models — use the debug logs to identify your own.
 
-To debug:
-```bash
-ESP_LOGD("jura", "Raw IC result: %s", result.c_str());
+---
+
+## 🔧 Diagnostics
+
+Two sensors are added to the component to make it simpler to figure out your specific model Jura's values (from the registers) and the possible sensors
+
+Changed Counters
+
+This sensor captures the RAW values converted to decimals from the first data register.  When it detects a change, it logs this change as a text value as shown:
+
+<img width="557" height="149" alt="image" src="https://github.com/user-attachments/assets/022bba13-35f9-4531-8a3d-6e19dc9cb5a1" />
+
+This comma-separated list will give you clues about what values changed after making a specific beverage.
 ```
+changed to counter_4 9836→9837, counter_11 41177→41181, counter_14 630→631, counter_15 7→8, counter_16 136→137
+```
+In the example above, after making a "Flat White"  on the Jura E8, you can see several counters increased:
+| Counter | Values | Notes |
+|--------|-------|-------------|
+| counter_4 | 9836→9837 | After investigation, this is the value on other machines related to double_coffee.   Using this information, I updated the sensor publishing for the E8 model.|
+| counter_11 | 41177→41181 | On the Jura E8, the value increased normally by more than 1 per beverage, and from research, it seems this is the amount of brew_movements.|
+| counter_14 | 630→631 | Unknown at this stage.... we will see if it resets.|
+| counter_15 | 7→8 | This one is known to be the amount of grounds(pucks) after emptying the grounds container, it resets.|
+| counter_16 | 136→137 | Unknown for now.  It might be the count of beverages made after cleaning or descaling.  Will monitor.|
+
+Once you have established some known values, you may create an issue with your findings.  Please make sure to include the following details:
+- Model Name
+- Counter number
+- Example from and to values
+- suggested sensor name and description
+
+
 
 ---
+
 
 ## 🔧 Development Notes
 
@@ -153,7 +189,6 @@ ESP_LOGD("jura", "Raw IC result: %s", result.c_str());
 
 - Figure out more "bit-flag" meanings from **CI:**
 - Clarify more quantity Values from **RT:**
-- Implement "Machine Type" property, so that people with different machines don't need to clone and customise the code
 
 ## 🌟 Credits
 
@@ -172,6 +207,8 @@ ESP_LOGD("jura", "Raw IC result: %s", result.c_str());
 ---
 
 ## 💡 Contributions Welcome
+
+Please use the diagnostics procedure above to contribute your machine values and bit status flags!
 
 Pull requests, improvements, or new flag maps for other Jura models are very welcome!  
 Let’s make our coffee smarter — responsibly.

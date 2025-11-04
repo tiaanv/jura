@@ -1,141 +1,215 @@
-DEPENDENCIES = ["uart"]      # we require UART
-AUTO_LOAD = ["sensor","text_sensor"]       # make sure sensor headers get included
+DEPENDENCIES = ["uart"]
+AUTO_LOAD = ["sensor", "text_sensor"]
 
-import esphome.config_validation as cv
 import esphome.codegen as cg
-
-from esphome.const import CONF_ID, UNIT_EMPTY, ICON_WATER, ICON_THERMOMETER
+import esphome.config_validation as cv
 from esphome.components import uart, sensor, text_sensor
+from esphome.const import CONF_ID, CONF_NAME, UNIT_EMPTY, ENTITY_CATEGORY_DIAGNOSTIC
 
+# Icons/units
 ICON_CUP = "mdi:cup"
 ICON_COFFEE_MAKER = "mdi:coffee-maker"
 ICON_WATER_CHECK = "mdi:water-check"
 ICON_TRAY = "mdi:tray"
-
+ICON_WATER = "mdi:water"
 UNIT_CUPS = "cups"
+UNIT_PUCKS = "pucks"
+UNIT_TIMES = "times"
 
-CONF_SINGLE_ESPRESSO_MADE = "single_espresso_made"
-CONF_DOUBLE_ESPRESSO_MADE = "double_espresso_made"
-CONF_COFFEE_MADE = "coffee_made"
-CONF_DOUBLE_COFFEE_MADE = "double_coffee_made"
-CONF_CLEANINGS_PERFORMED = "cleanings_performed"
-CONF_BREWS_PERFORMED = "brews_performed"
+# Top-level options
+CONF_MODEL = "model"
 
-CONF_GROUNDS_CAPACITY_CFG = "grounds_capacity"
-CONF_GROUNDS_REMAINING_CAPACITY = "grounds_remaining_capacity"
+# Model enum
+MODEL_UNKNOWN = "UNKNOWN"
+MODEL_F6 = "F6"
+MODEL_F7 = "F7"
+MODEL_E8 = "E8"
+MODEL_ENUM = cv.one_of(MODEL_F6, MODEL_F7, MODEL_E8, MODEL_UNKNOWN, upper=True)
 
-CONF_TRAY_STATUS = "tray_status"
-CONF_WATER_TANK_STATUS = "water_tank_status"
-CONF_MACHINE_STATUS = "machine_status"
+# YAML field keys (unique per entity, used only to anchor IDs)
+F_SINGLE_ESPRESSO   = "single_espresso_made"
+F_DOUBLE_ESPRESSO   = "double_espresso_made"
+F_COFFEE            = "coffee_made"
+F_DOUBLE_COFFEE     = "double_coffee_made"
+F_RISTRETTO         = "ristretto_made"
+F_CAPPUCCINO        = "cappuccino_made"
+F_FLAT_WHITE        = "flat_white_made"
+F_MILK              = "milk_portion_made"
 
 
+F_CLEANINGS         = "cleanings_performed"
+F_BREWS             = "brews_performed"
+F_BREW_MOVEMENTS    = "brews_movements_performed"
+F_RINSES            = "rinses_performed"
+F_GROUNDS_LEVEL     = "grounds_level"
 
+F_TRAY_STATUS       = "tray_status"
+F_TANK_STATUS       = "water_tank_status"
+F_MACHINE_STATUS    = "machine_status"
+
+F_COUNTERS_CHANGED  = "counters_changed"
+F_IC_BITS = "ic_bits"
+
+# C++ binding
 jura_ns = cg.esphome_ns.namespace("jura")
 Jura = jura_ns.class_("Jura", cg.PollingComponent, uart.UARTDevice)
 
+# ---------- CONFIG SCHEMA ----------
+# Give every possible entity a default dict INCLUDING a `name`.
+# This ensures validation creates a unique ID for each field path.
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(Jura),
-    cv.Optional(CONF_SINGLE_ESPRESSO_MADE): sensor.sensor_schema(
-        unit_of_measurement=UNIT_CUPS,
-        icon=ICON_CUP,
-        accuracy_decimals=0,
-    ),
-    cv.Optional(CONF_DOUBLE_ESPRESSO_MADE): sensor.sensor_schema(
-        unit_of_measurement=UNIT_CUPS,
-        icon=ICON_CUP,
-        accuracy_decimals=0,
-    ),
-    cv.Optional(CONF_COFFEE_MADE): sensor.sensor_schema(
-        unit_of_measurement=UNIT_CUPS,
-        icon=ICON_CUP,
-        accuracy_decimals=0,
-    ),
-    cv.Optional(CONF_DOUBLE_COFFEE_MADE): sensor.sensor_schema(
-        unit_of_measurement=UNIT_CUPS,
-        icon=ICON_CUP,
-        accuracy_decimals=0,
-    ),
-    cv.Optional(CONF_CLEANINGS_PERFORMED): sensor.sensor_schema(
-        unit_of_measurement=UNIT_EMPTY,
-        icon=ICON_WATER,
-        accuracy_decimals=0,
-    ),
-    cv.Optional(CONF_BREWS_PERFORMED): sensor.sensor_schema(
-        unit_of_measurement=UNIT_EMPTY,
-        icon=ICON_WATER,
-        accuracy_decimals=0,
-    ),
-    cv.Optional(CONF_GROUNDS_REMAINING_CAPACITY): sensor.sensor_schema(
-        unit_of_measurement=UNIT_EMPTY,
-        icon=ICON_WATER,
-        accuracy_decimals=0,
-    ).extend(
-    cv.Schema({
-        cv.Optional(CONF_GROUNDS_CAPACITY_CFG, default=12): cv.int_range(min=1, max=20),
-    })
-    ),
-    cv.Optional(CONF_TRAY_STATUS): text_sensor.text_sensor_schema(
-        icon=ICON_TRAY,
-    ),
-    cv.Optional(CONF_WATER_TANK_STATUS): text_sensor.text_sensor_schema(
-        icon=ICON_WATER_CHECK,
-    ),
-    cv.Optional(CONF_MACHINE_STATUS): text_sensor.text_sensor_schema(
-        icon=ICON_COFFEE_MAKER,
-    ),
+    cv.Required(CONF_MODEL): MODEL_ENUM,
+
+    # Numeric sensors (default display names; users don't have to write these)
+    cv.Optional(F_SINGLE_ESPRESSO, default={CONF_NAME: "Single Espresso Made"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
+    cv.Optional(F_DOUBLE_ESPRESSO, default={CONF_NAME: "Double Espresso Made"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
+    cv.Optional(F_COFFEE, default={CONF_NAME: "Coffee Made"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
+    cv.Optional(F_DOUBLE_COFFEE, default={CONF_NAME: "Double Coffee Made"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
+    cv.Optional(F_FLAT_WHITE, default={CONF_NAME: "Flat White Made"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
+    cv.Optional(F_CAPPUCCINO, default={CONF_NAME: "Cappuccino Made"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
+    cv.Optional(F_MILK, default={CONF_NAME: "Milk Portions Made"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
+    cv.Optional(F_CLEANINGS, default={CONF_NAME: "Cleanings Performed"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
+    cv.Optional(F_RINSES, default={CONF_NAME: "Rinses Performed"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
+    cv.Optional(F_BREWS, default={CONF_NAME: "Brews Performed"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
+    cv.Optional(F_BREW_MOVEMENTS, default={CONF_NAME: "Brew Movements Performed"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
+    cv.Optional(F_GROUNDS_LEVEL, default={CONF_NAME: "Grounds Level"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_PUCKS, icon=ICON_WATER, accuracy_decimals=0),
+
+    # Text sensors
+    cv.Optional(F_TRAY_STATUS, default={CONF_NAME: "Tray Status"}):
+        text_sensor.text_sensor_schema(icon=ICON_TRAY),
+    cv.Optional(F_TANK_STATUS, default={CONF_NAME: "Water Tank Status"}):
+        text_sensor.text_sensor_schema(icon=ICON_WATER_CHECK),
+    cv.Optional(F_MACHINE_STATUS, default={CONF_NAME: "Machine Status"}):
+        text_sensor.text_sensor_schema(icon=ICON_COFFEE_MAKER),
+    # Debug Sensors
+    cv.Optional(F_COUNTERS_CHANGED, default={CONF_NAME: "Changed Counters"}):
+        text_sensor.text_sensor_schema(icon="mdi:format-list-bulleted",entity_category=ENTITY_CATEGORY_DIAGNOSTIC),    
+    cv.Optional(F_IC_BITS, default={CONF_NAME: "IC Bits"}):
+        text_sensor.text_sensor_schema(icon="mdi:binary",entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
 }).extend(uart.UART_DEVICE_SCHEMA).extend(cv.polling_component_schema("2s"))
 
+# ---------- MODEL → which fields to expose & which publish keys they map to ----------
+# Each entry: (yaml_field_key, publish_key)
+MODEL_MAP = {
+    "F6": {
+        "numeric": [
+            (F_SINGLE_ESPRESSO,   "counter_1"),
+            (F_DOUBLE_ESPRESSO,   "counter_2"),
+            (F_COFFEE,            "counter_3"),
+            (F_DOUBLE_COFFEE,     "counter_4"),
+            (F_BREWS,             "counter_8"),
+            (F_CLEANINGS,         "counter_9"),
+            (F_GROUNDS_LEVEL,     "counter_15"),
+        ],
+        "text": [
+            (F_TRAY_STATUS,       "tray_status"),
+            (F_TANK_STATUS,       "water_tank_status"),
+            (F_MACHINE_STATUS,    "machine_status"),
+            (F_COUNTERS_CHANGED,  "counters_changed"),
+            (F_IC_BITS, "ic_bits"),            
+        ],
+    },
+    "F7": {
+        "numeric": [
+            (F_SINGLE_ESPRESSO,   "counter_1"),
+            (F_DOUBLE_ESPRESSO,   "counter_2"),
+            (F_COFFEE,            "counter_3"),
+            (F_DOUBLE_COFFEE,     "counter_4"),
+            (F_BREWS,             "counter_8"),
+            (F_CLEANINGS,         "counter_9"),
+            (F_GROUNDS_LEVEL,     "counter_15"),
+        ],
+        "text": [
+            (F_TRAY_STATUS,       "tray_status"),
+            (F_TANK_STATUS,       "water_tank_status"),
+            (F_MACHINE_STATUS,    "machine_status"),
+            (F_COUNTERS_CHANGED,  "counters_changed"),
+            (F_IC_BITS, "ic_bits"),            
+        ],
+    },
+    "E8": {
+        "numeric": [
+            (F_SINGLE_ESPRESSO,   "counter_1"),
+            (F_DOUBLE_ESPRESSO,   "counter_2"),
+            (F_COFFEE,            "counter_3"),
+            (F_FLAT_WHITE,        "counter_4"),
+            (F_CAPPUCCINO,        "counter_5"),
+            (F_RINSES,            "counter_8"),
+            (F_CLEANINGS,         "counter_9"),
+            (F_BREW_MOVEMENTS,    "counter_11"),
+            (F_MILK,              "counter_12"), # This one is still a bit of a mystery..  It increases on a Cappuccino but not when doing milk only?
+            (F_GROUNDS_LEVEL,     "counter_15"),
+        ],
+        "text": [
+            (F_TRAY_STATUS,       "tray_status"),
+            (F_TANK_STATUS,       "water_tank_status"),
+            (F_MACHINE_STATUS,    "machine_status"),
+            (F_COUNTERS_CHANGED,  "counters_changed"),
+            (F_IC_BITS, "ic_bits"),            
+        ],
+    },
+    "UNKNOWN": {
+        "numeric": [
+            (F_SINGLE_ESPRESSO,   "counter_1"),
+            (F_DOUBLE_ESPRESSO,   "counter_2"),
+            (F_COFFEE,            "counter_3"),
+            (F_FLAT_WHITE,        "counter_4"),
+            (F_CAPPUCCINO,        "counter_5"),
+            (F_RINSES,            "counter_8"),
+            (F_CLEANINGS,         "counter_9"),
+            (F_BREW_MOVEMENTS,    "counter_11"),
+            (F_GROUNDS_LEVEL,     "counter_15"),
+        ],
+        "text": [
+            (F_TRAY_STATUS,       "tray_status"),
+            (F_TANK_STATUS,       "water_tank_status"),
+            (F_MACHINE_STATUS,    "machine_status"),
+            (F_COUNTERS_CHANGED,  "counters_changed"),
+            (F_IC_BITS, "ic_bits"),            
+        ],
+    },
+}
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await uart.register_uart_device(var, config)
 
-    if CONF_SINGLE_ESPRESSO_MADE in config:
-            single_espresso_made = await sensor.new_sensor(config[CONF_SINGLE_ESPRESSO_MADE])
-            cg.add(var.set_single_espresso_made_sensor(single_espresso_made))
+    model = config[CONF_MODEL]
+    cg.add(var.set_model(model))
 
-    if CONF_DOUBLE_ESPRESSO_MADE in config:
-            double_espresso_made = await sensor.new_sensor(config[CONF_DOUBLE_ESPRESSO_MADE])
-            cg.add(var.set_double_espresso_made_sensor(double_espresso_made))
+    spec = MODEL_MAP.get(model, MODEL_MAP["UNKNOWN"])
 
-    if CONF_COFFEE_MADE in config:
-            coffee_made = await sensor.new_sensor(config[CONF_COFFEE_MADE])
-            cg.add(var.set_coffee_made_sensor(coffee_made))
+    # Create only the entities for this model
+    for field_key, publish_key in spec.get("numeric", []):
+        s = await sensor.new_sensor(config[field_key])   # config[field_key] already validated with unique ID
+        cg.add(var.register_metric_sensor(cg.std_string(publish_key), s))
 
-    if CONF_DOUBLE_COFFEE_MADE in config:
-            double_coffee_made = await sensor.new_sensor(config[CONF_DOUBLE_COFFEE_MADE])
-            cg.add(var.set_double_coffee_made_sensor(double_coffee_made))
+    for field_key, publish_key in spec.get("text", []):
+        ts = await text_sensor.new_text_sensor(config[field_key])
+        cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
 
-    if CONF_CLEANINGS_PERFORMED in config:
-            cleanings_performed = await sensor.new_sensor(config[CONF_CLEANINGS_PERFORMED])
-            cg.add(var.set_cleanings_performed_sensor(cleanings_performed))
 
-    if CONF_BREWS_PERFORMED in config:
-            brews_performed = await sensor.new_sensor(config[CONF_BREWS_PERFORMED])
-            cg.add(var.set_brews_performed_sensor(brews_performed))
 
-    if CONF_GROUNDS_REMAINING_CAPACITY in config:
-            grc_cfg = dict(config[CONF_GROUNDS_REMAINING_CAPACITY])
 
-            # Extract capacity (sub-parameter) and set it on the C++ object
-            cap = grc_cfg.pop(CONF_GROUNDS_CAPACITY_CFG, 12)
-            cg.add(var.set_grounds_capacity(cap))        
-        
-            grounds_remaining_capacity = await sensor.new_sensor(grc_cfg)
-            cg.add(var.set_grounds_remaining_capacity_sensor(grounds_remaining_capacity))
-    
-    if CONF_TRAY_STATUS in config:
-            tray_status = await text_sensor.new_text_sensor(config[CONF_TRAY_STATUS])
-            cg.add(var.set_tray_status_sensor(tray_status))
 
-    if CONF_WATER_TANK_STATUS in config:
-            water_tank_status = await text_sensor.new_text_sensor(config[CONF_WATER_TANK_STATUS])
-            cg.add(var.set_water_tank_status_sensor(water_tank_status))
 
-    if CONF_MACHINE_STATUS in config:
-            machine_status = await text_sensor.new_text_sensor(config[CONF_MACHINE_STATUS])
-            cg.add(var.set_machine_status_sensor(machine_status))
+
+
+
 
 
 
