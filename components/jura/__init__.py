@@ -138,7 +138,7 @@ async def to_code(config):
             accuracy_decimals=acc,
         ).extend(cv.Schema({cv.Required(CONF_NAME): cv.string}))
         
-        valid = num_schema.validate(_mk_sensor_cfg(disp, unit, icon, acc))
+        valid = num_schema(_mk_sensor_cfg(disp, unit, icon, acc))
         s = await sensor.new_sensor(valid)
         cg.add(var.register_metric_sensor(cg.std_string(key), s))
 
@@ -147,9 +147,10 @@ async def to_code(config):
         txt_schema = text_sensor.text_sensor_schema(icon=icon).extend(
             cv.Schema({cv.Required(CONF_NAME): cv.string})
         )
-        valid_ts = txt_schema.validate(_mk_text_sensor_cfg(disp, icon))
+        valid_ts = txt_schema(_mk_text_sensor_cfg(disp, icon))
         ts = await text_sensor.new_text_sensor(valid_ts)
         cg.add(var.register_text_sensor(cg.std_string(key), ts))
+
 
 
 
