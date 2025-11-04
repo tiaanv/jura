@@ -32,8 +32,6 @@ F_DOUBLE_ESPRESSO   = "double_espresso_made"
 F_COFFEE            = "coffee_made"
 F_DOUBLE_COFFEE     = "double_coffee_made"
 F_RISTRETTO         = "ristretto_made"
-#F_MACCHIATO         = "macchiato_made"
-#F_LATTE_MACCHIATO   = "late_macchiato_made"
 F_CAPPUCCINO        = "cappuccino_made"
 F_FLAT_WHITE        = "flat_white_made"
 F_MILK              = "milk_portion_made"
@@ -120,6 +118,8 @@ MODEL_MAP = {
             (F_TRAY_STATUS,       "tray_status"),
             (F_TANK_STATUS,       "water_tank_status"),
             (F_MACHINE_STATUS,    "machine_status"),
+            (F_COUNTERS_CHANGED,  "counters_changed"),
+            (F_IC_BITS, "ic_bits"),            
         ],
     },
     "F7": {
@@ -136,6 +136,8 @@ MODEL_MAP = {
             (F_TRAY_STATUS,       "tray_status"),
             (F_TANK_STATUS,       "water_tank_status"),
             (F_MACHINE_STATUS,    "machine_status"),
+            (F_COUNTERS_CHANGED,  "counters_changed"),
+            (F_IC_BITS, "ic_bits"),            
         ],
     },
     "E8": {
@@ -155,7 +157,7 @@ MODEL_MAP = {
             (F_TRAY_STATUS,       "tray_status"),
             (F_TANK_STATUS,       "water_tank_status"),
             (F_MACHINE_STATUS,    "machine_status"),
-            (F_COUNTERS_CHANGED, "counters_changed"),
+            (F_COUNTERS_CHANGED,  "counters_changed"),
             (F_IC_BITS, "ic_bits"),            
         ],
     },
@@ -168,13 +170,15 @@ MODEL_MAP = {
             (F_CAPPUCCINO,        "counter_5"),
             (F_RINSES,            "counter_8"),
             (F_CLEANINGS,         "counter_9"),
-            (F_BREW_MOVEMENTS,   "counter_11"),
+            (F_BREW_MOVEMENTS,    "counter_11"),
             (F_GROUNDS_LEVEL,     "counter_15"),
         ],
         "text": [
             (F_TRAY_STATUS,       "tray_status"),
             (F_TANK_STATUS,       "water_tank_status"),
             (F_MACHINE_STATUS,    "machine_status"),
+            (F_COUNTERS_CHANGED,  "counters_changed"),
+            (F_IC_BITS, "ic_bits"),            
         ],
     },
 }
@@ -197,6 +201,7 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
 
