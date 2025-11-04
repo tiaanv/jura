@@ -26,14 +26,6 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     if (it != text_.end() && it->second) it->second->publish_state(value);
   }
 
-  // helper: get counter_n from RT string
-  static inline long get_counter_n(const std::string &rt, int n) {
-    // position = 3 + 4*(n-1)
-    const size_t pos = 3u + 4u * (size_t)(n - 1);
-    if (rt.size() < pos + 4u) return 0;
-    return strtol(rt.substr(pos, 4).c_str(), nullptr, 16);
-  }
-
   void update() override {
     // ---- counters ----
     std::string result = cmd2jura("RT:0000");
@@ -42,23 +34,19 @@ class Jura : public PollingComponent, public uart::UARTDevice {
       return;
     }
 
-    // Parse by index
-    const long counter_1  = get_counter_n(result, 1);
-    const long counter_2  = get_counter_n(result, 2);
-    const long counter_3  = get_counter_n(result, 3);
-    const long counter_4  = get_counter_n(result, 4);
-    const long counter_8  = get_counter_n(result, 8);  // was 'brews'
-    const long counter_9  = get_counter_n(result, 9);  // was 'cleanings'
-    const long counter_15 = get_counter_n(result, 15); // raw "used" count for grounds
-  
-    // Publish by generic keys only
-    publish_number("counter_1",         counter_1);
-    publish_number("counter_2",         counter_2);
-    publish_number("counter_3",         counter_3);
-    publish_number("counter_4",         counter_4);
-    publish_number("counter_8",         counter_8);
-    publish_number("counter_9",         counter_9);
-    publish_number("counter_15",        counter_15);
+   // Parse all counters available (4 hex chars per field starting at pos=3)
+    std::vector<long> current = parse_all_counters_(rt);
+
+    // Publish the ones you already expose (examples below; keep as you had it)
+    publish_number("counter_1", get_counter_n_(current, 1));
+    publish_number("counter_2", get_counter_n_(current, 2));
+    publish_number("counter_3", get_counter_n_(current, 3));
+    publish_number("counter_4", get_counter_n_(current, 4));
+    publish_number("counter_8", get_counter_n_(current, 8));
+    publish_number("counter_9", get_counter_n_(current, 9));
+    publish_number("counter_15", get_counter_n_(current, 15));
+
+    publish_counter_changes_(current);
 
     // ---- flags ----
     std::string ic = cmd2jura("IC:");
@@ -88,6 +76,56 @@ class Jura : public PollingComponent, public uart::UARTDevice {
   }
 
  protected:
+  // Return counter_n (1-based) from vector or -1 if missing
+  long get_counter_n_(const std::vector<long> &v, int n) const {
+    const size_t idx = (n >= 1) ? (size_t)(n - 1) : (size_t) -1;
+    if (idx < v.size()) return v[idx];
+    return -1;
+  }
+
+  // Parse all 4-hex counters from RT payload starting at pos=3
+  std::vector<long> parse_all_counters_(const std::string &rt) const {
+    std::vector<long> out;
+    // field i starts at pos = 3 + 4*i (i = 0..)
+    for (size_t pos = 3; pos + 4 <= rt.size(); pos += 4) {
+      long val = strtol(rt.substr(pos, 4).c_str(), nullptr, 16);
+      out.push_back(val);
+    }
+    return out;
+  }
+
+  void publish_counter_changes_(const std::vector<long> &current) {
+    // First run: just seed the cache; don't publish noise
+    if (!last_counters_initialized_) {
+      last_counters_ = current;
+      last_counters_initialized_ = true;
+      return;
+    }
+
+    // Build diff message
+    std::ostringstream oss;
+    bool any = false;
+    const size_t max_n = std::max(last_counters_.size(), current.size());
+    for (size_t i = 0; i < max_n; ++i) {
+      long prev = (i < last_counters_.size()) ? last_counters_[i] : -1;
+      long now  = (i < current.size())       ? current[i]          : -1;
+      if (prev != now) {
+        if (any) oss << ", ";
+        // counters are 1-based in naming
+        oss << "counter_" << (i + 1) << " " << prev << "→" << now;
+        any = true;
+      }
+    }
+
+    if (any) {
+      publish_text("counters_changed", oss.str());
+      ESP_LOGD("jura", "Changed: %s", oss.str().c_str());
+    }
+
+    // Update cache
+    last_counters_ = current;
+  }
+
   std::string cmd2jura(std::string outbytes) {
     std::string inbytes;
     int w = 0;
@@ -129,6 +167,9 @@ class Jura : public PollingComponent, public uart::UARTDevice {
 
   std::map<std::string, sensor::Sensor*>            numeric_;
   std::map<std::string, text_sensor::TextSensor*>   text_;
+
+  std::vector<long> last_counters_;
+  bool last_counters_initialized_{false};
 };
 
 }  // namespace jura
