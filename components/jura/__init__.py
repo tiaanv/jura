@@ -23,7 +23,7 @@ MODEL_UNKNOWN = "UNKNOWN"
 MODEL_F6 = "F6"
 MODEL_F7 = "F7"
 MODEL_E8 = "E8"
-MODEL_ENUM = cv.one_of(MODEL_F6, MODEL_F7, MODEL_E8, MODEL_UNKNOWN, lower=True)
+MODEL_ENUM = cv.one_of(MODEL_F6, MODEL_F7, MODEL_E8, MODEL_UNKNOWN, upper=True)
 
 # Stable publish keys used by C++:
 #   counter_1, counter_2, counter_3, counter_4, cleanings, brews,
@@ -83,7 +83,7 @@ CONFIG_SCHEMA = cv.Schema({
 # ---------- MODEL → which fields to expose & which publish keys they map to ----------
 # Each entry: (yaml_field_key, publish_key)
 MODEL_MAP = {
-    "f6": {
+    "F6": {
         "numeric": [
             (F_SINGLE_ESPRESSO,   "counter_1"),
             (F_DOUBLE_ESPRESSO,   "counter_2"),
@@ -99,7 +99,7 @@ MODEL_MAP = {
             (F_MACHINE_STATUS, "machine_status"),
         ],
     },
-    "f7": {
+    "F7": {
         "numeric": [
             (F_SINGLE_ESPRESSO,   "counter_1"),
             (F_DOUBLE_ESPRESSO,   "counter_2"),
@@ -111,7 +111,7 @@ MODEL_MAP = {
             (F_MACHINE_STATUS, "machine_status"),
         ],
     },
-    "e8": {
+    "E8": {
         "numeric": [
             (F_SINGLE_ESPRESSO,   "counter_1"),  # you can change default names above if you prefer "Espresso Shots"
             (F_COFFEE,            "counter_2"),  # e.g., rename to "Coffee Cups" in defaults if needed
@@ -125,7 +125,7 @@ MODEL_MAP = {
             (F_MACHINE_STATUS,    "machine_status"),
         ],
     },
-    "unknown": {
+    "UNKNOWN": {
         "numeric": [
             (F_SINGLE_ESPRESSO,   "counter_1"),
             (F_DOUBLE_ESPRESSO,   "counter_2"),
@@ -142,11 +142,11 @@ async def to_code(config):
     await cg.register_component(var, config)
     await uart.register_uart_device(var, config)
 
-    model = config[CONF_MODEL].upper()
+    model = config[CONF_MODEL]
     cg.add(var.set_model(model))
     cg.add(var.set_grounds_capacity(config[CONF_GROUNDS_CAPACITY_CFG]))
 
-    spec = MODEL_MAP.get(model.lower(), MODEL_MAP["unknown"])
+    spec = MODEL_MAP.get(model.lower(), MODEL_MAP["UNKNOWN"])
 
     # Create only the entities for this model
     for field_key, publish_key in spec.get("numeric", []):
@@ -156,3 +156,4 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
