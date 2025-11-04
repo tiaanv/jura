@@ -42,54 +42,54 @@ Jura = jura_ns.class_("Jura", cg.PollingComponent, uart.UARTDevice)
 MODEL_SPECS = {
     MODEL_F6.lower(): {
         "numeric": [
-            ("counter_1", "Single Espresso Made", UNIT_CUPS, ICON_CUP, 0),
-            ("counter_2", "Double Espresso Made", UNIT_CUPS, ICON_CUP, 0),
-            ("counter_3", "Coffee Made", UNIT_CUPS, ICON_CUP, 0),
-            ("counter_4", "Double Coffee Made", UNIT_CUPS, ICON_CUP, 0),
-            ("cleanings", "Cleanings Performed", UNIT_EMPTY, ICON_WATER, 0),
-            ("brews", "Brews Performed", UNIT_EMPTY, ICON_WATER, 0),
-            ("grounds_remaining", "Grounds Remaining Capacity", UNIT_EMPTY, ICON_WATER, 0),
+            ("counter_1", "single_espresso_made", "Single Espresso Made", UNIT_CUPS, ICON_CUP, 0),
+            ("counter_2", "double_espresso_made", "Double Espresso Made", UNIT_CUPS, ICON_CUP, 0),
+            ("counter_3", "coffee_made", "Coffee Made", UNIT_CUPS, ICON_CUP, 0),
+            ("counter_4", "double_coffee_made", "Double Coffee Made", UNIT_CUPS, ICON_CUP, 0),
+            ("cleanings", "cleanings_performed", "Cleanings Performed", UNIT_EMPTY, ICON_WATER, 0),
+            ("brews", "brews_performed", "Brews Performed", UNIT_EMPTY, ICON_WATER, 0),
+            ("grounds_remaining", "grounds_remaining_capacity", "Grounds Remaining Capacity", UNIT_EMPTY, ICON_WATER, 0),
         ],
         "text": [
-            ("tray_status", "Tray Status", ICON_TRAY),
-            ("water_tank_status", "Water Tank Status", ICON_WATER_CHECK),
-            ("machine_status", "Machine Status", ICON_COFFEE_MAKER),
+            ("tray_status", "tray_status", "Tray Status", ICON_TRAY),
+            ("water_tank_status", "water_tank_status", "Water Tank Status", ICON_WATER_CHECK),
+            ("machine_status", "machine_status", "Machine Status", ICON_COFFEE_MAKER),
         ],
     },
     MODEL_F7.lower(): {
         "numeric": [
-            ("counter_1", "Single Espresso Made", UNIT_CUPS, ICON_CUP, 0),
-            ("counter_2", "Double Espresso Made", UNIT_CUPS, ICON_CUP, 0),
-            ("cleanings", "Cleanings Performed", UNIT_EMPTY, ICON_WATER, 0),
-            ("grounds_remaining", "Grounds Remaining Capacity", UNIT_EMPTY, ICON_WATER, 0),
+            ("counter_1", "single_espresso_made", "Single Espresso Made", UNIT_CUPS, ICON_CUP, 0),
+            ("counter_2", "double_espresso_made", "Double Espresso Made", UNIT_CUPS, ICON_CUP, 0),
+            ("cleanings", "cleanings_performed", "Cleanings Performed", UNIT_EMPTY, ICON_WATER, 0),
+            ("grounds_remaining", "grounds_remaining_capacity", "Grounds Remaining Capacity", UNIT_EMPTY, ICON_WATER, 0),
         ],
         "text": [
-            ("tray_status", "Tray Status", ICON_TRAY),
-            ("machine_status", "Machine Status", ICON_COFFEE_MAKER),
+            ("tray_status", "tray_status", "Tray Status", ICON_TRAY),
+            ("machine_status", "machine_status", "Machine Status", ICON_COFFEE_MAKER),
         ],
     },
     MODEL_E8.lower(): {
         "numeric": [
-            ("counter_1", "Espresso Shots", UNIT_CUPS, ICON_CUP, 0),
-            ("counter_2", "Coffee Cups", UNIT_CUPS, ICON_CUP, 0),
-            ("cleanings", "Cleanings Performed", UNIT_EMPTY, ICON_WATER, 0),
-            ("brews", "Brews Performed", UNIT_EMPTY, ICON_WATER, 0),
-            ("grounds_remaining", "Grounds Remaining Capacity", UNIT_EMPTY, ICON_WATER, 0),
+            ("counter_1", "espresso_shots", "Espresso Shots", UNIT_CUPS, ICON_CUP, 0),
+            ("counter_2", "coffee_cups", "Coffee Cups", UNIT_CUPS, ICON_CUP, 0),
+            ("cleanings", "cleanings_performed", "Cleanings Performed", UNIT_EMPTY, ICON_WATER, 0),
+            ("brews", "brews_performed", "Brews Performed", UNIT_EMPTY, ICON_WATER, 0),
+            ("grounds_remaining", "grounds_remaining_capacity", "Grounds Remaining Capacity", UNIT_EMPTY, ICON_WATER, 0),
         ],
         "text": [
-            ("tray_status", "Tray Status", ICON_TRAY),
-            ("water_tank_status", "Water Tank Status", ICON_WATER_CHECK),
-            ("machine_status", "Machine Status", ICON_COFFEE_MAKER),
+            ("tray_status", "tray_status", "Tray Status", ICON_TRAY),
+            ("water_tank_status", "water_tank_status", "Water Tank Status", ICON_WATER_CHECK),
+            ("machine_status", "machine_status", "Machine Status", ICON_COFFEE_MAKER),
         ],
     },
     MODEL_UNKNOWN.lower(): {
         "numeric": [
-            ("counter_1", "Counter 1", UNIT_EMPTY, ICON_CUP, 0),
-            ("counter_2", "Counter 2", UNIT_EMPTY, ICON_CUP, 0),
-            ("grounds_remaining", "Grounds Remaining Capacity", UNIT_EMPTY, ICON_WATER, 0),
+            ("counter_1", "counter_1", "Counter 1", UNIT_EMPTY, ICON_CUP, 0),
+            ("counter_2", "counter_2", "Counter 2", UNIT_EMPTY, ICON_CUP, 0),
+            ("grounds_remaining", "grounds_remaining_capacity", "Grounds Remaining Capacity", UNIT_EMPTY, ICON_WATER, 0),
         ],
         "text": [
-            ("machine_status", "Machine Status", ICON_COFFEE_MAKER),
+            ("machine_status", "machine_status", "Machine Status", ICON_COFFEE_MAKER),
         ],
     },
 }
@@ -128,32 +128,32 @@ async def to_code(config):
     spec = MODEL_SPECS.get(model.lower(), MODEL_SPECS["unknown"])
     
     # numeric sensors
-    for key, disp, unit, icon, acc in spec.get("numeric", []):
-        # Build a brand-new schema instance per entity
+    for publish_key, yaml_field_name, disp, unit, icon, acc in spec.get("numeric", []):
         num_schema = sensor.sensor_schema(
             unit_of_measurement=unit,
             icon=icon,
             accuracy_decimals=acc,
         ).extend(cv.Schema({cv.Required(CONF_NAME): cv.string}))
     
-        # Optionally make the name extra-unique per model
-        display_name = f"{disp}"  # or f"{disp} ({model})" if you prefer
-        valid = num_schema({CONF_NAME: display_name})  # CALL the schema → autogenerates id
+        # Wrap under a unique key so GenerateID uses a unique path
+        wrapper = cv.Schema({cv.Required(yaml_field_name): num_schema})
+        valid_wrapped = wrapper({yaml_field_name: {CONF_NAME: disp}})
     
-        s = await sensor.new_sensor(valid)
-        cg.add(var.register_metric_sensor(cg.std_string(key), s))
+        s = await sensor.new_sensor(valid_wrapped[yaml_field_name])
+        cg.add(var.register_metric_sensor(cg.std_string(publish_key), s))
     
     # text sensors
-    for key, disp, icon in spec.get("text", []):
+    for publish_key, yaml_field_name, disp, icon in spec.get("text", []):
         txt_schema = text_sensor.text_sensor_schema(
             icon=icon
         ).extend(cv.Schema({cv.Required(CONF_NAME): cv.string}))
     
-        display_name = f"{disp}"  # or f"{disp} ({model})"
-        valid_ts = txt_schema({CONF_NAME: display_name})
+        wrapper = cv.Schema({cv.Required(yaml_field_name): txt_schema})
+        valid_wrapped = wrapper({yaml_field_name: {CONF_NAME: disp}})
     
-        ts = await text_sensor.new_text_sensor(valid_ts)
-        cg.add(var.register_text_sensor(cg.std_string(key), ts))
+        ts = await text_sensor.new_text_sensor(valid_wrapped[yaml_field_name])
+        cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
 
