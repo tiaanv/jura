@@ -54,6 +54,8 @@ class Jura : public PollingComponent, public uart::UARTDevice {
       byte a = static_cast<byte>(strtol(ic.substr(3,2).c_str(), NULL, 16));
       byte b = static_cast<byte>(strtol(ic.substr(5,2).c_str(), NULL, 16));
 
+      publish_ic_bits_if_changed_(a, b);     
+
       byte trayBit       = bitRead(a, 4);
       byte left_readyBit = bitRead(a, 2);
       byte tankBit       = bitRead(b, 5);
@@ -126,6 +128,28 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     last_counters_ = current;
   }
 
+  static inline void byte_to_bits(uint8_t v, char out[9]) {
+    for (int i = 7; i >= 0; --i) out[7 - i] = (v & (1u << i)) ? '1' : '0';
+    out[8] = '\0';
+  }
+
+  void publish_ic_bits_if_changed_(uint8_t a, uint8_t b) {
+    if (!ic_bits_initialized_ || a != last_ic_a_ || b != last_ic_b_) {
+      char abits[9], bbits[9], buf[32];
+      byte_to_bits(a, abits);
+      byte_to_bits(b, bbits);
+      // "A=xxxxxxxx B=xxxxxxxx"
+      snprintf(buf, sizeof(buf), "A=%s B=%s", abits, bbits);
+      publish_text("ic_bits", std::string(buf));
+  
+      last_ic_a_ = a;
+      last_ic_b_ = b;
+      ic_bits_initialized_ = true;
+  
+      ESP_LOGD("jura", "IC bits changed: %s", buf);
+    }
+  }
+
   std::string cmd2jura(std::string outbytes) {
     std::string inbytes;
     int w = 0;
@@ -170,6 +194,10 @@ class Jura : public PollingComponent, public uart::UARTDevice {
 
   std::vector<long> last_counters_;
   bool last_counters_initialized_{false};
+
+  uint8_t last_ic_a_{0};
+  uint8_t last_ic_b_{0};
+  bool ic_bits_initialized_{false};
 };
 
 }  // namespace jura
