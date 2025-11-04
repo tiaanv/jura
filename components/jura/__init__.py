@@ -20,10 +20,10 @@ CONF_MODEL = "model"
 CONF_GROUNDS_CAPACITY_CFG = "grounds_capacity"
 
 # Model enum
-MODEL_UNKNOWN = "UNKNOWN"
-MODEL_F6 = "F6"
-MODEL_F7 = "F7"
-MODEL_E8 = "E8"
+MODEL_UNKNOWN = "unknown"
+MODEL_F6 = "f6"
+MODEL_F7 = "f7"
+MODEL_E8 = "e8"
 
 MODEL_ENUM = cv.one_of(MODEL_F6, MODEL_F7, MODEL_E8, MODEL_UNKNOWN, lower=True)
 
@@ -140,6 +140,7 @@ async def to_code(config):
     for key, disp, icon in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(_mk_text_sensor_cfg(disp, icon))
         cg.add(var.register_text_sensor(cg.std_string(key), ts))
+
 
 
 
