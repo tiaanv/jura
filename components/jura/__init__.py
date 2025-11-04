@@ -6,8 +6,6 @@ import esphome.codegen as cg
 
 from esphome.const import CONF_ID, CONF_NAME, UNIT_EMPTY, ICON_WATER, ICON_THERMOMETER
 from esphome.components import uart, sensor, text_sensor
-from esphome import core as _core
-valid[_core.CONF_ID] = cg.new_id()
 
 
 # Icons/units
@@ -126,33 +124,37 @@ async def to_code(config):
     await cg.register_component(var, config)
     await uart.register_uart_device(var, config)
 
-    # Pass model & capacity to C++
     model = config[CONF_MODEL].upper()
-    cg.add(var.set_model(model))
-    cg.add(var.set_grounds_capacity(config[CONF_GROUNDS_CAPACITY_CFG]))
-
-    spec = MODEL_SPECS.get(model.lower(), MODEL_SPECS[MODEL_UNKNOWN.lower()])
-
+    spec = MODEL_SPECS.get(model.lower(), MODEL_SPECS["unknown"])
+    
+    # numeric sensors
     for key, disp, unit, icon, acc in spec.get("numeric", []):
-        # fresh schema for each sensor
+        # Build a brand-new schema instance per entity
         num_schema = sensor.sensor_schema(
             unit_of_measurement=unit,
             icon=icon,
             accuracy_decimals=acc,
         ).extend(cv.Schema({cv.Required(CONF_NAME): cv.string}))
     
-        valid = num_schema({"name": disp})   # callable schema => validates & auto-generates a NEW id
+        # Optionally make the name extra-unique per model
+        display_name = f"{disp}"  # or f"{disp} ({model})" if you prefer
+        valid = num_schema({CONF_NAME: display_name})  # CALL the schema → autogenerates id
+    
         s = await sensor.new_sensor(valid)
         cg.add(var.register_metric_sensor(cg.std_string(key), s))
     
+    # text sensors
     for key, disp, icon in spec.get("text", []):
         txt_schema = text_sensor.text_sensor_schema(
             icon=icon
         ).extend(cv.Schema({cv.Required(CONF_NAME): cv.string}))
     
-        valid_ts = txt_schema({"name": disp})
+        display_name = f"{disp}"  # or f"{disp} ({model})"
+        valid_ts = txt_schema({CONF_NAME: display_name})
+    
         ts = await text_sensor.new_text_sensor(valid_ts)
         cg.add(var.register_text_sensor(cg.std_string(key), ts))
+
 
 
 
