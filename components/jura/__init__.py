@@ -16,7 +16,6 @@ UNIT_CUPS = "cups"
 
 # Top-level options
 CONF_MODEL = "model"
-CONF_GROUNDS_CAPACITY_CFG = "grounds_capacity"
 
 # Model enum
 MODEL_UNKNOWN = "UNKNOWN"
@@ -63,7 +62,6 @@ Jura = jura_ns.class_("Jura", cg.PollingComponent, uart.UARTDevice)
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(Jura),
     cv.Required(CONF_MODEL): MODEL_ENUM,
-    cv.Optional(CONF_GROUNDS_CAPACITY_CFG, default=12): cv.int_range(min=1, max=20),
 
     # Numeric sensors (default display names; users don't have to write these)
     cv.Optional(F_SINGLE_ESPRESSO, default={CONF_NAME: "Single Espresso Made"}):
@@ -173,7 +171,6 @@ async def to_code(config):
 
     model = config[CONF_MODEL]
     cg.add(var.set_model(model))
-    cg.add(var.set_grounds_capacity(config[CONF_GROUNDS_CAPACITY_CFG]))
 
     spec = MODEL_MAP.get(model.lower(), MODEL_MAP["UNKNOWN"])
 
@@ -185,5 +182,6 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
