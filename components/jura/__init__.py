@@ -139,8 +139,8 @@ async def to_code(config):
         wrapper = cv.Schema({cv.Required(yaml_field_name): num_schema})
         valid_wrapped = wrapper({yaml_field_name: {CONF_NAME: disp}})
     
-        s = await sensor.new_sensor(valid_wrapped[yaml_field_name])
-        cg.add(var.register_metric_sensor(cg.std_string(publish_key), s))
+        #s = await sensor.new_sensor(valid_wrapped[yaml_field_name])
+        #cg.add(var.register_metric_sensor(cg.std_string(publish_key), s))
     
     # text sensors
     # for publish_key, yaml_field_name, disp, icon in spec.get("text", []):
@@ -153,6 +153,7 @@ async def to_code(config):
     
     #     ts = await text_sensor.new_text_sensor(valid_wrapped[yaml_field_name])
     #     cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
 
