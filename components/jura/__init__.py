@@ -133,7 +133,7 @@ async def to_code(config):
             unit_of_measurement=unit,
             icon=icon,
             accuracy_decimals=acc,
-        ).extend(cv.Schema({cv.Required(yaml_field_name): cv.string}))
+        ).extend(cv.Schema({cv.Required(CONF_NAME): cv.string}))
     
         # Wrap under a unique key so GenerateID uses a unique path
         wrapper = cv.Schema({cv.Required(yaml_field_name): num_schema})
@@ -146,13 +146,14 @@ async def to_code(config):
     for publish_key, yaml_field_name, disp, icon in spec.get("text", []):
         txt_schema = text_sensor.text_sensor_schema(
             icon=icon
-        ).extend(cv.Schema({cv.Required(yaml_field_name): cv.string}))
+        ).extend(cv.Schema({cv.Required(CONF_NAME): cv.string}))
     
         wrapper = cv.Schema({cv.Required(yaml_field_name): txt_schema})
         valid_wrapped = wrapper({yaml_field_name: {CONF_NAME: disp}})
     
         ts = await text_sensor.new_text_sensor(valid_wrapped[yaml_field_name])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
 
