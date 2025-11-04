@@ -42,8 +42,11 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     publish_number("counter_2", get_counter_n_(current, 2));
     publish_number("counter_3", get_counter_n_(current, 3));
     publish_number("counter_4", get_counter_n_(current, 4));
+    publish_number("counter_5", get_counter_n_(current, 5));
     publish_number("counter_8", get_counter_n_(current, 8));
     publish_number("counter_9", get_counter_n_(current, 9));
+    publish_number("counter_11", get_counter_n_(current, 11));
+    publish_number("counter_12", get_counter_n_(current, 12));
     publish_number("counter_15", get_counter_n_(current, 15));
 
     publish_counter_changes_(current);
