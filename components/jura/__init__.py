@@ -54,6 +54,7 @@ F_TANK_STATUS       = "water_tank_status"
 F_MACHINE_STATUS    = "machine_status"
 
 F_COUNTERS_CHANGED  = "counters_changed"
+F_IC_BITS = "ic_bits"
 
 # C++ binding
 jura_ns = cg.esphome_ns.namespace("jura")
@@ -95,9 +96,11 @@ CONFIG_SCHEMA = cv.Schema({
         text_sensor.text_sensor_schema(icon=ICON_WATER_CHECK),
     cv.Optional(F_MACHINE_STATUS, default={CONF_NAME: "Machine Status"}):
         text_sensor.text_sensor_schema(icon=ICON_COFFEE_MAKER),
+    # Debug Sensors
     cv.Optional(F_COUNTERS_CHANGED, default={CONF_NAME: "Changed Counters"}):
         text_sensor.text_sensor_schema(icon="mdi:format-list-bulleted"),    
-
+    cv.Optional(F_IC_BITS, default={CONF_NAME: "IC Bits"}):
+        text_sensor.text_sensor_schema(icon="mdi:binary"),
 }).extend(uart.UART_DEVICE_SCHEMA).extend(cv.polling_component_schema("2s"))
 
 # ---------- MODEL → which fields to expose & which publish keys they map to ----------
@@ -149,7 +152,8 @@ MODEL_MAP = {
             (F_TRAY_STATUS,       "tray_status"),
             (F_TANK_STATUS,       "water_tank_status"),
             (F_MACHINE_STATUS,    "machine_status"),
-            (F_COUNTERS_CHANGED, "counters_changed"),            
+            (F_COUNTERS_CHANGED, "counters_changed"),
+            (F_IC_BITS, "ic_bits"),            
         ],
     },
     "UNKNOWN": {
@@ -188,6 +192,7 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
 
