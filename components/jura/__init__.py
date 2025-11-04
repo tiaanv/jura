@@ -74,7 +74,7 @@ CONFIG_SCHEMA = cv.Schema({
         sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
     cv.Optional(F_FLAT_WHITE, default={CONF_NAME: "Flat White Made"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
-    cv.Optional(F_CAPPUCCION, default={CONF_NAME: "Cappuccino Made"}):
+    cv.Optional(F_CAPPUCCINO, default={CONF_NAME: "Cappuccino Made"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
     cv.Optional(F_CLEANINGS, default={CONF_NAME: "Cleanings Performed"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_EMPTY, icon=ICON_WATER, accuracy_decimals=0),
@@ -182,6 +182,7 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
 
