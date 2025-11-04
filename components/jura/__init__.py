@@ -34,9 +34,20 @@ F_SINGLE_ESPRESSO   = "single_espresso_made"
 F_DOUBLE_ESPRESSO   = "double_espresso_made"
 F_COFFEE            = "coffee_made"
 F_DOUBLE_COFFEE     = "double_coffee_made"
+F_RISTRETTO         = "ristretto_made"
+F_MACCHIATO         = "macchiato_made"
+F_LATTE_MACCHIATO   = "late_macchiato_made"
+F_CAPPUCCINO        = "cappuccino_made"
+F_FLAT_WHITE        = "flat_white_made"
+F_HOT_WATER         = "hot_water_made"
+F_MILK              = "milk_portion_made"
+F_SPECIAL           = "special_made"
+
 F_CLEANINGS         = "cleanings_performed"
 F_BREWS             = "brews_performed"
-F_GROUNDS_REMAINING = "grounds_remaining_capacity"
+F_RINSES            = "rinses_performed"
+F_GROUNDS_LEVEL     = "grounds_level"
+
 F_TRAY_STATUS       = "tray_status"
 F_TANK_STATUS       = "water_tank_status"
 F_MACHINE_STATUS    = "machine_status"
@@ -63,11 +74,17 @@ CONFIG_SCHEMA = cv.Schema({
         sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
     cv.Optional(F_DOUBLE_COFFEE, default={CONF_NAME: "Double Coffee Made"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
+    cv.Optional(F_FLAT_WHITE, default={CONF_NAME: "Flat White Made"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
+    cv.Optional(F_CAPPUCCION, default={CONF_NAME: "Cappuccino Made"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
     cv.Optional(F_CLEANINGS, default={CONF_NAME: "Cleanings Performed"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_EMPTY, icon=ICON_WATER, accuracy_decimals=0),
-    cv.Optional(F_BREWS, default={CONF_NAME: "Brews Performed"}):
+    cv.Optional(F_CLEANINGS, default={CONF_NAME: "Rinses Performed"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_EMPTY, icon=ICON_WATER, accuracy_decimals=0),
-    cv.Optional(F_GROUNDS_REMAINING, default={CONF_NAME: "Grounds Remaining Capacity"}):
+    cv.Optional(F_RINSES, default={CONF_NAME: "Rinses Performed"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_EMPTY, icon=ICON_WATER, accuracy_decimals=0),
+    cv.Optional(F_GROUNDS_LEVEL, default={CONF_NAME: "Grounds Level"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_EMPTY, icon=ICON_WATER, accuracy_decimals=0),
 
     # Text sensors
@@ -89,35 +106,41 @@ MODEL_MAP = {
             (F_DOUBLE_ESPRESSO,   "counter_2"),
             (F_COFFEE,            "counter_3"),
             (F_DOUBLE_COFFEE,     "counter_4"),
-            (F_CLEANINGS,         "cleanings"),
-            (F_BREWS,             "brews"),
-            (F_GROUNDS_REMAINING, "grounds_remaining"),
+            (F_BREWS,             "counter_8"),
+            (F_CLEANINGS,         "counter_9"),
+            (F_GROUNDS_LEVEL,     "counter_15"),
         ],
         "text": [
-            (F_TRAY_STATUS,    "tray_status"),
-            (F_TANK_STATUS,    "water_tank_status"),
-            (F_MACHINE_STATUS, "machine_status"),
+            (F_TRAY_STATUS,       "tray_status"),
+            (F_TANK_STATUS,       "water_tank_status"),
+            (F_MACHINE_STATUS,    "machine_status"),
         ],
     },
     "F7": {
         "numeric": [
             (F_SINGLE_ESPRESSO,   "counter_1"),
             (F_DOUBLE_ESPRESSO,   "counter_2"),
-            (F_CLEANINGS,         "cleanings"),
-            (F_GROUNDS_REMAINING, "grounds_remaining"),
+            (F_COFFEE,            "counter_3"),
+            (F_DOUBLE_COFFEE,     "counter_4"),
+            (F_BREWS,             "counter_8"),
+            (F_CLEANINGS,         "counter_9"),
+            (F_GROUNDS_LEVEL,     "counter_15"),
         ],
         "text": [
-            (F_TRAY_STATUS,    "tray_status"),
-            (F_MACHINE_STATUS, "machine_status"),
+            (F_TRAY_STATUS,       "tray_status"),
+            (F_TANK_STATUS,       "water_tank_status"),
+            (F_MACHINE_STATUS,    "machine_status"),
         ],
     },
     "E8": {
         "numeric": [
-            (F_SINGLE_ESPRESSO,   "counter_1"),  # you can change default names above if you prefer "Espresso Shots"
-            (F_COFFEE,            "counter_2"),  # e.g., rename to "Coffee Cups" in defaults if needed
-            (F_CLEANINGS,         "cleanings"),
-            (F_BREWS,             "brews"),
-            (F_GROUNDS_REMAINING, "grounds_remaining"),
+            (F_SINGLE_ESPRESSO,   "counter_1"),
+            (F_DOUBLE_ESPRESSO,   "counter_2"),
+            (F_COFFEE,            "counter_3"),
+            (F_DOUBLE_COFFEE,     "counter_4"),
+            (F_RINSES,            "counter_8"),
+            (F_CLEANINGS,         "counter_9"),
+            (F_GROUNDS_LEVEL,     "counter_15"),
         ],
         "text": [
             (F_TRAY_STATUS,       "tray_status"),
@@ -129,10 +152,16 @@ MODEL_MAP = {
         "numeric": [
             (F_SINGLE_ESPRESSO,   "counter_1"),
             (F_DOUBLE_ESPRESSO,   "counter_2"),
-            (F_GROUNDS_REMAINING, "grounds_remaining"),
+            (F_COFFEE,            "counter_3"),
+            (F_DOUBLE_COFFEE,     "counter_4"),
+            (F_BREWS,             "counter_8"),
+            (F_CLEANINGS,         "counter_9"),
+            (F_GROUNDS_LEVEL,     "counter_15"),
         ],
         "text": [
-            (F_MACHINE_STATUS, "machine_status"),
+            (F_TRAY_STATUS,       "tray_status"),
+            (F_TANK_STATUS,       "water_tank_status"),
+            (F_MACHINE_STATUS,    "machine_status"),
         ],
     },
 }
@@ -156,4 +185,5 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
