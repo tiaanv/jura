@@ -13,7 +13,6 @@ namespace jura {
 class Jura : public PollingComponent, public uart::UARTDevice {
  public:
   void set_model(const std::string &m) { model_ = m; }
-  void set_grounds_capacity(uint16_t v) { grounds_capacity_ = v; }
 
   void register_metric_sensor(const std::string &key, sensor::Sensor *s) { numeric_[key] = s; }
   void register_text_sensor(const std::string &key, text_sensor::TextSensor *t) { text_[key] = t; }
@@ -50,12 +49,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     const long counter_4  = get_counter_n(rt, 4);
     const long counter_8  = get_counter_n(rt, 8);  // was 'brews'
     const long counter_9  = get_counter_n(rt, 9);  // was 'cleanings'
-    const long used_raw   = get_counter_n(rt, 15); // raw "used" count for grounds
-  
-    // Derive grounds_remaining from counter_15 and capacity
-    const uint16_t cap = grounds_capacity_;
-    const uint16_t used = (used_raw < 0) ? 0 : (uint16_t) used_raw;
-    const long grounds_remaining = (used >= cap) ? 0 : (cap - used);
+    const long counter_15 = get_counter_n(rt, 15); // raw "used" count for grounds
   
     // Publish by generic keys only
     publish_number("counter_1",         counter_1);
@@ -64,7 +58,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     publish_number("counter_4",         counter_4);
     publish_number("counter_8",         counter_8);
     publish_number("counter_9",         counter_9);
-    publish_number("grounds_remaining", grounds_remaining);
+    publish_number("counter_15",        counter_15);
 
     // ---- flags ----
     std::string ic = cmd2jura("IC:");
@@ -132,7 +126,6 @@ class Jura : public PollingComponent, public uart::UARTDevice {
   }
 
   std::string model_{"UNKNOWN"};
-  uint16_t grounds_capacity_{12};
 
   std::map<std::string, sensor::Sensor*>            numeric_;
   std::map<std::string, text_sensor::TextSensor*>   text_;
