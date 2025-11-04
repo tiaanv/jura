@@ -43,13 +43,13 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     }
 
     // Parse by index
-    const long counter_1  = get_counter_n(rt, 1);
-    const long counter_2  = get_counter_n(rt, 2);
-    const long counter_3  = get_counter_n(rt, 3);
-    const long counter_4  = get_counter_n(rt, 4);
-    const long counter_8  = get_counter_n(rt, 8);  // was 'brews'
-    const long counter_9  = get_counter_n(rt, 9);  // was 'cleanings'
-    const long counter_15 = get_counter_n(rt, 15); // raw "used" count for grounds
+    const long counter_1  = get_counter_n(result, 1);
+    const long counter_2  = get_counter_n(result, 2);
+    const long counter_3  = get_counter_n(result, 3);
+    const long counter_4  = get_counter_n(result, 4);
+    const long counter_8  = get_counter_n(result, 8);  // was 'brews'
+    const long counter_9  = get_counter_n(result, 9);  // was 'cleanings'
+    const long counter_15 = get_counter_n(result, 15); // raw "used" count for grounds
   
     // Publish by generic keys only
     publish_number("counter_1",         counter_1);
