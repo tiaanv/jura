@@ -6,6 +6,9 @@ import esphome.codegen as cg
 
 from esphome.const import CONF_ID, CONF_NAME, UNIT_EMPTY, ICON_WATER, ICON_THERMOMETER
 from esphome.components import uart, sensor, text_sensor
+from esphome import core as _core
+valid[_core.CONF_ID] = cg.new_id()
+
 
 # Icons/units
 ICON_CUP = "mdi:cup"
@@ -150,6 +153,7 @@ async def to_code(config):
         valid_ts = txt_schema({"name": disp})
         ts = await text_sensor.new_text_sensor(valid_ts)
         cg.add(var.register_text_sensor(cg.std_string(key), ts))
+
 
 
 
