@@ -130,26 +130,27 @@ async def to_code(config):
 
     spec = MODEL_SPECS.get(model.lower(), MODEL_SPECS[MODEL_UNKNOWN.lower()])
 
-    # Create numeric sensors
     for key, disp, unit, icon, acc in spec.get("numeric", []):
+        # fresh schema for each sensor
         num_schema = sensor.sensor_schema(
             unit_of_measurement=unit,
             icon=icon,
             accuracy_decimals=acc,
         ).extend(cv.Schema({cv.Required(CONF_NAME): cv.string}))
-        
-        valid = num_schema(_mk_sensor_cfg(disp, unit, icon, acc))
+    
+        valid = num_schema({"name": disp})   # callable schema => validates & auto-generates a NEW id
         s = await sensor.new_sensor(valid)
         cg.add(var.register_metric_sensor(cg.std_string(key), s))
-
-    # Create text sensors
+    
     for key, disp, icon in spec.get("text", []):
-        txt_schema = text_sensor.text_sensor_schema(icon=icon).extend(
-            cv.Schema({cv.Required(CONF_NAME): cv.string})
-        )
-        valid_ts = txt_schema(_mk_text_sensor_cfg(disp, icon))
+        txt_schema = text_sensor.text_sensor_schema(
+            icon=icon
+        ).extend(cv.Schema({cv.Required(CONF_NAME): cv.string}))
+    
+        valid_ts = txt_schema({"name": disp})
         ts = await text_sensor.new_text_sensor(valid_ts)
         cg.add(var.register_text_sensor(cg.std_string(key), ts))
+
 
 
 
