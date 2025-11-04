@@ -4,7 +4,7 @@ AUTO_LOAD = ["sensor","text_sensor"]       # make sure sensor headers get includ
 import esphome.config_validation as cv
 import esphome.codegen as cg
 
-from esphome.const import CONF_ID, UNIT_EMPTY, ICON_WATER, ICON_THERMOMETER
+from esphome.const import CONF_ID, CONF_NAME, UNIT_EMPTY, ICON_WATER, ICON_THERMOMETER
 from esphome.components import uart, sensor, text_sensor
 
 # Icons/units
@@ -132,14 +132,25 @@ async def to_code(config):
 
     # Create numeric sensors
     for key, disp, unit, icon, acc in spec.get("numeric", []):
-        s = await sensor.new_sensor(_mk_sensor_cfg(disp, unit, icon, acc))
-        # Let C++ keep a map: key -> Sensor*
+        num_schema = sensor.sensor_schema(
+            unit_of_measurement=unit,
+            icon=icon,
+            accuracy_decimals=acc,
+        ).extend(cv.Schema({cv.Required(CONF_NAME): cv.string}))
+        
+        valid = num_schema.validate(_mk_sensor_cfg(disp, unit, icon, acc))
+        s = await sensor.new_sensor(valid)
         cg.add(var.register_metric_sensor(cg.std_string(key), s))
 
     # Create text sensors
     for key, disp, icon in spec.get("text", []):
-        ts = await text_sensor.new_text_sensor(_mk_text_sensor_cfg(disp, icon))
+        txt_schema = text_sensor.text_sensor_schema(icon=icon).extend(
+            cv.Schema({cv.Required(CONF_NAME): cv.string})
+        )
+        valid_ts = txt_schema.validate(_mk_text_sensor_cfg(disp, icon))
+        ts = await text_sensor.new_text_sensor(valid_ts)
         cg.add(var.register_text_sensor(cg.std_string(key), ts))
+
 
 
 
