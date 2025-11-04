@@ -174,7 +174,7 @@ async def to_code(config):
     model = config[CONF_MODEL]
     cg.add(var.set_model(model))
 
-    spec = MODEL_MAP.get(model.lower(), MODEL_MAP["UNKNOWN"])
+    spec = MODEL_MAP.get(model, MODEL_MAP["UNKNOWN"])
 
     # Create only the entities for this model
     for field_key, publish_key in spec.get("numeric", []):
@@ -184,6 +184,7 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
 
