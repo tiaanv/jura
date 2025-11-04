@@ -36,16 +36,16 @@ F_DOUBLE_ESPRESSO   = "double_espresso_made"
 F_COFFEE            = "coffee_made"
 F_DOUBLE_COFFEE     = "double_coffee_made"
 F_RISTRETTO         = "ristretto_made"
-F_MACCHIATO         = "macchiato_made"
-F_LATTE_MACCHIATO   = "late_macchiato_made"
+#F_MACCHIATO         = "macchiato_made"
+#F_LATTE_MACCHIATO   = "late_macchiato_made"
 F_CAPPUCCINO        = "cappuccino_made"
 F_FLAT_WHITE        = "flat_white_made"
-F_HOT_WATER         = "hot_water_made"
 F_MILK              = "milk_portion_made"
-F_SPECIAL           = "special_made"
+
 
 F_CLEANINGS         = "cleanings_performed"
 F_BREWS             = "brews_performed"
+F_BREW_MOVEMENTS    = "brews_movements_performed"
 F_RINSES            = "rinses_performed"
 F_GROUNDS_LEVEL     = "grounds_level"
 
@@ -85,6 +85,8 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional(F_RINSES, default={CONF_NAME: "Rinses Performed"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
     cv.Optional(F_BREWS, default={CONF_NAME: "Brews Performed"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
+    cv.Optional(F_BREW_MOVEMENTS, default={CONF_NAME: "Brew Movements Performed"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
     cv.Optional(F_GROUNDS_LEVEL, default={CONF_NAME: "Grounds Level"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_PUCKS, icon=ICON_WATER, accuracy_decimals=0),
@@ -143,9 +145,12 @@ MODEL_MAP = {
             (F_SINGLE_ESPRESSO,   "counter_1"),
             (F_DOUBLE_ESPRESSO,   "counter_2"),
             (F_COFFEE,            "counter_3"),
-            (F_DOUBLE_COFFEE,     "counter_4"),
+            (F_FLAT_WHITE,        "counter_4"),
+            (F_CAPPUCCINO,        "counter_5"),
             (F_RINSES,            "counter_8"),
             (F_CLEANINGS,         "counter_9"),
+            (F_BREW_MOVEMENTS,    "counter_11"),
+            (F_MILK,              "counter_12"), # This one is still a bit of a mystery..  It increases on a Cappuccino but not when doing milk only?
             (F_GROUNDS_LEVEL,     "counter_15"),
         ],
         "text": [
@@ -161,9 +166,11 @@ MODEL_MAP = {
             (F_SINGLE_ESPRESSO,   "counter_1"),
             (F_DOUBLE_ESPRESSO,   "counter_2"),
             (F_COFFEE,            "counter_3"),
-            (F_DOUBLE_COFFEE,     "counter_4"),
-            (F_BREWS,             "counter_8"),
+            (F_FLAT_WHITE,        "counter_4"),
+            (F_CAPPUCCINO,        "counter_5"),
+            (F_RINSES,            "counter_8"),
             (F_CLEANINGS,         "counter_9"),
+            (F_BREW_MOVEMENTS,   "counter_11"),
             (F_GROUNDS_LEVEL,     "counter_15"),
         ],
         "text": [
@@ -192,6 +199,7 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
 
