@@ -143,16 +143,17 @@ async def to_code(config):
         cg.add(var.register_metric_sensor(cg.std_string(publish_key), s))
     
     # text sensors
-    for publish_key, yaml_field_name, disp, icon in spec.get("text", []):
-        txt_schema = text_sensor.text_sensor_schema(
-            icon=icon
-        ).extend(cv.Schema({cv.Required(CONF_NAME): cv.string}))
+    # for publish_key, yaml_field_name, disp, icon in spec.get("text", []):
+    #     txt_schema = text_sensor.text_sensor_schema(
+    #         icon=icon
+    #     ).extend(cv.Schema({cv.Required(CONF_NAME): cv.string}))
     
-        wrapper = cv.Schema({cv.Required(yaml_field_name): txt_schema})
-        valid_wrapped = wrapper({yaml_field_name: {CONF_NAME: disp}})
+    #     wrapper = cv.Schema({cv.Required(yaml_field_name): txt_schema})
+    #     valid_wrapped = wrapper({yaml_field_name: {CONF_NAME: disp}})
     
-        ts = await text_sensor.new_text_sensor(valid_wrapped[yaml_field_name])
-        cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+    #     ts = await text_sensor.new_text_sensor(valid_wrapped[yaml_field_name])
+    #     cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
 
