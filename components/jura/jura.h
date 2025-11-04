@@ -95,34 +95,34 @@ class Jura : public PollingComponent, public uart::UARTDevice {
   }
 
   void publish_counter_changes_(const std::vector<long> &current) {
-    // First run: just seed the cache; don't publish noise
     if (!last_counters_initialized_) {
       last_counters_ = current;
       last_counters_initialized_ = true;
       return;
     }
-
-    // Build diff message
-    std::ostringstream oss;
+  
+    std::string msg;
     bool any = false;
     const size_t max_n = std::max(last_counters_.size(), current.size());
+    char buf[48];
+  
     for (size_t i = 0; i < max_n; ++i) {
       long prev = (i < last_counters_.size()) ? last_counters_[i] : -1;
       long now  = (i < current.size())       ? current[i]          : -1;
       if (prev != now) {
-        if (any) oss << ", ";
-        // counters are 1-based in naming
-        oss << "counter_" << (i + 1) << " " << prev << "→" << now;
+        if (any) msg += ", ";
+        // "counter_%zu %ld→%ld"
+        snprintf(buf, sizeof(buf), "counter_%u %ld\u2192%ld", (unsigned)(i + 1), prev, now);
+        msg += buf;
         any = true;
       }
     }
-
+  
     if (any) {
-      publish_text("counters_changed", oss.str());
-      ESP_LOGD("jura", "Changed: %s", oss.str().c_str());
+      publish_text("counters_changed", msg);
+      ESP_LOGD("jura", "Changed: %s", msg.c_str());
     }
-
-    // Update cache
+  
     last_counters_ = current;
   }
 
