@@ -4,7 +4,7 @@ AUTO_LOAD = ["sensor", "text_sensor"]
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import uart, sensor, text_sensor
-from esphome.const import CONF_ID, CONF_NAME, UNIT_EMPTY
+from esphome.const import CONF_ID, CONF_NAME, UNIT_EMPTY, ENTITY_CATEGORY_DIAGNOSTIC
 
 # Icons/units
 ICON_CUP = "mdi:cup"
@@ -201,6 +201,7 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
 
