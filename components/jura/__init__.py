@@ -32,15 +32,17 @@ F_DOUBLE_ESPRESSO   = "double_espresso_made"
 F_COFFEE            = "coffee_made"
 F_DOUBLE_COFFEE     = "double_coffee_made"
 F_RISTRETTO         = "ristretto_made"
+F_DOUBLE_RISTRETTO  = "double_ristretto_made"
 F_CAPPUCCINO        = "cappuccino_made"
 F_FLAT_WHITE        = "flat_white_made"
 F_MILK              = "milk_portion_made"
 
 
 F_CLEANINGS         = "cleanings_performed"
+F_DESCALINGS        = "descalings_performed"
+F_RINSES            = "rinses_performed"
 F_BREWS             = "brews_performed"
 F_BREW_MOVEMENTS    = "brews_movements_performed"
-F_RINSES            = "rinses_performed"
 F_GROUNDS_LEVEL     = "grounds_level"
 
 F_TRAY_STATUS       = "tray_status"
@@ -70,13 +72,19 @@ CONFIG_SCHEMA = cv.Schema({
         sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
     cv.Optional(F_DOUBLE_COFFEE, default={CONF_NAME: "Double Coffee Made"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
-    cv.Optional(F_FLAT_WHITE, default={CONF_NAME: "Flat White Made"}):
+    cv.Optional(F_RISTRETTO, default={CONF_NAME: "Ristretto Made"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
+    cv.Optional(F_DOUBLE_RISTRETTO, default={CONF_NAME: "Double Ristretto Made"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
     cv.Optional(F_CAPPUCCINO, default={CONF_NAME: "Cappuccino Made"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
+    cv.Optional(F_FLAT_WHITE, default={CONF_NAME: "Flat White Made"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
     cv.Optional(F_MILK, default={CONF_NAME: "Milk Portions Made"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_CUPS, icon=ICON_CUP, accuracy_decimals=0),
     cv.Optional(F_CLEANINGS, default={CONF_NAME: "Cleanings Performed"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
+    cv.Optional(F_DESCALINGS, default={CONF_NAME: "Descalings Performed"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
     cv.Optional(F_RINSES, default={CONF_NAME: "Rinses Performed"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
@@ -128,8 +136,12 @@ MODEL_MAP = {
             (F_DOUBLE_ESPRESSO,   "counter_2"),
             (F_COFFEE,            "counter_3"),
             (F_DOUBLE_COFFEE,     "counter_4"),
-            (F_BREWS,             "counter_8"),
+            (F_RISTRETTO,         "counter_5"),
+            (F_CAPPUCCINO,        "counter_6"),
+            (F_DOUBLE_RISTRETTO,  "counter_7"),
+            (F_BREW_MOVEMENTS,    "counter_8"),
             (F_CLEANINGS,         "counter_9"),
+            (F_DESCLAINGS,        "counter_10"),
             (F_GROUNDS_LEVEL,     "counter_15"),
         ],
         "text": [
@@ -201,18 +213,3 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
