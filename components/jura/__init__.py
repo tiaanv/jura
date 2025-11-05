@@ -141,7 +141,7 @@ MODEL_MAP = {
             (F_DOUBLE_RISTRETTO,  "counter_7"),
             (F_BREW_MOVEMENTS,    "counter_8"),
             (F_CLEANINGS,         "counter_9"),
-            (F_DESCLAINGS,        "counter_10"),
+            (F_DESCALINGS,        "counter_10"),
             (F_GROUNDS_LEVEL,     "counter_15"),
         ],
         "text": [
@@ -161,6 +161,7 @@ MODEL_MAP = {
             (F_CAPPUCCINO,        "counter_5"),
             (F_RINSES,            "counter_8"),
             (F_CLEANINGS,         "counter_9"),
+            (F_DESCALINGS,        "counter_10"),
             (F_BREW_MOVEMENTS,    "counter_11"),
             (F_MILK,              "counter_12"), # This one is still a bit of a mystery..  It increases on a Cappuccino but not when doing milk only?
             (F_GROUNDS_LEVEL,     "counter_15"),
@@ -213,3 +214,4 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
