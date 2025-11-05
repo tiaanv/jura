@@ -172,6 +172,8 @@ Once you have established some known values, you may create an issue with your f
 - Example from and to values
 - suggested sensor name and description
 
+Please see the [Jura UART map](https://github.com/tiaanv/jura/blob/main/Jura_uart_map.md) for what we know so far.
+
 
 
 ---
