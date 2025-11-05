@@ -53,58 +53,24 @@ button:
     icon: "mdi:coffee-maker"
     id: jura_turn_off
     on_press:
-      - uart.write: [0xDF, 0xDB, 0xDB, 0xDF]  ## 'A'
-      - delay: 8ms
-      - uart.write: [0xFB, 0xFF, 0xDB, 0xDF]  ## 'N'
-      - delay: 8ms
-      - uart.write: [0xFB, 0xFB, 0xFF, 0xDB]  ## ':'
-      - delay: 8ms
-      - uart.write: [0xDB, 0xDB, 0xFF, 0xDB]  ## '0'
-      - delay: 8ms
-      - uart.write: [0xFB, 0xDB, 0xFF, 0xDB]  ## '2'
-      - delay: 8ms
-      - uart.write: [0xDF, 0xFF, 0xDB, 0xDB]  ## '\r'
-      - delay: 8ms
-      - uart.write: [0xFB, 0xFB, 0xDB, 0xDB]  ## '\n'
+      - lambda: |-
+          auto result = id(jura_coffee).cmd2jura("AN:02");
 
   - platform: template
     name: 'Make Hot Water'
     icon: "mdi:cup-water"
     id: jura_make_hot_water
     on_press:
-      - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F'
-      - delay: 8ms
-      - uart.write: [0xDF, 0xDB, 0xDB, 0xDF]  ## 'A'
-      - delay: 8ms
-      - uart.write: [0xFB, 0xFB, 0xFF, 0xDB]  ## ':'
-      - delay: 8ms
-      - uart.write: [0xDB, 0xDB, 0xFF, 0xDB]  ## '0'
-      - delay: 8ms
-      - uart.write: [0xFB, 0xDF, 0xFF, 0xDB]  ## '6'
-      - delay: 8ms
-      - uart.write: [0xDF, 0xFF, 0xDB, 0xDB]  ## '\r'
-      - delay: 8ms
-      - uart.write: [0xFB, 0xFB, 0xDB, 0xDB]  ## '\n'
+      - lambda: |-
+          auto result = id(jura_coffee).cmd2jura("FA:06");
 
   - platform: template
     name: 'Make Coffee'
     icon: "mdi:coffee"
     id: jura_make_coffee
     on_press:
-      - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F'
-      - delay: 8ms
-      - uart.write: [0xDF, 0xDB, 0xDB, 0xDF]  ## 'A'
-      - delay: 8ms
-      - uart.write: [0xFB, 0xFB, 0xFF, 0xDB]  ## ':'
-      - delay: 8ms
-      - uart.write: [0xDB, 0xDB, 0xFF, 0xDB]  ## '0'
-      - delay: 8ms
-      - uart.write: [0xDF, 0xFB, 0xFF, 0xDB]  ## '9'
-      - delay: 8ms
-      - uart.write: [0xDF, 0xFF, 0xDB, 0xDB]  ## '\r'
-      - delay: 8ms
-      - uart.write: [0xFB, 0xFB, 0xDB, 0xDB]  ## '\n'
-
+      - lambda: |-
+          auto result = id(jura_coffee).cmd2jura("FA:09");
 
 jura:
   id: jura_coffee
@@ -112,6 +78,7 @@ jura:
   model: E8     # options: F6,F7,E8,UNKNOWN
 
   
+
 
 
 

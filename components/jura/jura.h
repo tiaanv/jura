@@ -26,6 +26,43 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     if (it != text_.end() && it->second) it->second->publish_state(value);
   }
 
+  std::string cmd2jura(std::string outbytes) {
+    std::string inbytes;
+    int w = 0;
+
+    while (available()) { read(); }
+    outbytes += "\r\n";
+    for (int i = 0; i < (int) outbytes.size(); i++) {
+      uint8_t src = static_cast<uint8_t>(outbytes[i]);
+      for (int s = 0; s < 8; s += 2) {
+        uint8_t rawbyte = 0xFF;
+        bitWrite(rawbyte, 2, bitRead(src, s + 0));
+        bitWrite(rawbyte, 5, bitRead(src, s + 1));
+        write(rawbyte);
+      }
+      delay(8);
+    }
+
+    int s = 0;
+    uint8_t inbyte = 0;
+    while (!(inbytes.size() >= 2 && inbytes[inbytes.size()-2] == '\r' && inbytes[inbytes.size()-1] == '\n')) {
+      if (available()) {
+        uint8_t rawbyte = static_cast<uint8_t>(read());
+        bitWrite(inbyte, s + 0, bitRead(rawbyte, 2));
+        bitWrite(inbyte, s + 1, bitRead(rawbyte, 5));
+        if ((s += 2) >= 8) {
+          s = 0;
+          inbytes.push_back(static_cast<char>(inbyte));
+          inbyte = 0;
+        }
+      } else {
+        delay(10);
+      }
+      if (w++ > 500) return "";
+    }
+    return inbytes.substr(0, inbytes.size() - 2);
+  }
+
   void update() override {
     // ---- counters ----
     std::string result = cmd2jura("RT:0000");
@@ -154,43 +191,6 @@ class Jura : public PollingComponent, public uart::UARTDevice {
   
       ESP_LOGD("jura", "IC bits changed: %s", buf);
     }
-  }
-
-  std::string cmd2jura(std::string outbytes) {
-    std::string inbytes;
-    int w = 0;
-
-    while (available()) { read(); }
-    outbytes += "\r\n";
-    for (int i = 0; i < (int) outbytes.size(); i++) {
-      uint8_t src = static_cast<uint8_t>(outbytes[i]);
-      for (int s = 0; s < 8; s += 2) {
-        uint8_t rawbyte = 0xFF;
-        bitWrite(rawbyte, 2, bitRead(src, s + 0));
-        bitWrite(rawbyte, 5, bitRead(src, s + 1));
-        write(rawbyte);
-      }
-      delay(8);
-    }
-
-    int s = 0;
-    uint8_t inbyte = 0;
-    while (!(inbytes.size() >= 2 && inbytes[inbytes.size()-2] == '\r' && inbytes[inbytes.size()-1] == '\n')) {
-      if (available()) {
-        uint8_t rawbyte = static_cast<uint8_t>(read());
-        bitWrite(inbyte, s + 0, bitRead(rawbyte, 2));
-        bitWrite(inbyte, s + 1, bitRead(rawbyte, 5));
-        if ((s += 2) >= 8) {
-          s = 0;
-          inbytes.push_back(static_cast<char>(inbyte));
-          inbyte = 0;
-        }
-      } else {
-        delay(10);
-      }
-      if (w++ > 500) return "";
-    }
-    return inbytes.substr(0, inbytes.size() - 2);
   }
 
   std::string model_{"UNKNOWN"};
