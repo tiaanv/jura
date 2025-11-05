@@ -85,7 +85,11 @@ jura_coolcontrol:
   id: jura_cool
   uart_id: uart_bus
 ```
-This is just the barebones structure to show you how to reference external components.  See the example YAML files for real examples.
+This is just the barebones structure to show you how to reference external components.
+
+*Note that for the Jura component, you need to specify a Model. Current options are: F6, F7, E8 or UNKNOWN.  We are working on adding support for new models and enhancing current model detail as the communnty gives feedback, using the diagnostic functions.*
+
+See the example YAML files for real examples.
 
 ---
 
@@ -171,6 +175,8 @@ Once you have established some known values, you may create an issue with your f
 - Counter number
 - Example from and to values
 - suggested sensor name and description
+
+Please see the [Jura UART map](https://github.com/tiaanv/jura/blob/main/Jura_uart_map.md) for what we know so far.
 
 
 
