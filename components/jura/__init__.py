@@ -43,7 +43,7 @@ F_DESCALINGS          = "descalings_performed"
 F_RINSES              = "rinses_performed"
 F_BREWS               = "brews_performed"
 F_BREW_MOVEMENTS      = "brews_movements_performed"
-F_BREWS_SINCE_CLEANNG = "brews_since_cleaning_performed"
+F_BREWS_SINCE_CLEANING = "brews_since_cleaning_performed"
 F_GROUNDS_LEVEL       = "grounds_level"
 
 F_TRAY_STATUS         = "tray_status"
@@ -218,5 +218,6 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
