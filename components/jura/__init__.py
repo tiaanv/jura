@@ -27,29 +27,31 @@ MODEL_E8 = "E8"
 MODEL_ENUM = cv.one_of(MODEL_F6, MODEL_F7, MODEL_E8, MODEL_UNKNOWN, upper=True)
 
 # YAML field keys (unique per entity, used only to anchor IDs)
-F_SINGLE_ESPRESSO   = "single_espresso_made"
-F_DOUBLE_ESPRESSO   = "double_espresso_made"
-F_COFFEE            = "coffee_made"
-F_DOUBLE_COFFEE     = "double_coffee_made"
-F_RISTRETTO         = "ristretto_made"
-F_DOUBLE_RISTRETTO  = "double_ristretto_made"
-F_CAPPUCCINO        = "cappuccino_made"
-F_FLAT_WHITE        = "flat_white_made"
-F_MILK              = "milk_portion_made"
+F_SINGLE_ESPRESSO       = "single_espresso_made"
+F_DOUBLE_ESPRESSO       = "double_espresso_made"
+F_COFFEE                = "coffee_made"
+F_DOUBLE_COFFEE         = "double_coffee_made"
+F_RISTRETTO             = "ristretto_made"
+F_DOUBLE_RISTRETTO      = "double_ristretto_made"
+F_CAPPUCCINO            = "cappuccino_made"
+F_FLAT_WHITE            = "flat_white_made"
+F_MILK                  = "milk_portion_made"
 
 
-F_CLEANINGS         = "cleanings_performed"
-F_DESCALINGS        = "descalings_performed"
-F_RINSES            = "rinses_performed"
-F_BREWS             = "brews_performed"
-F_BREW_MOVEMENTS    = "brews_movements_performed"
-F_GROUNDS_LEVEL     = "grounds_level"
+F_CLEANINGS             = "cleanings_performed"
+F_DESCALINGS            = "descalings_performed"
+F_RINSES                = "rinses_performed"
+F_BREWS                 = "brews_performed"
+F_BREW_MOVEMENTS        = "brews_movements_performed"
+F_BREWS_SINCE_CLEANING  = "brews_since_cleaning_performed"
+F_BREWS_SINCE_DESCALING = "brews_since_descaling_performed"
+F_GROUNDS_LEVEL         = "grounds_level"
 
-F_TRAY_STATUS       = "tray_status"
-F_TANK_STATUS       = "water_tank_status"
-F_MACHINE_STATUS    = "machine_status"
+F_TRAY_STATUS           = "tray_status"
+F_TANK_STATUS           = "water_tank_status"
+F_MACHINE_STATUS        = "machine_status"
 
-F_COUNTERS_CHANGED  = "counters_changed"
+F_COUNTERS_CHANGED      = "counters_changed"
 F_IC_BITS = "ic_bits"
 
 # C++ binding
@@ -90,6 +92,10 @@ CONFIG_SCHEMA = cv.Schema({
         sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
     cv.Optional(F_BREWS, default={CONF_NAME: "Brews Performed"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
+    cv.Optional(F_BREWS_SINCE_CLEANING, default={CONF_NAME: "Brews Performed Since Cleaning"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
+    cv.Optional(F_BREWS_SINCE_DESCALING, default={CONF_NAME: "Brews Performed Since Descaling"}):
+        sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
     cv.Optional(F_BREW_MOVEMENTS, default={CONF_NAME: "Brew Movements Performed"}):
         sensor.sensor_schema(unit_of_measurement=UNIT_TIMES, icon=ICON_WATER, accuracy_decimals=0),
     cv.Optional(F_GROUNDS_LEVEL, default={CONF_NAME: "Grounds Level"}):
@@ -114,84 +120,86 @@ CONFIG_SCHEMA = cv.Schema({
 MODEL_MAP = {
     "F6": {
         "numeric": [
-            (F_SINGLE_ESPRESSO,   "counter_1"),
-            (F_DOUBLE_ESPRESSO,   "counter_2"),
-            (F_COFFEE,            "counter_3"),
-            (F_DOUBLE_COFFEE,     "counter_4"),
-            (F_BREWS,             "counter_8"),
-            (F_CLEANINGS,         "counter_9"),
-            (F_GROUNDS_LEVEL,     "counter_15"),
+            (F_SINGLE_ESPRESSO,       "counter_1"),
+            (F_DOUBLE_ESPRESSO,       "counter_2"),
+            (F_COFFEE,                "counter_3"),
+            (F_DOUBLE_COFFEE,         "counter_4"),
+            (F_BREWS,                 "counter_8"),
+            (F_CLEANINGS,             "counter_9"),
+            (F_GROUNDS_LEVEL,         "counter_15"),
         ],
         "text": [
-            (F_TRAY_STATUS,       "tray_status"),
-            (F_TANK_STATUS,       "water_tank_status"),
-            (F_MACHINE_STATUS,    "machine_status"),
-            (F_COUNTERS_CHANGED,  "counters_changed"),
-            (F_IC_BITS, "ic_bits"),            
+            (F_TRAY_STATUS,           "tray_status"),
+            (F_TANK_STATUS,           "water_tank_status"),
+            (F_MACHINE_STATUS,        "machine_status"),
+            (F_COUNTERS_CHANGED,      "counters_changed"),
+            (F_IC_BITS,               "ic_bits"),            
         ],
     },
     "F7": {
         "numeric": [
-            (F_SINGLE_ESPRESSO,   "counter_1"),
-            (F_DOUBLE_ESPRESSO,   "counter_2"),
-            (F_COFFEE,            "counter_3"),
-            (F_DOUBLE_COFFEE,     "counter_4"),
-            (F_RISTRETTO,         "counter_5"),
-            (F_CAPPUCCINO,        "counter_6"),
-            (F_DOUBLE_RISTRETTO,  "counter_7"),
-            (F_BREW_MOVEMENTS,    "counter_8"),
-            (F_CLEANINGS,         "counter_9"),
-            (F_DESCALINGS,        "counter_10"),
-            (F_GROUNDS_LEVEL,     "counter_15"),
+            (F_SINGLE_ESPRESSO,       "counter_1"),
+            (F_DOUBLE_ESPRESSO,       "counter_2"),
+            (F_COFFEE,                "counter_3"),
+            (F_DOUBLE_COFFEE,         "counter_4"),
+            (F_RISTRETTO,             "counter_5"),
+            (F_CAPPUCCINO,            "counter_6"),
+            (F_DOUBLE_RISTRETTO,      "counter_7"),
+            (F_BREW_MOVEMENTS,        "counter_8"),
+            (F_CLEANINGS,             "counter_9"),
+            (F_DESCALINGS,            "counter_10"),
+            (F_GROUNDS_LEVEL,         "counter_15"),
         ],
         "text": [
-            (F_TRAY_STATUS,       "tray_status"),
-            (F_TANK_STATUS,       "water_tank_status"),
-            (F_MACHINE_STATUS,    "machine_status"),
-            (F_COUNTERS_CHANGED,  "counters_changed"),
-            (F_IC_BITS, "ic_bits"),            
+            (F_TRAY_STATUS,           "tray_status"),
+            (F_TANK_STATUS,           "water_tank_status"),
+            (F_MACHINE_STATUS,        "machine_status"),
+            (F_COUNTERS_CHANGED,      "counters_changed"),
+            (F_IC_BITS,               "ic_bits"),            
         ],
     },
     "E8": {
         "numeric": [
-            (F_SINGLE_ESPRESSO,   "counter_1"),
-            (F_DOUBLE_ESPRESSO,   "counter_2"),
-            (F_COFFEE,            "counter_3"),
-            (F_FLAT_WHITE,        "counter_4"),
-            (F_CAPPUCCINO,        "counter_5"),
-            (F_RINSES,            "counter_8"),
-            (F_CLEANINGS,         "counter_9"),
-            (F_DESCALINGS,        "counter_10"),
-            (F_BREW_MOVEMENTS,    "counter_11"),
-            (F_MILK,              "counter_12"), # This one is still a bit of a mystery..  It increases on a Cappuccino but not when doing milk only?
-            (F_GROUNDS_LEVEL,     "counter_15"),
+            (F_SINGLE_ESPRESSO,       "counter_1"),
+            (F_DOUBLE_ESPRESSO,       "counter_2"),
+            (F_COFFEE,                "counter_3"),
+            (F_FLAT_WHITE,            "counter_4"),
+            (F_CAPPUCCINO,            "counter_5"),
+            (F_RINSES,                "counter_8"),
+            (F_CLEANINGS,             "counter_9"),
+            (F_DESCALINGS,            "counter_10"),
+            (F_BREW_MOVEMENTS,        "counter_11"),
+            (F_MILK,                  "counter_12"), # This one is still a bit of a mystery..  It increases on a Cappuccino but not when doing milk only?
+            (F_BREWS_SINCE_DESCALING, "counter_14"),
+            (F_GROUNDS_LEVEL,         "counter_15"),
+            (F_BREWS_SINCE_CLEANING,  "counter_16"),
         ],
         "text": [
-            (F_TRAY_STATUS,       "tray_status"),
-            (F_TANK_STATUS,       "water_tank_status"),
-            (F_MACHINE_STATUS,    "machine_status"),
-            (F_COUNTERS_CHANGED,  "counters_changed"),
-            (F_IC_BITS, "ic_bits"),            
+            (F_TRAY_STATUS,           "tray_status"),
+            (F_TANK_STATUS,           "water_tank_status"),
+            (F_MACHINE_STATUS,        "machine_status"),
+            (F_COUNTERS_CHANGED,      "counters_changed"),
+            (F_IC_BITS,               "ic_bits"),            
         ],
     },
     "UNKNOWN": {
         "numeric": [
-            (F_SINGLE_ESPRESSO,   "counter_1"),
-            (F_DOUBLE_ESPRESSO,   "counter_2"),
-            (F_COFFEE,            "counter_3"),
-            (F_FLAT_WHITE,        "counter_4"),
-            (F_CAPPUCCINO,        "counter_5"),
-            (F_RINSES,            "counter_8"),
-            (F_CLEANINGS,         "counter_9"),
-            (F_BREW_MOVEMENTS,    "counter_11"),
-            (F_GROUNDS_LEVEL,     "counter_15"),
+            (F_SINGLE_ESPRESSO,       "counter_1"),
+            (F_DOUBLE_ESPRESSO,       "counter_2"),
+            (F_COFFEE,                "counter_3"),
+            (F_FLAT_WHITE,            "counter_4"),
+            (F_CAPPUCCINO,            "counter_5"),
+            (F_RINSES,                "counter_8"),
+            (F_CLEANINGS,             "counter_9"),
+            (F_BREW_MOVEMENTS,        "counter_11"),
+            (F_GROUNDS_LEVEL,         "counter_15"),
         ],
         "text": [
-            (F_TRAY_STATUS,       "tray_status"),
-            (F_TANK_STATUS,       "water_tank_status"),
-            (F_MACHINE_STATUS,    "machine_status"),
-            (F_COUNTERS_CHANGED,  "counters_changed"),
-            (F_IC_BITS, "ic_bits"),            
+            (F_TRAY_STATUS,           "tray_status"),
+            (F_TANK_STATUS,           "water_tank_status"),
+            (F_MACHINE_STATUS,        "machine_status"),
+            (F_COUNTERS_CHANGED,      "counters_changed"),
+            (F_IC_BITS,               "ic_bits"),            
         ],
     },
 }
@@ -214,4 +222,8 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
+
+
+
 
