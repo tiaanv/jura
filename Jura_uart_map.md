@@ -26,7 +26,7 @@ and to make it easy to correlate specific machine counters with their real-world
 | counter_11 | 0x2B | *Brew Group Cycles* | – | – | `Brew Movements Performed` | – | – |
 | counter_12 | 0x2F | *Maybe something to do with Milk* | – | – | `*Milk Made*` | – | – |
 | counter_13 | 0x33 | *Unknown* | – | – | – | – | – |
-| counter_14 | 0x37 | *Unknown* | – | – | – | – | – |
+| counter_14 | 0x37 | *Brews since Cleaning* | – | – | `Brews Since Cleaning Performed` | – | – |
 | counter_15 | 0x3B | *Grounds Bin Count* | `Grounds Level` | `Grounds Level` | `Grounds Level` | – | – |
 | counter_16 | 0x3F | *Unknown / Reserved* | – | – | – | – | – |
 
