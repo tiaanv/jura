@@ -239,6 +239,7 @@ Please see the [Jura UART map](https://github.com/tiaanv/jura/blob/main/Jura_uar
 - [Ryan Alden's OG component that inspired this one](https://github.com/ryanalden/esphome-jura-component)
 - [AH Wood's fantastic component with much more!](https://github.com/alco28/Jura-F7-ESPHOME)
 - [Jura Proto project](https://github.com/Jutta-Proto/protocol-cpp?tab=readme-ov-file)
+- [Joe Seymore - For his E6 contribution and some cleanup!](https://github.com/poindexter12)
 
 ---
 
