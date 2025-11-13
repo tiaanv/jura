@@ -1,0 +1,95 @@
+esphome:
+  name: jura-coffee
+  # Change friendly_name to match your model
+  friendly_name: "Jura E6"  # or "Jura E8"
+
+esp8266:
+  board: d1_mini
+
+external_components:
+ - source:
+      type: git
+      url: https://github.com/tiaanv/jura
+   components: [jura]
+
+# Enable logging
+logger:
+  level: DEBUG
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Jura Coffee Fallback"
+    password: "fallbackpassword"
+
+captive_portal:
+
+uart:
+  tx_pin: D1
+  rx_pin: D2
+  baud_rate: 9600
+  id: uart_bus
+
+# Jura Coffee Machine Component
+# Change model to E6 or E8 depending on your machine
+jura:
+  id: jura_coffee
+  uart_id: uart_bus
+  model: E6  # Options: E6, E8, F6, F7, UNKNOWN
+
+# Control Buttons
+button:
+  - platform: template
+    name: 'Turn On Coffee Machine'
+    icon: "mdi:coffee-maker"
+    id: jura_turn_on
+    on_press:
+      - lambda: |-
+          auto result = id(jura_coffee).cmd2jura("AN:01");
+
+  - platform: template
+    name: 'Turn Off Coffee Machine'
+    icon: "mdi:coffee-maker-outline"
+    id: jura_turn_off
+    on_press:
+      - lambda: |-
+          auto result = id(jura_coffee).cmd2jura("AN:02");
+
+  - platform: template
+    name: 'Make Hot Water'
+    icon: "mdi:cup-water"
+    id: jura_make_hot_water
+    on_press:
+      - lambda: |-
+          auto result = id(jura_coffee).cmd2jura("FA:06");
+
+  - platform: template
+    name: 'Make Espresso'
+    icon: "mdi:coffee"
+    id: jura_make_espresso
+    on_press:
+      - lambda: |-
+          auto result = id(jura_coffee).cmd2jura("FA:04");
+
+  - platform: template
+    name: 'Make Coffee'
+    icon: "mdi:coffee"
+    id: jura_make_coffee
+    on_press:
+      - lambda: |-
+          auto result = id(jura_coffee).cmd2jura("FA:09");
+
+  - platform: restart
+    name: Restart

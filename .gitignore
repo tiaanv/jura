@@ -1,0 +1,9 @@
+## Claude Code artifacts
+CLAUDE.md
+.claude/
+.claude*
+
+## Python
+__pycache__/
+*.pyc
+*.pyo

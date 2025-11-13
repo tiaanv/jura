@@ -11,24 +11,26 @@ and to make it easy to correlate specific machine counters with their real-world
 
 ## 📊 Register / Counter Mapping
 
-| Register | Offset | Description (if known) | F6 | F7 | E8 | ENA8 | UNKNOWN / Legacy |
-|-----------|:------:|------------------------|:--:|:--:|:--:|:--:|:----------------:|
-| counter_1 | 0x03 | *Shots / Single Espresso* | `Single Espresso Made` | `Single Espresso Made` | `Single Espresso Made` | – | – |
-| counter_2 | 0x07 | *Double Espresso / Lungo* | `Double Espresso Made` | `Double Espresso Made` | `Double Espresso Made` | – | – |
-| counter_3 | 0x0B | *Coffee / Americano* | `Coffee Made` | `Coffee Made` | `Coffee Made` | – | – |
-| counter_4 | 0x0F | *Normally Double Coffee* | `Double Coffee Made` | `Double Coffee Made` | `Flat White Made` | – | – |
-| counter_5 | 0x13 | *Ristretto/Cappuccino* | – | `Ristretto Made` | `Cappuccino Made` | – | – |
-| counter_6 | 0x17 | *Cappuccino* | – | `Cappuccino Made` | – | – | – |
-| counter_7 | 0x1B | *Double Ristretto* | – | `Double Ristretto Made` | – | – | – |
-| counter_8 | 0x1F | *Brew Group Cycles/Rinses* | - | `Brew Movements Performed` | `Rinses Performed` | – | – |
-| counter_9 | 0x23 | *Cleanings Performed* | `Cleanings Performed` | `Cleanings Performed` | `Cleanings Performed` | – | – |
-| counter_10 | 0x27 | *Descalings Performed* | – | `Descalings Performed` | `Descalings Performed` | – | – |
-| counter_11 | 0x2B | *Brew Group Cycles* | – | – | `Brew Movements Performed` | – | – |
-| counter_12 | 0x2F | *Maybe something to do with Milk* | – | – | `*Milk Made*` | – | – |
-| counter_13 | 0x33 | *Unknown* | – | – | – | – | – |
-| counter_14 | 0x37 | *Brews since Cleaning* | – | – | `Brews Since Cleaning Performed` | – | – |
-| counter_15 | 0x3B | *Grounds Bin Count* | `Grounds Level` | `Grounds Level` | `Grounds Level` | – | – |
-| counter_16 | 0x3F | *Unknown / Reserved* | – | – | – | – | – |
+| Register | Offset | Description (if known) | E6 | E8 | J6 | F7 | ENA8 | UNKNOWN / Legacy |
+|-----------|:------:|------------------------|:--:|:--:|:--:|:--:|:--:|:----------------:|
+| counter_1 | 0x03 | *Shots / Single Espresso* | `Single Espresso Made` | `Single Espresso Made` | – | `Single Espresso Made` | – | – |
+| counter_2 | 0x07 | *Double Espresso / Lungo* | `Double Espresso Made` | `Double Espresso Made` | – | `Double Espresso Made` | – | – |
+| counter_3 | 0x0B | *Coffee / Americano* | `Coffee Made` | `Coffee Made` | – | `Coffee Made` | – | – |
+| counter_4 | 0x0F | *Normally Double Coffee* | `Double Coffee Made` | `Flat White Made` | – | `Double Coffee Made` | – | – |
+| counter_5 | 0x13 | *Ristretto/Cappuccino* | – | `Cappuccino Made` | – | `Ristretto Made` | – | – |
+| counter_6 | 0x17 | *Cappuccino* | – | – | – | `Cappuccino Made` | – | – |
+| counter_7 | 0x1B | *Double Ristretto* | – | – | – | `Double Ristretto Made` | – | – |
+| counter_8 | 0x1F | *Brew Group Cycles/Rinses* | `Brews Performed` | `Rinses Performed` | – | `Brew Movements Performed` | – | – |
+| counter_9 | 0x23 | *Cleanings Performed* | `Cleanings Performed` | `Cleanings Performed` | – | `Cleanings Performed` | – | – |
+| counter_10 | 0x27 | *Descalings Performed* | `Descalings Performed` | `Descalings Performed` | – | `Descalings Performed` | – | – |
+| counter_11 | 0x2B | *Brew Group Cycles* | – | `Brew Movements Performed` | – | – | – | – |
+| counter_12 | 0x2F | *Maybe something to do with Milk* | – | `*Milk Made*` | – | – | – | – |
+| counter_13 | 0x33 | *Unknown* | – | – | – | – | – | – |
+| counter_14 | 0x37 | *Brews since Cleaning/Descaling* | – | `Brews Since Descaling Performed` ⚠️ | – | – | – | – |
+| counter_15 | 0x3B | *Grounds Bin Count* | `Grounds Level` | `Grounds Level` | – | `Grounds Level` | – | – |
+| counter_16 | 0x3F | *Brews since Cleaning* | – | `Brews Since Cleaning Performed` | – | – | – | – |
+
+> ⚠️ **Note on counter_14**: There's a documentation mismatch for E8 - this doc says "Brews since Cleaning" but the code implementation (`__init__.py`) maps it to "Brews Since Descaling". See TODO comment in code.
 
 > 💡 **Notes**
 > - Offsets shown are relative to the ASCII payload starting at byte `3` of `RT:0000`.

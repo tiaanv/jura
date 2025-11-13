@@ -1,5 +1,6 @@
 esphome:
-  name: jura-e8
+  name: jura-f6
+  friendly_name: "Jura F6"
 
 esp8266:
   board: d1_mini
@@ -8,49 +9,57 @@ external_components:
  - source:
       type: git
       url: https://github.com/tiaanv/jura
-   components: [jura]     
+   components: [jura]
 
 # Enable logging
 logger:
+  level: DEBUG
 
 # Enable Home Assistant API
 api:
   encryption:
-    key: !secret key
+    key: !secret api_key
 
 ota:
-  id: my_ota
-  platform: esphome  
-  password: "<yourotasecret>"
+  - platform: esphome
+    password: !secret ota_password
 
 wifi:
-  networks:
-  - ssid: !secret wifi_ssid
-    password: !secret wifi_password
-  - ssid: !secret wifi_backup_ssid
-    password: !secret wifi_backup_password
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
-    ssid: "Jura-E8 Fallback Hotspot"
-    password: "<yourpassword>"
+    ssid: "Jura F6 Fallback"
+    password: "fallbackpassword"
 
 captive_portal:
 
 uart:
-  tx_pin: D1  
+  tx_pin: D1
   rx_pin: D2
   baud_rate: 9600
   id: uart_bus
 
+# Jura Coffee Machine Component
+jura:
+  id: jura_coffee
+  uart_id: uart_bus
+  model: F6
 
-# UART bytes below have been generated with generate_esphome_jura_yaml.py
-# Tested with a Jura Impressa J6
-
+# Control Buttons
 button:
   - platform: template
-    name: 'Turn Off'
+    name: 'Turn On Coffee Machine'
     icon: "mdi:coffee-maker"
+    id: jura_turn_on
+    on_press:
+      - lambda: |-
+          auto result = id(jura_coffee).cmd2jura("AN:01");
+
+  - platform: template
+    name: 'Turn Off Coffee Machine'
+    icon: "mdi:coffee-maker-outline"
     id: jura_turn_off
     on_press:
       - lambda: |-
@@ -65,6 +74,14 @@ button:
           auto result = id(jura_coffee).cmd2jura("FA:06");
 
   - platform: template
+    name: 'Make Espresso'
+    icon: "mdi:coffee"
+    id: jura_make_espresso
+    on_press:
+      - lambda: |-
+          auto result = id(jura_coffee).cmd2jura("FA:04");
+
+  - platform: template
     name: 'Make Coffee'
     icon: "mdi:coffee"
     id: jura_make_coffee
@@ -72,13 +89,5 @@ button:
       - lambda: |-
           auto result = id(jura_coffee).cmd2jura("FA:09");
 
-jura:
-  id: jura_coffee
-  uart_id: uart_bus
-  model: E8     # options: F6,F7,E8,UNKNOWN
-
-  
-
-
-
-
+  - platform: restart
+    name: Restart
