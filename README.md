@@ -19,16 +19,16 @@ This project builds on the fantastic work by [Ryan Alden’s original Jura compo
 - ✅ Updated **bit-flags** for the Jura E8 (your model may differ)
 - ✅ Introduced model selection. With the help of the community, we will refine this for each machine type.
 - ✅ Added **Jura CoolControl** support (milk cooler integration)  
-- ✅ Diagnostic Sensors to help discover counter and flag meanings. See below 
+- ✅ Diagnostic Sensors to help discover counter and flag meanings. See below
 
 ---
 
 ## ⚡ Hardware & Wiring
 
-> **⚠️ Warning:** Incorrect wiring can permanently damage your Jura machine or your ESP device.  
+> **⚠️ Warning:** Incorrect wiring can permanently damage your Jura machine or your ESP device.
 > ESP pins are **not 5 V tolerant**. Always use a level-shifter if unsure.
-<img width="468" height="324" alt="image" src="https://github.com/user-attachments/assets/6f2bb48f-e853-409c-b768-2b08b87c70d2" />
 
+![Jura Wiring Diagram](https://github.com/user-attachments/assets/6f2bb48f-e853-409c-b768-2b08b87c70d2)
 
 | Pin | Description | Notes |
 |-----|--------------|-------|
@@ -46,13 +46,11 @@ uart:
   baud_rate: 9600
 ```
 
-<details>
-<summary>⚙️ Practical note about voltage tolerance</summary>
+### ⚙️ Practical note about voltage tolerance
 
-Officially, ESP devices are **not 5 V tolerant**.  
-Unofficially—many of us have connected 5 V UARTs to ESP boards without immediate issues.  
-Proceed at your own risk: your luck, your device, your coffee. ☕😅  
-</details>
+Officially, ESP devices are **not 5 V tolerant**.
+Unofficially—many of us have connected 5 V UARTs to ESP boards without immediate issues.
+Proceed at your own risk: your luck, your device, your coffee. ☕😅
 
 ---
 
@@ -85,11 +83,12 @@ jura_coolcontrol:
   id: jura_cool
   uart_id: uart_bus
 ```
+
 This is just the barebones structure to show you how to reference external components.
 
-*Note that for the Jura component, you need to specify a Model. Current options are: F6, F7, E8 or UNKNOWN.  We are working on adding support for new models and enhancing current model detail as the communnty gives feedback, using the diagnostic functions.*
+*Note that for the Jura component, you need to specify a Model. Current options are: E6, E8, F6, F7 or UNKNOWN.  We are working on adding support for new models and enhancing current model detail as the communnty gives feedback, using the diagnostic functions.*
 
-See the example YAML files for real examples.
+See the [examples/](examples/) folder for complete configuration examples.
 
 ---
 
@@ -114,12 +113,50 @@ The **Jura component** polls the machine every **2 seconds**, sending two serial
 | `Changed Counters` | Show the raw value changes between previous and current for diagnostics and discovery|
 | `IC Bits` | Show the raw bit/status flags for diagnostics and discovery |
 
-
 The sensors exposed by each machine may be different depending on the model selected.
 
 ### Example Dashboard
 
-<img width="330" alt="Jura Dashboard" src="https://github.com/user-attachments/assets/8fde2d3c-cc85-4a5d-ab0a-e84f5641cd6e" />
+![Jura Dashboard](https://github.com/user-attachments/assets/8fde2d3c-cc85-4a5d-ab0a-e84f5641cd6e)
+
+### Control Commands
+
+You can create buttons to control your Jura machine using the `cmd2jura()` function. Here are common commands:
+
+#### Machine Control
+
+| Command | Description |
+|---------|-------------|
+| `AN:01` | Turn machine on |
+| `AN:02` | Turn machine off |
+
+#### Beverage Commands
+
+| Command | Beverage | Notes |
+|---------|----------|-------|
+| `FA:04` | Single Espresso | Standard espresso shot |
+| `FA:05` | Ristretto | Short, concentrated espresso |
+| `FA:06` | Hot Water | Dispense hot water |
+| `FA:07` | Cappuccino | Espresso with milk foam (models with milk capability) |
+| `FA:09` | Coffee | Standard coffee |
+
+**Note**: Available beverages vary by model. Not all commands work on all machines (e.g., cappuccino requires milk frothing capability). FA commands are model-specific and may trigger different drinks on different models.
+
+#### Example Button Configuration
+
+```yaml
+button:
+  - platform: template
+    name: 'Make Espresso'
+    icon: "mdi:coffee"
+    on_press:
+      - lambda: |-
+          auto result = id(jura_coffee).cmd2jura("FA:04");
+```
+
+See the [examples/](examples/) folder for complete button configurations for each model.
+
+📖 **For a comprehensive list of known commands and discovery guidance, see [COMMANDS.md](COMMANDS.md)**
 
 ---
 
@@ -134,7 +171,7 @@ Monitors the official Jura **CoolControl milk cooler**, which continuously broad
 | Level | % | 0–100 | Milk level |
 | Temperature | °C | 0–50 | Cooler temperature |
 
-<img width="325" alt="CoolControl Entities" src="https://github.com/user-attachments/assets/f9654b9d-b26e-46c5-b7aa-83a001afc28c" />
+![CoolControl Entities](https://github.com/user-attachments/assets/f9654b9d-b26e-46c5-b7aa-83a001afc28c)
 
 ---
 
@@ -153,15 +190,18 @@ Two sensors are added to the component to make it simpler to figure out your spe
 
 Changed Counters
 
-This sensor captures the RAW values converted to decimals from the first data register.  When it detects a change, it logs this change as a text value as shown:
+This sensor captures the RAW values converted to decimals from the first data register. When it detects a change, it logs this change as a text value as shown:
 
-<img width="557" height="149" alt="image" src="https://github.com/user-attachments/assets/022bba13-35f9-4531-8a3d-6e19dc9cb5a1" />
+![Changed Counters Example](https://github.com/user-attachments/assets/022bba13-35f9-4531-8a3d-6e19dc9cb5a1)
 
 This comma-separated list will give you clues about what values changed after making a specific beverage.
-```
+
+```text
 changed to counter_4 9836→9837, counter_11 41177→41181, counter_14 630→631, counter_15 7→8, counter_16 136→137
 ```
+
 In the example above, after making a "Flat White"  on the Jura E8, you can see several counters increased:
+
 | Counter | Values | Notes |
 |--------|-------|-------------|
 | counter_4 | 9836→9837 | After investigation, this is the value on other machines related to double_coffee.   Using this information, I updated the sensor publishing for the E8 model.|
@@ -171,6 +211,7 @@ In the example above, after making a "Flat White"  on the Jura E8, you can see s
 | counter_16 | 136→137 | Unknown for now.  It might be the count of beverages made after cleaning or descaling.  Will monitor.|
 
 Once you have established some known values, you may create an issue with your findings.  Please make sure to include the following details:
+
 - Model Name
 - Counter number
 - Example from and to values
@@ -178,10 +219,7 @@ Once you have established some known values, you may create an issue with your f
 
 Please see the [Jura UART map](https://github.com/tiaanv/jura/blob/main/Jura_uart_map.md) for what we know so far.
 
-
-
 ---
-
 
 ## 🔧 Development Notes
 
@@ -201,8 +239,10 @@ Please see the [Jura UART map](https://github.com/tiaanv/jura/blob/main/Jura_uar
 - [Ryan Alden's OG component that inspired this one](https://github.com/ryanalden/esphome-jura-component)
 - [AH Wood's fantastic component with much more!](https://github.com/alco28/Jura-F7-ESPHOME)
 - [Jura Proto project](https://github.com/Jutta-Proto/protocol-cpp?tab=readme-ov-file)
+- [Joe Seymore - For his E6 contribution and some cleanup!](https://github.com/poindexter12)
 
 ---
+
 ## ⚠️ Final Thoughts
 
 > ☕ “Just because you *can*, doesn’t mean you *should*.”  

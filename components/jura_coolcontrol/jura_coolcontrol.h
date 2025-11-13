@@ -74,7 +74,7 @@ std::string cmd2jura(const std::string &out, uint32_t rx_timeout_ms = 1000) {
         level = value;
         value = std::stoul(resp.substr(6, 2), nullptr, 16);
         ESP_LOGI(TAG, "Temperature: %i", value);
-        temp_c = level / 10.0;
+        temp_c = value / 10.0;
 
       if (this->level_sensor_ && !std::isnan(level)) {
         this->level_sensor_->publish_state(level);
