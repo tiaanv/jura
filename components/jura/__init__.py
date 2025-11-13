@@ -190,9 +190,6 @@ MODEL_MAP = {
             (F_DESCALINGS,            "counter_10"),
             (F_BREW_MOVEMENTS,        "counter_11"),
             (F_MILK,                  "counter_12"), # This one is still a bit of a mystery..  It increases on a Cappuccino but not when doing milk only?
-            # TODO: Possible bug - Documentation mismatch for counter_14
-            # Jura_uart_map.md says counter_14 is "Brews since Cleaning"
-            # but here it's mapped to F_BREWS_SINCE_DESCALING for E8 model
             (F_BREWS_SINCE_DESCALING, "counter_14"),
             (F_GROUNDS_LEVEL,         "counter_15"),
             (F_BREWS_SINCE_CLEANING,  "counter_16"),
@@ -245,6 +242,7 @@ async def to_code(config):
     for field_key, publish_key in spec.get("text", []):
         ts = await text_sensor.new_text_sensor(config[field_key])
         cg.add(var.register_text_sensor(cg.std_string(publish_key), ts))
+
 
 
 
