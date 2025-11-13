@@ -21,10 +21,11 @@ CONF_MODEL = "model"
 
 # Model enum
 MODEL_UNKNOWN = "UNKNOWN"
+MODEL_E6 = "E6"
+MODEL_E8 = "E8"
 MODEL_F6 = "F6"
 MODEL_F7 = "F7"
-MODEL_E8 = "E8"
-MODEL_ENUM = cv.one_of(MODEL_F6, MODEL_F7, MODEL_E8, MODEL_UNKNOWN, upper=True)
+MODEL_ENUM = cv.one_of(MODEL_E6, MODEL_E8, MODEL_F6, MODEL_F7, MODEL_UNKNOWN, upper=True)
 
 # YAML field keys (unique per entity, used only to anchor IDs)
 F_SINGLE_ESPRESSO       = "single_espresso_made"
@@ -118,6 +119,25 @@ CONFIG_SCHEMA = cv.Schema({
 # ---------- MODEL → which fields to expose & which publish keys they map to ----------
 # Each entry: (yaml_field_key, publish_key)
 MODEL_MAP = {
+    "E6": {
+        "numeric": [
+            (F_SINGLE_ESPRESSO,       "counter_1"),
+            (F_DOUBLE_ESPRESSO,       "counter_2"),
+            (F_COFFEE,                "counter_3"),
+            (F_DOUBLE_COFFEE,         "counter_4"),
+            (F_BREWS,                 "counter_8"),
+            (F_CLEANINGS,             "counter_9"),
+            (F_DESCALINGS,            "counter_10"),
+            (F_GROUNDS_LEVEL,         "counter_15"),
+        ],
+        "text": [
+            (F_TRAY_STATUS,           "tray_status"),
+            (F_TANK_STATUS,           "water_tank_status"),
+            (F_MACHINE_STATUS,        "machine_status"),
+            (F_COUNTERS_CHANGED,      "counters_changed"),
+            (F_IC_BITS,               "ic_bits"),
+        ],
+    },
     "F6": {
         "numeric": [
             (F_SINGLE_ESPRESSO,       "counter_1"),
@@ -170,6 +190,9 @@ MODEL_MAP = {
             (F_DESCALINGS,            "counter_10"),
             (F_BREW_MOVEMENTS,        "counter_11"),
             (F_MILK,                  "counter_12"), # This one is still a bit of a mystery..  It increases on a Cappuccino but not when doing milk only?
+            # TODO: Possible bug - Documentation mismatch for counter_14
+            # Jura_uart_map.md says counter_14 is "Brews since Cleaning"
+            # but here it's mapped to F_BREWS_SINCE_DESCALING for E8 model
             (F_BREWS_SINCE_DESCALING, "counter_14"),
             (F_GROUNDS_LEVEL,         "counter_15"),
             (F_BREWS_SINCE_CLEANING,  "counter_16"),
