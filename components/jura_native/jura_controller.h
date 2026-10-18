@@ -53,13 +53,16 @@ class JuraController : public TransportSink {
   void advance(uint32_t now) {
     now_ = now;
     transport_.tick(now);
-    if (!discovery_done_ && uint32_t(now - boot_) >= 8000) {
-      if (!profile_hint_.empty() && profiles_.select(profile_hint_))
+    const uint32_t boot_elapsed = uint32_t(now - boot_);
+    // TY is optional: some machines reveal their model only in the AT T3 reply.
+    // Keep API discovery gated while that first handshake can identify the profile.
+    if (!discovery_done_) {
+      if (boot_elapsed >= 8000 && !profile_hint_.empty() && profiles_.select(profile_hint_)) {
         install_profile_();
-      else {
+      } else if (boot_elapsed >= startup_delay_ && boot_elapsed - startup_delay_ >= 30000) {
         discovery_done_ = true;
         profile_changed(false);
-        text("profile", "Unknown; restart after identification");
+        text("profile", "Identification timed out; configure profile_hint and restart");
       }
     }
     if (session_ != Session::OFF && session_ != Session::READY && session_ != Session::BACKOFF &&
@@ -114,7 +117,7 @@ class JuraController : public TransportSink {
       start_("TY:", Kind::TYPE);
       return;
     }
-    if (!model_mismatch_ && discovery_done_ && uint32_t(now - boot_) >= startup_delay_ &&
+    if (!model_mismatch_ && uint32_t(now - boot_) >= startup_delay_ &&
         (session_ == Session::OFF ||
          (session_ == Session::BACKOFF && uint32_t(now - session_failed_at_) >= 60000))) {
       start_session_();
@@ -337,7 +340,8 @@ class JuraController : public TransportSink {
       Profiles candidate;
       if (profile_ok() && candidate.select(model) && candidate.ef == profiles_.ef) return;
       model_mismatch_ = true;
-      session_failed_("Machine/profile changed: restart to update native entities");
+      session_failed_(profile_ok() ? "Machine/profile changed: restart to update native entities"
+                                   : "Model identified after discovery closed: configure profile_hint and restart");
       return;
     }
     if (profiles_.select(model))

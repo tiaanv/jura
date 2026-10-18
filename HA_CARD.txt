@@ -1,4 +1,4 @@
-Home Assistant card contract — Jura Native 0.1.0
+Home Assistant card contract — Jura Native 0.1.1
 ================================================
 
 Use actual entity IDs discovered under the Jura device; names below identify

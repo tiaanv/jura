@@ -1,4 +1,4 @@
-Validation — Jura Native 0.1.0
+Validation — Jura Native 0.1.1
 ==============================
 
 Performed with ESPHome 2026.9.1 on 2026-10-18.
@@ -17,6 +17,10 @@ PASS: C++17 host controller/protocol tests, -Wall -Wextra -Werror:
   extended progress windows; incomplete progress; operation timeout and finish.
   Handshake backoff/recovery, clock rollover, persistent model mismatch block
   and incomplete TF refusing readiness.
+  Regression: with no TY response and the default 8-second startup delay, the
+  first AT T3 reply identifies EF533 before native discovery is finalised.
+  Discovery remains bounded with no machine present; a matching profile hint
+  finalises earlier without treating the subsequent T3 as a profile change.
 
 PASS: same suite compiled with USE_ESP8266 and the test pgmspace shim to
   exercise the flash-reader path. This is a host test, not an ESP8266 binary.

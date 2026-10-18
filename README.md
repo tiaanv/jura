@@ -1,4 +1,4 @@
-# Jura Native V2 — 0.1.0 testing release
+# Jura Native V2 — 0.1.1 testing release
 
 The `V2` branch includes the new native ESPHome component in
 [`components/jura_native`](components/jura_native), using all 75 bundled model

@@ -52,13 +52,14 @@ struct Machine {
   size_t consumed = 0;
   std::string outgoing;
   std::string model = "EF533M V02.09", challenge = "010001B228", tf = "000400000000";
-  bool answer_at = true, answer_brew = true, reject_brew = false, auto_tf = true;
+  bool answer_type = true, answer_at = true, answer_brew = true, reject_brew = false, auto_tf = true;
   std::vector<std::string> commands;
   void inject(const std::string &s, bool at = true) {
     for (auto raw : encode(at ? cipher::build_frame(s + "\r\n", 0xA0) : s + "\r\n")) dev.input(raw, clock);
   }
-  void begin(bool control = true, const std::string &override = "") {
-    dev.configure(control, true, true, 100, override);
+  void begin(bool control = true, const std::string &override = "", uint32_t startup = 100,
+             const std::string &hint = "") {
+    dev.configure(control, true, true, startup, override, hint);
     dev.begin(clock);
   }
   void tick(unsigned n = 1) {
@@ -87,7 +88,7 @@ struct Machine {
         command = outgoing.substr(0, outgoing.size() - 2);
       outgoing.clear();
       commands.push_back(command);
-      if (command == "TY:")
+      if (command == "TY:" && answer_type)
         inject("ty:" + model, false);
       else if (command == "AN:02")
         inject("an:OK", false);
@@ -351,6 +352,32 @@ static void test_banks_and_progress() {
   assert(short_tf.dev.texts["status"] == "unknown");
   assert(!short_tf.dev.brew_named("Espresso"));
 }
+static void test_at_only_identification() {
+  Machine m;
+  m.answer_type = false;
+  m.begin(true, "", 8000);
+  m.tick(8001);
+  assert(!m.dev.discovery_ready() && !m.dev.profile_ok());
+  m.tick(10000);
+  assert(m.dev.discovery_ready() && m.dev.profile().ef == "EF533" && m.dev.ready());
+  assert(m.dev.installed == 1 && m.dev.bins["connected"] == 1);
+  assert(m.count("@t3") == 1 && m.dev.brew_named("Espresso"));
+
+  Machine no_machine;
+  no_machine.answer_type = no_machine.answer_at = false;
+  no_machine.begin(true, "", 8000);
+  no_machine.tick(38001);
+  assert(no_machine.dev.discovery_ready() && !no_machine.dev.profile_ok());
+  assert(no_machine.dev.installed == 1);
+
+  Machine hint;
+  hint.answer_type = false;
+  hint.begin(true, "", 8000, "EF533");
+  hint.tick(8001);
+  assert(hint.dev.discovery_ready() && hint.dev.profile().ef == "EF533");
+  hint.tick(10000);
+  assert(hint.dev.ready() && hint.dev.installed == 1);
+}
 int main() {
   test_profiles();
   test_cipher();
@@ -358,6 +385,7 @@ int main() {
   test_brew();
   test_failure_and_rejection();
   test_banks_and_progress();
+  test_at_only_identification();
   std::cout << "PASS: all 75 profiles, cipher, statistics, native recipe semantics, brewing lifecycle, busy "
                "rejection, TV liveness, retry/rejection and rollover\n";
 }

@@ -16,7 +16,8 @@ manifest = root / "SHA256SUMS"
 manifest.write_text("".join(hashlib.sha256(p.read_bytes()).hexdigest() + "  " +
                             p.relative_to(root).as_posix() + "\n" for p in files), encoding="utf-8")
 files.append(manifest)
-dest = root.parent / "jura-native-release-0.1.0.zip"
+version = (root / "VERSION").read_text().strip()
+dest = root.parent / f"jura-native-release-{version}.zip"
 with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as archive:
     for file in files:
         archive.write(file, "jura-native/" + file.relative_to(root).as_posix())

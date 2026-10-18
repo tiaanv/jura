@@ -1,4 +1,4 @@
-Jura Native 0.1.0 — first testing release
+Jura Native 0.1.1 — testing release
 ======================================
 
 Native ESPHome integration using harryzz's complete 75-profile JPRF v4 database.
@@ -84,10 +84,15 @@ drink preparation, rather than claiming every screen operation is supported.
 STARTUP AND STATUS
 ------------------
 The native entities are registered at build time. During setup the component
-waits up to 8 seconds for TY identification, then names/unhides the selected
-profile's slots before the native API starts. Only that profile's slots appear.
+tries TY identification and, if needed, takes the model from the first AT T3
+reply. It names/unhides the selected profile's slots before the native API
+starts. Only that profile's slots appear. AT identification starts after
+startup_delay; discovery stays open for a further 30 seconds (38 seconds total
+with the default startup delay). A working TY response can finish discovery
+earlier. This waiting is nonblocking and continues to service the watchdog.
 For a machine that cannot answer during boot, set profile_hint: EF533 (or its
-actual EF code). A later different/unknown profile requires an ESP restart to
+actual EF code); a hint can finalise discovery after 8 seconds even without a
+TY reply. A later different/unknown profile requires an ESP restart to
 rebuild discovery; control is blocked rather than using incompatible metadata.
 
 startup_delay defaults to 8s before starting the AT session. handshake_response:

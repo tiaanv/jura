@@ -73,6 +73,8 @@ int main() {
   unavailable.register_number(3, &hidden);
   unavailable.setup();
   ticks(unavailable, 8001);
+  assert(!unavailable.can_proceed());
+  ticks(unavailable, 30000);
   assert(unavailable.can_proceed() && missing.is_internal() && hidden.is_internal());
 
   esphome::jura_coolcontrol::JuraCoolcontrol cooler;
