@@ -5,7 +5,15 @@
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/log.h"
+#include "esphome/core/hal.h"
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <vector>
 #include <map>
+#include <deque>
 
 namespace esphome {
 namespace jura {
@@ -26,54 +34,152 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     if (it != text_.end() && it->second) it->second->publish_state(value);
   }
 
-  std::string cmd2jura(std::string outbytes) {
-    std::string inbytes;
-    int w = 0;
-
-    while (available()) { read(); }
-    outbytes += "\r\n";
-    for (int i = 0; i < (int) outbytes.size(); i++) {
-      uint8_t src = static_cast<uint8_t>(outbytes[i]);
-      for (int s = 0; s < 8; s += 2) {
-        uint8_t rawbyte = 0xFF;
-        bitWrite(rawbyte, 2, bitRead(src, s + 0));
-        bitWrite(rawbyte, 5, bitRead(src, s + 1));
-        write(rawbyte);
-      }
-      delay(8);
+  // Returns queue acceptance, not a machine acknowledgement. No automatic retries.
+  bool queue_command(const std::string &command) {
+    if (command.empty() || command.size() > 32 || command.find_first_of("\r\n") != std::string::npos) {
+      ESP_LOGW("jura", "Rejected invalid command");
+      return false;
     }
-
-    int s = 0;
-    uint8_t inbyte = 0;
-    while (!(inbytes.size() >= 2 && inbytes[inbytes.size()-2] == '\r' && inbytes[inbytes.size()-1] == '\n')) {
-      if (available()) {
-        uint8_t rawbyte = static_cast<uint8_t>(read());
-        bitWrite(inbyte, s + 0, bitRead(rawbyte, 2));
-        bitWrite(inbyte, s + 1, bitRead(rawbyte, 5));
-        if ((s += 2) >= 8) {
-          s = 0;
-          inbytes.push_back(static_cast<char>(inbyte));
-          inbyte = 0;
-        }
-      } else {
-        delay(10);
-      }
-      if (w++ > 500) return "";
+    if (commands_.size() >= 8) {
+      ESP_LOGW("jura", "Command queue full; rejected %s", command.c_str());
+      return false;
     }
-    return inbytes.substr(0, inbytes.size() - 2);
+    commands_.push_back(command);
+    return true;
   }
 
   void update() override {
-    // ---- counters ----
-    std::string result = cmd2jura("RT:0000");
-    if (result.empty() || result.size() < 64) {
-      ESP_LOGW("jura", "Unexpected RT:0000 response len=%d", (int)result.size());
+    // Coalesce ticks while a poll is pending or in progress.
+    if (poll_rt_pending_ || poll_ic_pending_ ||
+        (state_ != State::IDLE && active_kind_ != Kind::ACTION)) return;
+    poll_rt_pending_ = poll_ic_pending_ = true;
+  }
+
+  void loop() override {
+    uint32_t now = millis();
+    // Bound work per loop, including while draining stale/late input.
+    uint8_t raw;
+    for (size_t count = 0; count < 128 && available(); ++count) {
+      if (!read_byte(&raw)) break;
+      last_rx_ms_ = millis();
+      if (state_ == State::IDLE) continue;
+      if (response_complete_) continue;
+      // The other six bits must remain high in the Jura encoding.
+      if ((raw & 0xDBu) != 0xDBu) {
+        finish_(false, "invalid UART encoding");
+        return;
+      }
+      rx_byte_ |= static_cast<uint8_t>((((raw >> 2) & 1u) << rx_shift_) |
+                                     (((raw >> 5) & 1u) << (rx_shift_ + 1)));
+      rx_shift_ += 2;
+      if (rx_shift_ == 8) {
+        response_.push_back(static_cast<char>(rx_byte_));
+        rx_shift_ = rx_byte_ = 0;
+        if (response_.size() > 512) {
+          finish_(false, "response too long");
+          return;
+        }
+        const size_t n = response_.size();
+        if (n >= 2 && response_[n - 2] == '\r' && response_[n - 1] == '\n') {
+          response_.resize(n - 2);
+          response_complete_ = true;
+        }
+      }
+    }
+    now = millis();
+    if (state_ == State::IDLE) {
+      if (available() || static_cast<uint32_t>(now - last_rx_ms_) < 100 ||
+          static_cast<uint32_t>(now - finished_ms_) < recovery_ms_) return;
+      if (!commands_.empty()) {
+        std::string command = commands_.front();
+        commands_.pop_front();
+        start_(command, Kind::ACTION, now);
+      } else if (poll_rt_pending_) {
+        poll_rt_pending_ = false;
+        start_("RT:0000", Kind::COUNTERS, now);
+      } else if (poll_ic_pending_) {
+        poll_ic_pending_ = false;
+        start_("IC:", Kind::STATUS, now);
+      }
       return;
     }
+    if (state_ == State::SENDING) {
+      if (static_cast<uint32_t>(now - started_ms_) >= 5000) {
+        finish_(false, "transmit scheduling timeout");
+        return;
+      }
+      if (tx_pos_ != 0 && static_cast<uint32_t>(now - last_tx_ms_) < 8) return;
+      if (tx_pos_ < tx_.size()) {
+        const uint8_t value = static_cast<uint8_t>(tx_[tx_pos_++]);
+        uint8_t encoded[4];
+        for (unsigned i = 0; i < 4; ++i)
+          encoded[i] = static_cast<uint8_t>(0xDBu | (((value >> (2 * i)) & 1u) << 2) |
+                                          (((value >> (2 * i + 1)) & 1u) << 5));
+        // Only four bytes per call; never wait for the full frame to flush.
+        write_array(encoded, sizeof(encoded));
+        last_tx_ms_ = millis();
+        return;
+      }
+      state_ = State::WAITING;
+      response_started_ms_ = now;
+    }
+    if (response_complete_) {
+      finish_(true, "");
+    } else if (static_cast<uint32_t>(now - response_started_ms_) >= 5000) {
+      finish_(false, "response timeout");
+    }
+  }
 
-   // Parse all counters available (4 hex chars per field starting at pos=3)
+ protected:
+  enum class State { IDLE, SENDING, WAITING };
+  enum class Kind { ACTION, COUNTERS, STATUS };
+
+  void start_(const std::string &command, Kind kind, uint32_t now) {
+    active_command_ = command;
+    active_kind_ = kind;
+    tx_ = command + "\r\n";
+    tx_pos_ = 0;
+    response_.clear();
+    response_complete_ = false;
+    rx_shift_ = rx_byte_ = 0;
+    started_ms_ = now;
+    state_ = State::SENDING;
+    ESP_LOGD("jura", "Sending %s", command.c_str());
+  }
+
+  static bool valid_hex_payload_(const std::string &value, const char *prefix, size_t min_length) {
+    if (value.size() < min_length || value.compare(0, 3, prefix) != 0) return false;
+    for (size_t i = 3; i < value.size(); ++i) {
+      const char c = value[i];
+      if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+        return false;
+    }
+    return true;
+  }
+
+  void finish_(bool success, const char *reason) {
+    if (success && active_kind_ == Kind::COUNTERS)
+      success = valid_hex_payload_(response_, "rt:", 64) && ((response_.size() - 3) % 4 == 0);
+    if (success && active_kind_ == Kind::STATUS)
+      success = valid_hex_payload_(response_, "ic:", 7);
+    if (!success) {
+      ESP_LOGW("jura", "%s: %s (%u decoded bytes); not retried", active_command_.c_str(),
+               reason[0] ? reason : "unexpected response", static_cast<unsigned>(response_.size()));
+    } else if (active_kind_ == Kind::COUNTERS) {
+      handle_counters_(response_);
+    } else if (active_kind_ == Kind::STATUS) {
+      handle_status_(response_);
+    } else {
+      ESP_LOGD("jura", "%s response: %s", active_command_.c_str(), response_.c_str());
+    }
+    state_ = State::IDLE;
+    finished_ms_ = millis();
+    // A quiet interval helps discard late replies after timeout; the protocol has no transaction IDs.
+    recovery_ms_ = success ? 100 : 500;
+  }
+
+  void handle_counters_(const std::string &result) {
     std::vector<long> current = parse_all_counters_(result);
-
     // Publish the ones you already expose (examples below; keep as you had it)
     publish_number("counter_1", get_counter_n_(current, 1));
     publish_number("counter_2", get_counter_n_(current, 2));
@@ -94,18 +200,18 @@ class Jura : public PollingComponent, public uart::UARTDevice {
 
     publish_counter_changes_(current);
 
-    // ---- flags ----
-    std::string ic = cmd2jura("IC:");
-    if (ic.size() >= 7) {
-      byte a = static_cast<byte>(strtol(ic.substr(3,2).c_str(), NULL, 16));
-      byte b = static_cast<byte>(strtol(ic.substr(5,2).c_str(), NULL, 16));
+  }
+
+  void handle_status_(const std::string &ic) {
+      uint8_t a = static_cast<uint8_t>(std::strtol(ic.substr(3,2).c_str(), nullptr, 16));
+      uint8_t b = static_cast<uint8_t>(std::strtol(ic.substr(5,2).c_str(), nullptr, 16));
 
       publish_ic_bits_if_changed_(a, b);     
 
-      byte trayBit       = bitRead(a, 4);
-      byte left_readyBit = bitRead(a, 2);
-      byte tankBit       = bitRead(b, 5);
-      byte right_busyBit = bitRead(b, 6);
+      uint8_t trayBit       = ((a >> 4) & 1u);
+      uint8_t left_readyBit = ((a >> 2) & 1u);
+      uint8_t tankBit       = ((b >> 5) & 1u);
+      uint8_t right_busyBit = ((b >> 6) & 1u);
 
       std::string tray_status = (trayBit == 1) ? "Present" : "Missing";
       std::string tank_status = (tankBit == 1) ? "Fill Tank" : "OK";
@@ -118,12 +224,8 @@ class Jura : public PollingComponent, public uart::UARTDevice {
       publish_text("tray_status",        tray_status);
       publish_text("water_tank_status",  tank_status);
       publish_text("machine_status",     machine_status);
-    } else {
-      ESP_LOGW("jura", "Unexpected IC response len=%d", (int) ic.size());
-    }
   }
 
- protected:
   // Return counter_n (1-based) from vector or -1 if missing
   long get_counter_n_(const std::vector<long> &v, int n) const {
     const size_t idx = (n >= 1) ? (size_t)(n - 1) : (size_t) -1;
@@ -136,7 +238,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     std::vector<long> out;
     // field i starts at pos = 3 + 4*i (i = 0..)
     for (size_t pos = 3; pos + 4 <= rt.size(); pos += 4) {
-      long val = strtol(rt.substr(pos, 4).c_str(), nullptr, 16);
+      long val = std::strtol(rt.substr(pos, 4).c_str(), nullptr, 16);
       out.push_back(val);
     }
     return out;
@@ -160,7 +262,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
       if (prev != now) {
         if (any) msg += ", ";
         // "counter_%zu %ld→%ld"
-        snprintf(buf, sizeof(buf), "counter_%u %ld\u2192%ld", (unsigned)(i + 1), prev, now);
+        std::snprintf(buf, sizeof(buf), "counter_%u %ld\u2192%ld", (unsigned)(i + 1), prev, now);
         msg += buf;
         any = true;
       }
@@ -185,7 +287,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
       byte_to_bits(a, abits);
       byte_to_bits(b, bbits);
       // "A=xxxxxxxx B=xxxxxxxx"
-      snprintf(buf, sizeof(buf), "A=%s B=%s", abits, bbits);
+      std::snprintf(buf, sizeof(buf), "A=%s B=%s", abits, bbits);
       publish_text("ic_bits", std::string(buf));
   
       last_ic_a_ = a;
@@ -195,6 +297,17 @@ class Jura : public PollingComponent, public uart::UARTDevice {
       ESP_LOGD("jura", "IC bits changed: %s", buf);
     }
   }
+
+  State state_{State::IDLE};
+  Kind active_kind_{Kind::ACTION};
+  std::deque<std::string> commands_;
+  bool poll_rt_pending_{false}, poll_ic_pending_{false};
+  std::string active_command_, tx_, response_;
+  size_t tx_pos_{0};
+  uint8_t rx_byte_{0}, rx_shift_{0};
+  bool response_complete_{false};
+  uint32_t last_rx_ms_{0}, finished_ms_{0}, recovery_ms_{100};
+  uint32_t started_ms_{0}, last_tx_ms_{0}, response_started_ms_{0};
 
   std::string model_{"UNKNOWN"};
 
