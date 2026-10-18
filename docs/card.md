@@ -71,7 +71,7 @@ external-component configuration and UART setup are unaffected.
 3. Add a dashboard resource of type **JavaScript module**:
 
    ```text
-   /local/jura-native-card.js?v=2.0.8
+   /local/jura-native-card.js?v=2.0.9
    ```
 
 4. Refresh the browser and add the card YAML.
@@ -188,7 +188,10 @@ retained coffee-rinse visuals once the explicit rinse flag clears.
 The alert banner translates machine shorthand into actions, for example **Rinse
 the Milk System**. Ambiguous alerts say **Check the machine display**. Offline
 hides cached alerts and dims the machine while preserving independent cooler
-readings. **Offline** means disconnected; it does not prove the machine is in
+readings. During active operations the machine sends TV progress instead of TF
+alerts, so the expected stale-alert notice is suppressed while other alert
+messages remain visible. Outside an active operation, stale warnings are shown.
+**Offline** means disconnected; it does not prove the machine is in
 standby. Raw product/stage/TF/TV readings remain in **Diagnostics**.
 
 ## Troubleshooting

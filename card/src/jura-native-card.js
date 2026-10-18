@@ -1,4 +1,4 @@
-// Jura Native Graphical Card 2.0.8 — native ESPHome entities, no MQTT or external dependencies.
+// Jura Native Graphical Card 2.0.9 — native ESPHome entities, no MQTT or external dependencies.
 (() => {
   const GRAPHIC = /*GRAPHIC*/;
   const STYLES = /*STYLES*/;
@@ -246,7 +246,10 @@
       this._card.dataset.mode=mode;this._card.dataset.phase=active?(code===33?'heating':code===49||code===57?'grinding':code===50?'milk':code===52?'foam':code===51?'pause':code===55||code===60?'coffee':code===65?'water':/rins|clean|descal/i.test(phase)?'rinse':'working'):mode==='heating'?'heating':finished?'finished':'idle';
       const statusNames={switching_off:'Switching off',ready:'Ready',busy:'Making a drink',blocked:'Needs attention',heating:'Heating',finishing:'Finishing',not_ready:'Not ready',connecting:'Connecting',offline:'Offline',unknown:'Unknown'};
       set('#status',statusNames[mode]||'Unknown');set('#detail',shuttingDown?'Preparing to Switch Off':!connected&&status!=='connecting'?'Machine disconnected':active?displayPhase||'Machine operation in progress':friendlyAlert(this._text('status_detail','Waiting for machine status')));
-      const alerts=[];if(activeAlerts&&activeAlerts.toLowerCase()!=='none')alerts.push(friendlyAlert(activeAlerts));if(stale&&!/stale/i.test(activeAlerts))alerts.push('Alert readings are stale');
+      // Active operations report TV progress instead of TF. Suppress only the
+      // expected stale-status notice, preserving physical machine alert labels.
+      const visibleAlerts=active?activeAlerts.split(/[,;]/).filter(label=>! /^(unknown \(stale alerts\)|alert readings are stale)$/i.test(label.trim())).join(', '):activeAlerts;
+      const alerts=[];if(visibleAlerts&&visibleAlerts.toLowerCase()!=='none')alerts.push(friendlyAlert(visibleAlerts));if(stale&&!active&&!/stale/i.test(activeAlerts))alerts.push('Alert readings are stale');
       $('#alerts').hidden=!connected||!alerts.length;set('#alerts',connected?alerts.join(' · '):'');
       const freshReady=connected&&!stale&&status==='ready';
       const operation=connected&&!shuttingDown&&!freshReady&&(active||finished||/progress timeout/i.test(phase));$('#operation').hidden=!operation;

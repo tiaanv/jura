@@ -1,5 +1,11 @@
 # Card changelog
 
+## 2.0.9
+
+- Suppress the expected TF stale-status banner during active TV-reported
+  operations. Physical machine alerts remain visible; stale warnings resume
+  after the active operation ends. Readiness and Brew gates are unchanged.
+
 ## 2.0.8 — first public card package
 
 Includes the live-tested development series 2.0.0–2.0.8:
