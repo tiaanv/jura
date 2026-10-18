@@ -1,0 +1,85 @@
+Saved drink recipes and one-shot HA edits — 0.2.0
+================================================
+
+Update from V2, compile and upload. No YAML changes are required for the native
+selectors, numbers, buttons and new recipe-state entities. Keep allow_brew: true
+to use Brew. The optional brew_selected API action is included in both examples;
+merge it into your api.actions only if your card wants that action rather than
+pressing the native Jura Brew button.
+
+NORMAL USE
+----------
+Select a drink in Jura Drink. The component schedules @TM:41,<product code>,
+waits for an idle connected machine/fresh status, and reads its saved settings.
+Jura Recipe Loading stays on until that read succeeds or fails. While waiting,
+the controls show provisional profile defaults; Brew rejects rather than silently
+using them. Changing another control while loading is allowed and that explicit
+HA edit is retained when the machine values arrive.
+
+Once Recipe Loading is off, inspect:
+  Jura Recipe Source     Machine or Profile defaults (the baseline source)
+  Jura Recipe Status     Loaded product, pending read, or fallback explanation
+  Jura Recipe Modified   HA overrides are pending for one Brew request
+  Jura Saved Recipe Raw  Current-selection read response, for diagnostics
+
+Edit settings and press Jura Brew. The queued @TP command contains a frozen copy
+of the loaded recipe plus overrides. The controls immediately return to the
+baseline and Recipe Modified turns off. Rejected requests preserve the edits.
+Edits are consumed when queued, including if the eventual command is rejected
+or unconfirmed; a brew is never retried automatically. Changing controls while
+a prior brew is pending cannot alter that prior command's frozen payload.
+
+Reset Recipe discards overrides and requests a fresh read. Selecting even the
+same drink also reloads it. The baseline stays in RAM until a selection/reset;
+it is not a continuous mirror of changes made at the machine screen. After a
+screen edit, leave Expert Mode, return to idle, then select/reset in HA to reload.
+
+READ VALIDATION AND FALLBACK
+----------------------------
+The reply must have a valid ASCII checksum, echo the requested product, contain
+all options declared for that product, and decode to permitted profile values.
+Unknown/sentinel/out-of-range values cause a complete profile-default fallback;
+partial machine settings are not mixed silently into the baseline.
+
+Unsupported (@tm:C1), malformed, unexpected, bad-checksum, wrong-product,
+incomplete and timed-out responses use Profile defaults and explain why in
+Recipe Status. There is no automatic retry loop. Select/reset to retry.
+Existing user edits are retained over the fallback baseline for one brew.
+
+A response for an earlier selection/reset is discarded. Selection requests
+coalesce to the newest drink rather than accumulating a read per click. The
+in-flight transaction finishes or times out, then the newest selection is read.
+Reads defer during a machine operation and do not change its saved recipes.
+The initial default selection (Espresso where available) loads after connection.
+
+API/CARD USAGE
+--------------
+Use button.press on the native Jura Brew entity, or brew_selected(), to use the
+selected controls. The example's optional API action is normally exposed as
+esphome.jura_e8_brew_selected for the existing device name jura-e8.
+
+The earlier brew_drink(name)/brew_named(name) and brew_custom(...) shortcuts
+retain their existing independent semantics: unspecified values use profile
+defaults. They do not read another product on demand or consume UI edits.
+This avoids silently changing existing explicit API callers. For a card using
+the saved-recipe workflow, select the drink, wait until Recipe Loading is false,
+change native controls if desired, and press Brew/brew_selected.
+
+For a fresh baseline with no overrides, use Reset Recipe, wait, then Brew.
+To brew profile defaults deliberately, the existing named API action is available.
+No saved-recipe write, EEPROM write, @TS lock/unlock or screen-navigation command
+has been added. Only @TM reads and the existing one-shot @TP brewing are used.
+
+FIRST TESTS ON YOUR E8
+----------------------
+1. Select Espresso; expect Machine source and your saved 8 / 45ml / High values.
+2. Select another drink and compare every available control with its screen.
+   Espresso's saved-water read is physically established; other products and
+   field mappings still need these comparisons.
+3. Edit water in HA and press Brew once. Verify the edited command/drink, then
+   confirm the controls returned to the saved baseline and the screen recipe
+   remains unchanged. Compare progress/command result as in previous tests.
+4. Change one setting at the screen, exit menus, press Reset Recipe in HA, and
+   verify the refreshed controls. Test a milk drink's duration separately.
+5. If Source says Profile defaults, inspect Recipe Status and Saved Recipe Raw;
+   the firmware may not expose saved settings for that product.

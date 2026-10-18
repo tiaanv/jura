@@ -1,4 +1,4 @@
-Validation — Jura Native 0.1.3
+Validation — Jura Native 0.2.0
 ==============================
 
 Performed with ESPHome 2026.9.1 on 2026-10-18.
@@ -72,7 +72,7 @@ Suggested first E8 acceptance check:
   6. Verify the espresso/grounds counters change, then reset and power-cycle
      the ESP to check that discovery and AT connection recover consistently.
 
-0.1.3 espresso probe regression checks:
+0.2.0 espresso probe regression checks:
   Native diagnostic button/text schema and generated source pass; actual C3
   ESP-IDF syntax check passes. Host tests cover checksum and espresso-code
   validation, profile label/volume decoding, missing/unknown fields, malformed
@@ -83,9 +83,20 @@ Suggested first E8 acceptance check:
   selected recipe values remain unchanged. Actual EF533 read support and
   agreement with the saved screen settings remain unverified pending the probe.
 
-0.1.3: repeated reads tested with the actual EF533 reply
+0.2.0: repeated reads tested with the actual EF533 reply
   @tm:41,020006090000020000000000DB, then a 50ml comparison vector.
   Both complete, re-enable the next read and leave recipe controls unchanged.
   Pending, active-operation, awaiting-TF and stale-TF rejection reasons tested.
   This clarifies diagnostics; the screenshot alone does not identify which
   guard rejected the physical machine's second button press.
+
+0.2.0 selected-drink saved recipes:
+  Controller tests cover initial load, espresso/coffee/cappuccino settings,
+  friendly-label decoding, preserved HA edits during a read, one-shot queue
+  payload/restored controls, rejected brew retaining edits, explicit reset,
+  unsupported/corrupt/wrong-product/short/timeout fallback, no retry loop, late
+  replies and timeouts after changing selection, and reset of the same product.
+  Native adapter tests perform the AT handshake, receive a saved cappuccino
+  recipe, update typed entities while preserving overrides and restore baseline
+  controls on Brew. Other drinks/models remain physically unverified; the
+  supplied E8 logs confirm saved espresso water follows 45 -> 60 -> 45ml.

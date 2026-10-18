@@ -1,4 +1,4 @@
-Read-only espresso settings probe — 0.1.3
+Read-only espresso settings probe — 0.2.0
 =========================================
 
 Update the component from the V2 branch, recompile and upload. No additional
@@ -20,7 +20,8 @@ component version, use Clean Build Files and compile again.
 
 The exact request is @TM:41,02 (product 02 = Espresso). It is sent once through
 the existing AT transport. The button works with allow_brew: false as well.
-There is no automatic startup/polling probe and no automatic retry.
+This diagnostic button does not run automatically or retry. The selected-drink
+loader separately reads @TM:41,<code> on selection/reset, including at startup.
 
 It sends no @TP brew, @TS lock/unlock, @TM settings-write payload or EEPROM
 write. The existing recipe controls and profile defaults remain unchanged.
@@ -60,8 +61,10 @@ https://github.com/makefu/jura-connect/blob/main/jura_connect/client.py
   read_pmode_product, _parse_pmode_product, _pmode_strip_checksum
 https://github.com/makefu/jura-connect/blob/main/docs/PROTOCOL.md
 
-This feature is a diagnostic probe, not saved-recipe synchronisation. Real EF533
-support and the field interpretations must be established from your comparison.
+The diagnostic probe remains independent of the controls. The selected drink
+now has a separate automatic saved-recipe loader; see SAVED_RECIPES.txt.
+EF533 saved espresso water was confirmed by the 45 -> 60 -> 45ml screen test;
+other fields/products still benefit from independent screen comparisons.
 
 If another press is rejected, Result now names the specific cause: no profile,
 AT disconnected, active operation (phase and last progress age), waiting for

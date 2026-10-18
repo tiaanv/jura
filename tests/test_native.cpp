@@ -18,6 +18,11 @@ static void ticks(JuraNative &device, unsigned n) {
     device.loop();
   }
 }
+static void inject_at(JuraNative &device, const std::string &frame) {
+  for (auto raw : encode(jura_protocol::atproto::build_frame(frame + "\r\n", 0xA0)))
+    device.incoming.push_back(raw);
+  ticks(device, 10);
+}
 int main() {
   test_now = 0;
   JuraNative device;
@@ -27,6 +32,8 @@ int main() {
   ProfileBinarySensor tray, unrelated_alert;
   CommandButton brew, off, probe;
   esphome::text_sensor::TextSensor probe_result;
+  esphome::text_sensor::TextSensor recipe_source;
+  esphome::binary_sensor::BinarySensor recipe_loading, recipe_modified;
   esphome::sensor::Sensor water_min;
   device.register_select(-1, &drink);
   device.register_select(0, &strength);
@@ -44,6 +51,9 @@ int main() {
   device.register_button(3, &off);
   device.register_button(4, &probe);
   device.register_text("espresso_probe_result", &probe_result);
+  device.register_text("recipe_source", &recipe_source);
+  device.register_binary("recipe_loading", &recipe_loading);
+  device.register_binary("recipe_modified", &recipe_modified);
   device.set_allow_brew(true);
   device.set_allow_power_off(true);
   device.setup();
@@ -71,6 +81,23 @@ int main() {
   assert(!probe.is_internal());
   device.press(4);  // Identification alone is not an AT connection.
   assert(probe_result.state.find("Rejected") == 0);
+  assert(recipe_loading.state && recipe_modified.state);
+  // Complete the real adapter's handshake and load the selected Cappuccino.
+  ticks(device, 8300 - test_now);
+  inject_at(device, "@t0");
+  ticks(device, 400);
+  inject_at(device, "@t1");
+  inject_at(device, "@T2:010001B228");
+  ticks(device, 1000);
+  inject_at(device, "@T3:3BA4EF533M V02.09");
+  ticks(device, 500);
+  inject_at(device, "@TF:000400000000");
+  ticks(device, 800);
+  inject_at(device, "@tm:41,0400060C0E00010000000000BB");
+  assert(recipe_source.state == "Machine" && !recipe_loading.state);
+  assert(water.state == 80 && recipe_modified.state);  // Preserve the earlier HA override.
+  device.press(0);
+  assert(water.state == 60 && !recipe_modified.state);  // Consume it for exactly one request.
 
   JuraNative unavailable;
   RecipeSelect missing;

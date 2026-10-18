@@ -1,4 +1,4 @@
-Home Assistant card contract — Jura Native 0.1.3
+Home Assistant card contract — Jura Native 0.2.0
 ================================================
 
 Use actual entity IDs discovered under the Jura device; names below identify
@@ -46,7 +46,7 @@ Recipe panel
   Jura Bypass Amount       ml, if supported
   Jura Milk Pause          seconds, if supported
   Jura Brew                Start the selected/edited recipe
-  Jura Reset Recipe        Restore selected drink's profile defaults
+  Jura Reset Recipe        Discard HA edits and reload the selected saved recipe
 
 Jura Water Min/Max/Step, Milk Min/Max/Step, Milk Foam Min/Max/Step, Bypass
 Min/Max/Step and Milk Pause Min/Max/Step report selected-drink bounds. An absent
@@ -122,3 +122,22 @@ Read-only espresso settings probe (diagnostic; no YAML additions needed)
   Jura Espresso Probe Raw           Raw response, including payload/checksum
   Jura Espresso Probe Settings      Decoded profile labels, water ml, temperature
 This probe does not initialise or change the recipe controls. See ESPRESSO_PROBE.txt.
+
+Saved selected recipe controls (0.2.0)
+  Jura Recipe Source     Machine or Profile defaults (the unedited baseline)
+  Jura Recipe Status     Waiting/reading/success, or the reason for fallback
+  Jura Recipe Loading    Disable Brew while true
+  Jura Recipe Modified   HA edits are pending for the next accepted Brew request
+  Jura Saved Recipe Raw  Raw current-selection response (diagnostic)
+
+Use native Jura Brew / button.press, or the optional brew_selected API action
+in the examples, to send the controls and consume one-shot edits. Selecting a
+drink or pressing Reset Recipe reloads its saved settings. Edits made during a
+read are preserved; a reply for an earlier selection/reset is ignored. The
+controls return to their baseline as soon as the request is accepted into the
+queue, not after physical completion. Rejected requests retain edits.
+
+The existing brew_drink and brew_custom actions remain independent shortcuts:
+unspecified parameters still use profile defaults. They do not consume the
+selected controls or their edits. Use brew_selected for this new workflow.
+See SAVED_RECIPES.txt for fallback and physical comparison details.

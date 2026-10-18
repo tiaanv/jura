@@ -44,6 +44,12 @@ jura_native:
 api:
   # Keep your existing encryption: block here.
   actions:
+    # Optional card action: sends the loaded/edited controls as a one-shot recipe.
+    - action: brew_selected
+      then:
+        - lambda: |-
+            id(jura_coffee).brew_selected();
+
     - action: brew_drink
       variables:
         drink: string

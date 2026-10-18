@@ -1,4 +1,4 @@
-# Jura Native V2 — 0.1.3 testing release
+# Jura Native V2 — 0.2.0 testing release
 
 The `V2` branch includes the new native ESPHome component in
 [`components/jura_native`](components/jura_native), using all 75 bundled model
@@ -13,13 +13,17 @@ Only one component should consume the Jura UART.
 
 [Component documentation](README.txt) · [HA card/action contract](HA_CARD.txt) ·
 [Profile index](PROFILE_REFERENCE.txt) · [Readable profile data](PROFILE_DATABASE.json) ·
+[Saved recipe loading and one-shot edits](SAVED_RECIPES.txt) ·
 [Read-only espresso settings probe](ESPRESSO_PROBE.txt) ·
 [Validation and remaining hardware checks](VALIDATION.txt) · [Sources and attribution](SOURCES.txt)
 
 The new source passes protocol/entity tests, ESPHome schema validation, and an
 ESP32-C3 ESP-IDF compiler syntax check. Full firmware linking/flashing and physical
-acceptance of the fresh implementation remain to be done. Named/custom recipes
-use profile defaults and do not read or overwrite the machine's saved recipes.
+acceptance of this saved-recipe loader remain to be done. Selecting a drink
+reads its saved settings into the native controls, with profile defaults as a
+labelled fallback. HA edits apply to one accepted Brew request;
+the machine's saved recipe is never overwritten. See SAVED_RECIPES.txt for the
+explicit profile-default named/custom API shortcuts.
 
 The legacy `components/jura` remains available below for existing configurations.
 The optional `jura_coolcontrol` receiver has also been updated to nonblocking reception.

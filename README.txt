@@ -1,4 +1,4 @@
-Jura Native 0.1.3 — testing release
+Jura Native 0.2.0 — testing release
 ======================================
 
 Native ESPHome integration using harryzz's complete 75-profile JPRF v4 database.
@@ -44,9 +44,12 @@ WHAT YOU GET
 
 DRINK CONTROLS
 --------------
-Select a named drink, edit supported settings, then press Jura Brew. Changing
-the drink resets its recipe to that profile's defaults. Reset Recipe does the
-same for the selected drink. Edited recipes live in RAM and reset on reboot.
+Select a named drink, wait for Jura Recipe Loading to turn off, edit supported
+settings, then press Jura Brew. Selection loads the machine's saved recipe.
+Unsupported/invalid/timed-out reads use clearly labelled profile defaults.
+Reset Recipe discards HA edits and reads the selected drink again. A successful
+Brew queue request consumes the HA edits and restores the baseline controls.
+Rejected requests retain edits. See SAVED_RECIPES.txt for details and test steps.
 
 Strength, temperature and grinder ratio use the displayed profile labels. For
 example EF533 strength "6" is encoded differently from raw value 6. Do not use
@@ -65,9 +68,11 @@ of the currently edited UI recipe. brew_selected() uses the edited recipe.
 brew_custom() validates all arguments together and does not alter UI selections.
 Empty choice strings (or "default") and numeric -1 use profile defaults.
 
-These are one-shot @TP recipes. They do not read the recipes saved on the Jura's
-screen and do not write EEPROM or change those saved recipes. Consequently a
-named drink may differ from your locally customised screen recipe.
+Selected recipes are read using @TM:41,<product>. Brew commands are one-shot
+@TP recipes and never write EEPROM or alter the machine's saved recipe. The
+explicit brew_named/brew_custom API shortcuts above retain profile-default
+semantics for omitted values; use Jura Brew or brew_selected() for the loaded
+native controls. Other products/models still need real screen comparisons.
 
 Brewing requires allow_brew: true and a fresh positive ready state without
 blocking alerts. Only one control request is pending at a time. Requests made
@@ -138,6 +143,6 @@ READ-ONLY SAVED ESPRESSO SETTINGS PROBE
 Press Jura Read Espresso Settings while connected and idle. The diagnostic
 Result, Raw and Settings text entities show the outcome of @TM:41,02. There
 is no automatic polling, settings write, brew or change to the recipe controls.
-This can establish whether EF533 exposes its saved espresso recipe. Compare
+EF533 saved espresso water reads were confirmed by a 45 -> 60 -> 45ml screen test. Compare
 the returned values with the machine screen before trusting the interpretation.
 See ESPRESSO_PROBE.txt for the exact test steps and response meanings.

@@ -16,6 +16,7 @@ class JuraController : public TransportSink {
  public:
   JuraController() : transport_(*this) {
     selected_.fill(-1);
+    baseline_.fill(-1);
     counters_.fill(0xFFFF);
   }
   virtual ~JuraController() = default;
@@ -159,6 +160,18 @@ class JuraController : public TransportSink {
       return;
     }
     if (busy_()) return;
+    if (recipe_read_requested_ && !brew_pending_ && !probe_pending_ && can_read_recipe_()) {
+      const auto *p = selection();
+      if (p) {
+        recipe_read_requested_ = false;
+        active_recipe_epoch_ = recipe_epoch_;
+        active_recipe_code_ = p->code;
+        recipe_read_status_ = "Reading saved recipe for " + p->name;
+        publish_recipe_state_();
+        start_("@TM:41," + hexbyte_(p->code), Kind::SAVED_RECIPE, true);
+        return;
+      }
+    }
     if (!polls_.empty()) {
       const auto r = polls_.front();
       polls_.pop_front();
@@ -189,12 +202,20 @@ class JuraController : public TransportSink {
     return true;
   }
   void reset_recipe() {
-    selected_.fill(-1);
+    ++recipe_epoch_;
+    baseline_.fill(-1);
     if (const auto *p = selection())
       for (uint8_t i = 0; i < p->n_options; ++i) {
         const auto o = profiles_.option(*p, i);
-        if (o.valid()) selected_[o.attr] = o.def;
+        if (o.valid()) baseline_[o.attr] = o.def;
       }
+    selected_ = baseline_;
+    edited_mask_ = 0;
+    recipe_source_ = "Profile defaults";
+    recipe_read_status_ = "Waiting to read saved recipe";
+    recipe_read_requested_ = recipe_loading_ = selection() != nullptr;
+    text("saved_recipe_raw", "");
+    publish_recipe_state_();
     recipe_changed();
   }
   bool set_parameter(uint8_t attr, int32_t value) {
@@ -203,12 +224,22 @@ class JuraController : public TransportSink {
     const auto o = profiles_.option_for(*p, attr);
     if (!o.valid() || !o.accepts(value)) return reject_("Unsupported value for selected drink");
     selected_[attr] = value;
+    edited_mask_ |= uint8_t(1u << attr);
+    publish_recipe_state_();
     recipe_changed();
     return true;
   }
   bool brew_selected() {
     const auto *p = selection();
-    return p ? submit_(*p, selected_.data()) : reject_("No drink selected");
+    if (!p) return reject_("No drink selected");
+    if (recipe_loading_) return reject_("Saved recipe is still loading; wait for Recipe Loading to turn off");
+    if (!submit_(*p, selected_.data())) return false;
+    // submit_ freezes the one-shot wire recipe before clearing UI overrides.
+    selected_ = baseline_;
+    edited_mask_ = 0;
+    publish_recipe_state_();
+    recipe_changed();
+    return true;
   }
   bool brew_named(const std::string &name) {
     std::array<int32_t, ATTRIBUTE_COUNT> values;
@@ -244,7 +275,8 @@ class JuraController : public TransportSink {
   }
   bool power_off() {
     if (!allow_power_) return reject_("Power-off control disabled");
-    if (brew_pending_ || probe_pending_ || busy_() || !control_.empty()) return reject_("Machine busy");
+    if (brew_pending_ || probe_pending_ || active_ == Kind::SAVED_RECIPE || busy_() || !control_.empty())
+      return reject_("Machine busy");
     control_.push_back({"AN:02", Kind::POWER, false});
     text("command_result", "Power off queued");
     return true;
@@ -255,6 +287,7 @@ class JuraController : public TransportSink {
     if (why.empty() && brew_pending_) why = "brew command still pending";
     if (why.empty() && probe_pending_) why = "espresso settings read already pending";
     if (why.empty() && !control_.empty()) why = "another control command queued";
+    if (why.empty() && active_ == Kind::SAVED_RECIPE) why = "selected drink settings read in progress";
     if (!why.empty()) {
       text("espresso_probe_result", "Rejected: " + why);
       trace("Espresso probe rejected: " + why + "; last command=" + active_command_);
@@ -301,7 +334,8 @@ class JuraController : public TransportSink {
     RAW,
     BREW,
     POWER,
-    RECIPE_PROBE
+    RECIPE_PROBE,
+    SAVED_RECIPE
   };
   struct Request {
     std::string command;
@@ -352,8 +386,46 @@ class JuraController : public TransportSink {
     if (uint32_t(now_ - last_tf_) >= 60000) return "TF status is older than 60 seconds";
     return "";
   }
-  bool can_probe_() const {
-    return probe_block_reason_().empty();
+  bool can_probe_() const { return probe_block_reason_().empty(); }
+  bool can_read_recipe_() const {
+    return !model_mismatch_ && profile_ok() && selection() && session_ == Session::READY && !busy_() &&
+           !awaiting_tf_ && tf_valid_ && uint32_t(now_ - last_tf_) < 60000;
+  }
+  void publish_recipe_state_() {
+    text("recipe_source", recipe_source_);
+    binary("recipe_loading", recipe_loading_ ? 1 : 0);
+    binary("recipe_modified", edited_mask_ ? 1 : 0);
+    text("recipe_status",
+         edited_mask_ ? "Edited for next brew; " + recipe_read_status_ : recipe_read_status_);
+  }
+  void saved_recipe_fallback_(const std::string &why) {
+    recipe_loading_ = recipe_read_requested_ = false;
+    recipe_source_ = "Profile defaults";
+    recipe_read_status_ = "Profile defaults: " + why;
+    publish_recipe_state_();
+    trace("Saved recipe fallback: " + why);
+  }
+  void receive_saved_recipe_(const std::string &frame) {
+    if (active_recipe_epoch_ != recipe_epoch_) {
+      trace("Ignoring saved recipe response for previous selection/reset");
+      return;
+    }
+    text("saved_recipe_raw", frame);
+    std::array<int32_t, ATTRIBUTE_COUNT> values;
+    std::string summary, error;
+    if (!decode_saved_recipe_(frame, active_recipe_code_, values, summary, error)) {
+      saved_recipe_fallback_(error);
+      return;
+    }
+    baseline_ = values;
+    for (uint8_t attr = 0; attr < ATTRIBUTE_COUNT; ++attr)
+      if (!(edited_mask_ & (1u << attr))) selected_[attr] = baseline_[attr];
+    recipe_source_ = "Machine";
+    recipe_loading_ = recipe_read_requested_ = false;
+    recipe_read_status_ = "Saved recipe loaded for " + selection()->name;
+    publish_recipe_state_();
+    recipe_changed();
+    trace("Saved recipe " + selection()->name + ": " + summary);
   }
   bool flag_(unsigned bit) const { return bit / 8 < tf_.size() && (tf_[bit / 8] & (0x80u >> (bit % 8))); }
   bool blocked_() const {
@@ -373,7 +445,8 @@ class JuraController : public TransportSink {
   }
   bool submit_(const Product &product, const int32_t *values) {
     if (!allow_brew_) return reject_("Brewing control disabled");
-    if (brew_pending_ || probe_pending_ || !control_.empty()) return reject_("Another command is pending");
+    if (brew_pending_ || probe_pending_ || active_ == Kind::SAVED_RECIPE || !control_.empty())
+      return reject_("Another command is pending");
     if (!ready_for_brew_()) return reject_("Machine not ready or status unavailable");
     std::string payload, error;
     if (!profiles_.recipe(product, values, payload, error)) return reject_(error);
@@ -444,6 +517,8 @@ class JuraController : public TransportSink {
     handshake_command_.clear();
     polls_.clear();
     control_.clear();
+    if (active_ == Kind::SAVED_RECIPE && active_recipe_epoch_ == recipe_epoch_ && recipe_loading_)
+      saved_recipe_fallback_("Connection lost; select drink or Reset Recipe to retry");
     if (probe_pending_) text("espresso_probe_result", "Connection lost; probe not retried");
     probe_pending_ = false;
     tf_valid_ = false;
@@ -515,6 +590,8 @@ class JuraController : public TransportSink {
   void completed(bool success) override {
     const Kind kind = active_;
     active_ = Kind::NONE;
+    if (kind == Kind::SAVED_RECIPE && !success && active_recipe_epoch_ == recipe_epoch_ && recipe_loading_)
+      saved_recipe_fallback_("Settings read timed out; select drink or Reset Recipe to retry");
     if (kind == Kind::RECIPE_PROBE) {
       probe_pending_ = false;
       if (!success) text("espresso_probe_result", "Timeout: no settings response; not retried");
@@ -600,8 +677,12 @@ class JuraController : public TransportSink {
       handshake_command_ = "@t3";
       handshake_kind_ = Kind::H3;
     } else if (session_ == Session::READY) {
-      if (active_ == Kind::RECIPE_PROBE && transport_.waiting() &&
+      if (active_ == Kind::SAVED_RECIPE && transport_.waiting() &&
           (starts_(frame, "@tm:") || starts_(frame, "@an:error"))) {
+        receive_saved_recipe_(frame);
+        transport_.complete(true, now_);
+      } else if (active_ == Kind::RECIPE_PROBE && transport_.waiting() &&
+                 (starts_(frame, "@tm:") || starts_(frame, "@an:error"))) {
         parse_espresso_probe_(frame);
         transport_.complete(true, now_);
       } else if (starts_(frame, "@TF:")) {
@@ -799,34 +880,49 @@ class JuraController : public TransportSink {
   }
   void parse_espresso_probe_(const std::string &frame) {
     text("espresso_probe_raw", frame);
-    text("espresso_probe_settings", "");
+    std::array<int32_t, ATTRIBUTE_COUNT> values;
+    std::string decoded, error;
+    const bool valid = decode_saved_recipe_(frame, 2, values, decoded, error);
+    text("espresso_probe_settings", decoded);
+    text("espresso_probe_result",
+         valid ? "Valid response; compare decoded settings with machine screen" : error);
+    trace("Espresso settings probe: " + decoded);
+  }
+  bool decode_saved_recipe_(const std::string &frame, uint8_t code,
+                            std::array<int32_t, ATTRIBUTE_COUNT> &values, std::string &decoded,
+                            std::string &error) const {
+    values.fill(-1);
     if (Profiles::lower(frame) == "@tm:c1") {
-      text("espresso_probe_result", "Unsupported: machine returned @tm:C1");
-      return;
+      error = "Unsupported: machine returned @tm:C1";
+      return false;
     }
     if (!starts_(frame, "@tm:41,")) {
-      text("espresso_probe_result", "Unexpected response; see raw probe response");
-      return;
+      error = "Unexpected response; see raw recipe response";
+      return false;
     }
     const auto body = frame.substr(7);
     if (!hex_(body) || body.size() < 4 || body.size() % 2 || body.size() > 130) {
-      text("espresso_probe_result", "Invalid response: malformed payload");
-      return;
+      error = "Invalid response: malformed payload";
+      return false;
     }
     const auto payload = body.substr(0, body.size() - 2);
     unsigned sum = 0;
     for (unsigned char c : "41," + payload) sum += c;
     if (((~sum) & 255u) != hexval_(body.substr(body.size() - 2))) {
-      text("espresso_probe_result", "Invalid response: checksum mismatch");
-      return;
+      error = "Invalid response: checksum mismatch";
+      return false;
     }
-    if (hexval_(payload.substr(0, 2)) != 2) {
-      text("espresso_probe_result", "Invalid response: product is not espresso (02)");
-      return;
+    if (hexval_(payload.substr(0, 2)) != code) {
+      error = code == 2 ? "Invalid response: product is not espresso (02)"
+                        : "Invalid response: product code mismatch";
+      return false;
     }
-    const Product *product = profiles_.find(uint8_t(2));
+    const Product *product = profiles_.find(code);
+    if (!product) {
+      error = "Product absent from profile";
+      return false;
+    }
     const char *labels[] = {"strength", "grinder", "temperature", "water", "milk", "foam", "bypass", "pause"};
-    std::string decoded;
     bool complete = true;
     for (uint8_t i = 0; i < product->n_options; ++i) {
       const auto opt = profiles_.option(*product, i);
@@ -846,18 +942,17 @@ class JuraController : public TransportSink {
         decoded += "unknown (F" + std::to_string(opt.argument) + "=" + hexbyte_(raw) + ")";
         complete = false;
       } else if (!opt.choices.empty()) {
+        values[opt.attr] = value;
         for (const auto &choice : opt.choices)
           if (choice.value == value) decoded += choice.name;
       } else {
+        values[opt.attr] = value;
         decoded += std::to_string(value);
         decoded += (opt.attr == WATER || opt.attr == BYPASS) ? " ml" : " s";
       }
     }
-    text("espresso_probe_settings", decoded);
-    text("espresso_probe_result",
-         complete ? "Valid response; compare decoded settings with machine screen"
-                  : "Checksum valid; incomplete or unknown settings; compare raw response");
-    trace("Espresso settings probe: " + decoded);
+    if (!complete) error = "Checksum valid; incomplete or unknown settings; compare raw response";
+    return complete;
   }
   void parse_statistics_(const std::string &frame) {
     if (!transport_.waiting()) return;
@@ -926,6 +1021,11 @@ class JuraController : public TransportSink {
   std::string active_command_, handshake_command_, detected_, response_override_, profile_hint_, phase_;
   std::deque<Request> polls_, control_;
   std::array<int32_t, ATTRIBUTE_COUNT> selected_;
+  std::array<int32_t, ATTRIBUTE_COUNT> baseline_;
+  std::string recipe_source_{"Profile defaults"}, recipe_read_status_;
+  uint32_t recipe_epoch_{0}, active_recipe_epoch_{0};
+  uint8_t edited_mask_{0}, active_recipe_code_{0};
+  bool recipe_read_requested_{false}, recipe_loading_{false};
   std::array<uint16_t, 256> counters_;
   size_t selected_product_{0};
   bool allow_brew_{false}, allow_power_{false}, raw_extras_{true}, discovery_done_{false},

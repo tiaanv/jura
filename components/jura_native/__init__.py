@@ -29,6 +29,8 @@ TEXT = {
     "espresso_probe_result": "Jura Espresso Probe Result",
     "espresso_probe_raw": "Jura Espresso Probe Raw",
     "espresso_probe_settings": "Jura Espresso Probe Settings",
+    "recipe_source": "Jura Recipe Source", "recipe_status": "Jura Recipe Status",
+    "saved_recipe_raw": "Jura Saved Recipe Raw",
 }
 NUMERIC = {
     "progress": ("Jura Progress", "%"), "stage_current": ("Jura Stage Current", ""),
@@ -46,7 +48,8 @@ EXTRAS = {
     "brews_since_cleaning": ("Brews Performed Since Cleaning", "times"),
     "brews_since_descaling": ("Brews Performed Since Descaling", "times"),
 }
-BINARY = {"connected": "Jura Connected", "brew_active": "Jura Brew Active", "alerts_stale": "Jura Alerts Stale"}
+BINARY = {"connected": "Jura Connected", "brew_active": "Jura Brew Active", "alerts_stale": "Jura Alerts Stale",
+          "recipe_loading": "Jura Recipe Loading", "recipe_modified": "Jura Recipe Modified"}
 SELECTS = {"drink": (-1, "Jura Drink"), "coffee_strength": (0, "Jura Coffee Strength"),
            "grinder_ratio": (1, "Jura Grinder Ratio"), "temperature": (2, "Jura Temperature")}
 NUMBERS = {"water_amount": (3, "Jura Water Amount", "ml"), "milk_amount": (4, "Jura Milk Amount", "s"),
@@ -82,7 +85,7 @@ schema = {
 }
 for key, name in TEXT.items():
     default = {CONF_NAME: name}
-    if key.startswith("espresso_probe"):
+    if key.startswith("espresso_probe") or key == "saved_recipe_raw":
         default["entity_category"] = ENTITY_CATEGORY_DIAGNOSTIC
     schema[cv.Optional(key, default=default)] = text_sensor.text_sensor_schema()
 for key, (name, unit) in NUMERIC.items():

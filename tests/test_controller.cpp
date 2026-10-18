@@ -55,6 +55,7 @@ struct Machine {
   bool answer_type = true, answer_at = true, answer_brew = true, reject_brew = false, auto_tf = true;
   std::vector<std::string> commands;
   std::string probe_reply = "@tm:41,0200040A00000200010000000000000000F4";
+  std::map<std::string, std::string> recipe_replies;
   void inject(const std::string &s, bool at = true) {
     for (auto raw : encode(at ? cipher::build_frame(s + "\r\n", 0xA0) : s + "\r\n")) dev.input(raw, clock);
   }
@@ -113,6 +114,8 @@ struct Machine {
           inject("@tg:C00A141E");
         else if (command == "@TM:41,02" && !probe_reply.empty())
           inject(probe_reply);
+        else if (recipe_replies.count(command))
+          inject(recipe_replies[command]);
         else if (command.compare(0, 4, "@TP:") == 0 && answer_brew) {
           if (reject_brew)
             inject("@tp:00");
@@ -385,14 +388,15 @@ static void test_espresso_probe() {
   Machine m;
   m.begin(false);  // Monitoring-only devices can run this read.
   m.tick(16000);
-  assert(m.count("@TM:41,02") == 0);  // Never automatic.
+  assert(m.count("@TM:41,02") == 1);  // Selected recipe loads; diagnostic probe is still manual.
+  assert(m.dev.texts["espresso_probe_result"] == "Not run");
   const auto selected = m.dev.selected_values();
   assert(m.dev.probe_espresso_settings());
   assert(!m.dev.probe_espresso_settings());
   assert(m.dev.texts["espresso_probe_result"].find("already pending") != std::string::npos);
   assert(!m.dev.brew_named("Espresso"));
   m.tick(2000);
-  assert(m.count("@TM:41,02") == 1);
+  assert(m.count("@TM:41,02") == 2);
   assert(m.dev.texts["espresso_probe_result"].find("Valid response") == 0);
   const auto decoded = m.dev.texts["espresso_probe_settings"];
   assert(decoded.find("strength=6") != std::string::npos);
@@ -452,7 +456,7 @@ static void test_espresso_probe() {
   assert(queued.dev.probe_espresso_settings());
   queued.inject("@TB");
   queued.tick(500);
-  assert(queued.count("@TM:41,02") == 0);
+  assert(queued.count("@TM:41,02") == 1);  // Only the initial selected-recipe read.
   assert(queued.dev.texts["espresso_probe_result"].find("Cancelled") == 0);
   Machine active;
   active.begin();
@@ -480,6 +484,107 @@ static void test_espresso_probe() {
   assert(!stale.dev.probe_espresso_settings());
   assert(stale.dev.texts["espresso_probe_result"].find("older than 60") != std::string::npos);
 }
+static void test_saved_selected_recipes() {
+  Machine m;
+  m.probe_reply = "@tm:41,020006090000020000000000DB";
+  m.begin();
+  m.tick(16000);
+  assert(m.dev.texts["recipe_source"] == "Machine");
+  assert(m.dev.selected_values()[STRENGTH] == 6 && m.dev.selected_values()[WATER] == 45);
+  assert(m.dev.bins["recipe_loading"] == 0 && m.dev.bins["recipe_modified"] == 0);
+  assert(m.dev.choose("Espresso"));
+  assert(!m.dev.brew_selected());  // Don't silently brew defaults while loading.
+  assert(m.dev.set_parameter(WATER, 60));
+  m.tick(2000);
+  assert(m.dev.selected_values()[WATER] == 60 && m.dev.selected_values()[STRENGTH] == 6);
+  assert(m.dev.bins["recipe_modified"] == 1);
+  assert(m.dev.brew_selected());
+  assert(m.dev.selected_values()[WATER] == 45 && m.dev.bins["recipe_modified"] == 0);
+  m.tick(2000);
+  assert(m.count("@TP:0200060C000002000100000000000000") == 1);
+  assert(m.dev.set_parameter(WATER, 55));
+  assert(!m.dev.brew_selected());  // Rejection retains edits for a later attempt.
+  assert(m.dev.selected_values()[WATER] == 55 && m.dev.bins["recipe_modified"] == 1);
+
+  Machine drinks;
+  drinks.recipe_replies["@TM:41,03"] = "@tm:41,030006100000020000000000E2";
+  drinks.recipe_replies["@TM:41,04"] = "@tm:41,0400060C0E00010000000000BB";
+  drinks.begin();
+  drinks.tick(16000);
+  assert(drinks.dev.choose("Coffee"));
+  drinks.tick(2000);
+  assert(drinks.dev.texts["recipe_source"] == "Machine");
+  assert(drinks.dev.selected_values()[WATER] == 80 && drinks.dev.selected_values()[TEMPERATURE] == 2);
+  assert(drinks.dev.choose("Cappuccino"));
+  drinks.tick(2000);
+  assert(drinks.dev.selected_values()[MILK] == 14 && drinks.dev.selected_values()[WATER] == 60);
+  assert(drinks.dev.selected_values()[TEMPERATURE] == 1);
+  assert(drinks.dev.set_parameter(MILK, 20));
+  drinks.dev.reset_recipe();
+  assert(drinks.dev.bins["recipe_modified"] == 0 && drinks.dev.bins["recipe_loading"] == 1);
+  drinks.tick(2000);
+  assert(drinks.dev.selected_values()[MILK] == 14 && drinks.dev.texts["recipe_source"] == "Machine");
+
+  for (const auto &reply : {"@tm:C1", "@tm:41,0200040A0000020001000000000000000000",
+                            "@tm:41,0300040A00000200010000000000000000F3", "@tm:41,020C", ""}) {
+    Machine fallback;
+    fallback.probe_reply = reply;
+    fallback.begin();
+    fallback.tick(18000);
+    assert(fallback.dev.texts["recipe_source"] == "Profile defaults");
+    assert(fallback.dev.bins["recipe_loading"] == 0);
+    assert(fallback.dev.selected_values()[WATER] == 45 && fallback.dev.selected_values()[STRENGTH] == 4);
+    assert(fallback.dev.texts["recipe_status"].find("Profile defaults:") == 0);
+    const auto requests = fallback.count("@TM:41,02");
+    fallback.tick(10000);
+    assert(fallback.count("@TM:41,02") == requests);  // No retry loop.
+  }
+  Machine late;
+  late.begin();
+  late.tick(16000);
+  late.probe_reply.clear();
+  late.recipe_replies["@TM:41,03"] = "@tm:41,030006100000020000000000E2";
+  late.dev.choose("Espresso");
+  late.tick(1500);
+  assert(late.dev.active() == "@TM:41,02" && late.dev.waiting());
+  late.dev.choose("Coffee");
+  late.inject("@tm:41,020006090000020000000000DB");
+  assert(late.dev.selected_values()[WATER] == 100);  // Coffee's provisional profile value, not espresso's 45.
+  late.tick(2000);
+  assert(late.dev.selection()->name == "Coffee" && late.dev.selected_values()[WATER] == 80);
+  assert(late.dev.texts["saved_recipe_raw"] == late.recipe_replies["@TM:41,03"]);
+
+  late.probe_reply.clear();
+  late.dev.choose("Espresso");
+  late.tick(1500);
+  late.dev.reset_recipe();  // Reset the same product also invalidates its in-flight response.
+  late.inject("@tm:41,020006090000020000000000DB");
+  assert(late.dev.bins["recipe_loading"] == 1 && late.dev.selected_values()[STRENGTH] == 4);
+  late.dev.choose("Coffee");
+  late.tick(7000);
+  assert(late.dev.texts["recipe_source"] == "Machine" && late.dev.selected_values()[WATER] == 80);
+  Machine edited_failure;
+  edited_failure.probe_reply.clear();
+  edited_failure.begin();
+  edited_failure.tick(5000);
+  assert(edited_failure.dev.active() == "@TM:41,02" && edited_failure.dev.waiting());
+  assert(edited_failure.dev.set_parameter(WATER, 60));
+  edited_failure.tick(7000);
+  assert(edited_failure.dev.texts["recipe_source"] == "Profile defaults");
+  assert(edited_failure.dev.selected_values()[WATER] == 60);
+  assert(edited_failure.dev.brew_selected());
+  assert(edited_failure.dev.selected_values()[WATER] == 45);
+  Machine old_timeout;
+  old_timeout.probe_reply.clear();
+  old_timeout.recipe_replies["@TM:41,03"] = "@tm:41,030006100000020000000000E2";
+  old_timeout.begin();
+  old_timeout.tick(5000);
+  assert(old_timeout.dev.waiting());
+  old_timeout.dev.choose("Coffee");
+  old_timeout.tick(7000);
+  assert(old_timeout.dev.texts["recipe_source"] == "Machine");
+  assert(old_timeout.dev.selected_values()[WATER] == 80);
+}
 int main() {
   test_profiles();
   test_cipher();
@@ -489,6 +594,7 @@ int main() {
   test_banks_and_progress();
   test_at_only_identification();
   test_espresso_probe();
+  test_saved_selected_recipes();
   std::cout << "PASS: all 75 profiles, cipher, statistics, native recipe semantics, brewing lifecycle, busy "
                "rejection, TV liveness, retry/rejection and rollover\n";
 }
