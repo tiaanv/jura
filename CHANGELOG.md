@@ -1,5 +1,13 @@
 # Change log
 
+## 0.3.1 (dev)
+
+- Added a manual native `test_an01()` method and YAML test button for observing
+  shutdown-delay behaviour. Sends only AN:01 through the serial queue, logs
+  replies without claiming wake success, and never automatically retries.
+- Diagnostic permits a connected, blocked shutdown-delay state but rejects
+  active operations or pending controls and rechecks before dispatch.
+
 ## Legacy documentation and examples
 
 - Aligned the legacy documentation with the existing non-blocking,

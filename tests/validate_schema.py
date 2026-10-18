@@ -11,6 +11,9 @@ import yaml
 base = yaml.safe_load((root / "examples/e8-local.yaml").read_text())
 base["external_components"][0]["source"]["path"] = str(root / "components")
 variants = [("esp32-c3-idf", base, True)]
+an01 = copy.deepcopy(base)
+an01["button"] = yaml.safe_load((root / "examples/an01-test.yaml").read_text())["button"]
+variants.append(("native-an01-c3-idf", an01, True))
 arduino = copy.deepcopy(base)
 arduino["esp32"]["framework"]["type"] = "arduino"
 variants.append(("esp32-c3-arduino", arduino, True))

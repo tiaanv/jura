@@ -55,6 +55,7 @@ struct Machine {
   bool answer_type = true, answer_at = true, answer_brew = true, reject_brew = false, auto_tf = true;
   std::vector<std::string> commands;
   std::string probe_reply = "@tm:41,0200040A00000200010000000000000000F4";
+  std::string an01_reply;
   std::map<std::string, std::string> recipe_replies;
   void inject(const std::string &s, bool at = true) {
     for (auto raw : encode(at ? cipher::build_frame(s + "\r\n", 0xA0) : s + "\r\n")) dev.input(raw, clock);
@@ -94,6 +95,8 @@ struct Machine {
         inject("ty:" + model, false);
       else if (command == "AN:02")
         inject("an:OK", false);
+      else if (command == "AN:01" && !an01_reply.empty())
+        inject(an01_reply, false);
       else if (command == "RT:0000")
         inject("rt:00F40004014C2D3E003A0014003534F400490024BCB300320000011600000066", false);
       else if (at && answer_at) {
@@ -714,7 +717,58 @@ static void test_api_saved_defaults() {
   stray_ack.tick(2500);
   assert(stray_ack.count("@TP:02000609000002000100000000000000") == 1);
 }
+static void test_an01_diagnostic() {
+  Machine disconnected;
+  assert(!disconnected.dev.test_an01());
+  assert(disconnected.count("AN:01") == 0);
+  for (const auto &reply : {"ok:", "an:OK"}) {
+    Machine m;
+    m.begin(false);
+    m.dev.configure(false, false, true, 100, "");  // Explicit manual diagnostic only.
+    m.tick(16000);
+    m.tf = "000000000001";  // SwitchOff Delay active, intentionally not ready.
+    m.inject("@TF:" + m.tf);
+    assert(m.dev.texts["active_alerts"].find("SwitchOff Delay") != std::string::npos);
+    m.an01_reply = reply;
+    assert(m.dev.test_an01());
+    assert(!m.dev.test_an01());  // No duplicate queued test.
+    m.tick(1500);
+    assert(m.count("AN:01") == 1);
+    assert(m.dev.texts["command_result"] == std::string("AN:01 test response: ") + reply +
+                                               "; effect unverified");
+  }
+  Machine timeout;
+  timeout.begin();
+  timeout.tick(16000);
+  assert(timeout.dev.test_an01());
+  timeout.tick(200);
+  assert(timeout.dev.active() == "AN:01");
+  assert(!timeout.dev.test_an01());  // Reject another test while waiting for a reply.
+  timeout.tick(9800);
+  assert(timeout.count("AN:01") == 1);
+  assert(timeout.dev.texts["command_result"].find("not retried") != std::string::npos);
+  timeout.tick(10000);
+  assert(timeout.count("AN:01") == 1);
+
+  Machine busy;
+  busy.begin();
+  busy.tick(16000);
+  busy.inject("@TB");
+  assert(!busy.dev.test_an01());
+  assert(busy.count("AN:01") == 0);
+
+  Machine race;
+  race.begin();
+  race.tick(16000);
+  assert(race.dev.test_an01());
+  race.inject("@TB");  // An operation starts after acceptance, before dispatch.
+  race.tick(1000);
+  assert(race.count("AN:01") == 0);
+  assert(race.dev.texts["command_result"].find("cancelled") != std::string::npos);
+}
+
 int main() {
+  test_an01_diagnostic();
   test_profiles();
   test_cipher();
   test_startup_and_statistics();

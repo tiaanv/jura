@@ -133,6 +133,12 @@ class JuraController : public TransportSink {
     if (!control_.empty()) {
       const Request r = control_.front();
       control_.pop_front();
+      if (r.kind == Kind::TEST_AN01 &&
+          (session_ != Session::READY || model_mismatch_ || busy_() || brew_pending_ ||
+           api_recipe_pending_ || probe_pending_)) {
+        reject_("AN:01 test cancelled: connection or operation changed");
+        return;
+      }
       if (r.kind == Kind::API_RECIPE && (!api_recipe_pending_ || !ready_for_brew_())) {
         cancel_api_recipe_("Machine no longer ready before settings read");
         return;
@@ -150,6 +156,8 @@ class JuraController : public TransportSink {
         return;
       }
       start_(r.command, r.kind, r.encrypted);
+      if (r.kind == Kind::TEST_AN01)
+        text("command_result", "AN:01 test sent; waiting for reply; effect unverified");
       if (r.kind == Kind::API_RECIPE) {
         text("command_result", "Reading saved settings before brew");
         text("command_recipe_status", "Reading machine settings");
@@ -309,6 +317,18 @@ class JuraController : public TransportSink {
     }
     return brew_recipe(name, values);
   }
+  // Manual diagnostic only. Does not require a ready TF state: the intended
+  // experiment is during SwitchOff Delay. Never send during an observed operation.
+  bool test_an01() {
+    if (session_ != Session::READY || model_mismatch_)
+      return reject_("AN:01 test requires a connected AT session");
+    if (busy_() || brew_pending_ || api_recipe_pending_ || probe_pending_ ||
+        active_ == Kind::SAVED_RECIPE || active_ == Kind::TEST_AN01 || !control_.empty())
+      return reject_("AN:01 test rejected: another operation or control is pending");
+    control_.push_back({"AN:01", Kind::TEST_AN01, false});
+    text("command_result", "AN:01 test queued; effect unverified; no automatic retry");
+    return true;
+  }
   bool power_off() {
     if (!allow_power_) return reject_("Power-off control disabled");
     if (brew_pending_ || api_recipe_pending_ || probe_pending_ || active_ == Kind::SAVED_RECIPE ||
@@ -373,6 +393,7 @@ class JuraController : public TransportSink {
     RAW,
     BREW,
     POWER,
+    TEST_AN01,
     RECIPE_PROBE,
     SAVED_RECIPE,
     API_RECIPE
@@ -683,7 +704,9 @@ class JuraController : public TransportSink {
         session_failed_("Handshake command timeout");
       else if (kind == Kind::BREW) {
         text("command_result", "Awaiting start; no immediate reply (not retried)");
-      } else if (kind == Kind::POWER)
+      } else if (kind == Kind::TEST_AN01)
+        text("command_result", "AN:01 test reply timeout; effect unknown; not retried");
+      else if (kind == Kind::POWER)
         text("command_result", "Power-off reply timeout; not retried");
     } else if (kind == Kind::H3 && session_ == Session::ACK_MODEL) {
       session_ = Session::READY;
@@ -702,7 +725,10 @@ class JuraController : public TransportSink {
     if (!transport_.waiting()) return;
     if (active_ == Kind::TYPE && starts_(frame, "ty:") && frame.size() > 3)
       transport_.complete(true, now_);
-    else if (active_ == Kind::POWER && starts_(frame, "an:")) {
+    else if (active_ == Kind::TEST_AN01 && (starts_(frame, "an:") || starts_(frame, "ok:"))) {
+      text("command_result", "AN:01 test response: " + frame + "; effect unverified");
+      transport_.complete(true, now_);
+    } else if (active_ == Kind::POWER && starts_(frame, "an:")) {
       text("command_result", "Power-off response: " + frame);
       transport_.complete(true, now_);
     } else if (active_ == Kind::RAW && starts_(frame, "rt:") && frame.size() >= 67 &&
