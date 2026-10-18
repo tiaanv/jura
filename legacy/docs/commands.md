@@ -1,3 +1,5 @@
+> Updated button examples use the non-blocking queue. `true` means queued, not brewed; commands are not retried. See the [current legacy guide](../README.md) for ESP32/IDF and ESP8266 setup.
+
 > Archived legacy reference. Raw-register interpretations and historical claims are unverified; see [the archive index](../README.md).
 
 # Jura Coffee Machine Commands Reference
@@ -6,7 +8,7 @@ This document lists known serial commands for controlling Jura coffee machines v
 
 ## Command Format
 
-Commands are sent using the `cmd2jura()` function in ESPHome YAML:
+Commands are sent using the `queue_command()` function in ESPHome YAML:
 
 ```yaml
 button:
@@ -14,7 +16,7 @@ button:
     name: 'Make Espresso'
     on_press:
       - lambda: |-
-          auto result = id(jura_coffee).cmd2jura("FA:04");
+          id(jura_coffee).queue_command("FA:04");
 ```
 
 ## Machine Control Commands

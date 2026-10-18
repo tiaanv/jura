@@ -2,7 +2,7 @@
 
 ## Install the component
 
-Use `ref: V2` and `components: [jura_native]` in `external_components`. The
+Use `ref: main` and `components: [jura_native]` in `external_components`. The
 component's location remains `components/jura_native`. During testing,
 `refresh: 0s` checks the source on each compile; pin a known commit when you
 want a repeatable build. If ESPHome keeps old source, use Clean Build Files.
@@ -20,7 +20,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/tiaanv/jura
-      ref: V2
+      ref: main
     refresh: 0s
     components: [jura_native]
 

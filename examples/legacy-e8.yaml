@@ -1,0 +1,70 @@
+# Legacy jura on ESP32-C3 / ESP-IDF. Replace network placeholders before use.
+# Keep your existing API encryption/OTA secrets when merging this example.
+esphome:
+  name: jura-legacy-e8
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/tiaanv/jura
+      ref: main
+    refresh: 0s
+    components: [jura]
+
+logger:
+  baud_rate: 0
+
+wifi:
+  ssid: "replace-with-your-network"
+  password: "replace-with-your-password"
+
+api:
+
+ota:
+  - platform: esphome
+
+uart:
+  id: uart_bus
+  tx_pin: GPIO4
+  rx_pin: GPIO3
+  baud_rate: 9600
+  rx_buffer_size: 1024
+
+jura:
+  id: jura_coffee
+  uart_id: uart_bus
+  model: E8
+  update_interval: 2s
+
+# These FA numbers are legacy examples, not universal drink IDs across models.
+# A queued command is not proof that a drink was made. Commands are not retried.
+button:
+  - platform: template
+    name: "Turn Off"
+    on_press:
+      - lambda: |-
+          if (!id(jura_coffee).queue_command("AN:02"))
+            ESP_LOGW("jura_button", "Command was not queued");
+
+  - platform: template
+    name: "Make Espresso"
+    on_press:
+      - lambda: |-
+          id(jura_coffee).queue_command("FA:04");
+
+  - platform: template
+    name: "Make Hot Water"
+    on_press:
+      - lambda: |-
+          id(jura_coffee).queue_command("FA:06");
+
+  - platform: template
+    name: "Make Coffee"
+    on_press:
+      - lambda: |-
+          id(jura_coffee).queue_command("FA:09");

@@ -1,5 +1,16 @@
 # Change log
 
+## Legacy documentation and examples
+
+- Aligned the legacy documentation with the existing non-blocking,
+  framework-independent implementation already on main.
+- Legacy buttons now use `queue_command()`; queue acceptance is not a brew
+  acknowledgement, and commands are not automatically retried.
+- Updated legacy E6/E8, F6 and F7 examples and added a C3/ESP-IDF E8 example.
+- Added legacy queue regression coverage and C3 IDF/Arduino schema checks.
+- Updated Git examples to `ref: main` following the V2 merge and branch deletion.
+- No change to legacy or native component firmware, schemas or sensor keys.
+
 ## Legacy component installation compatibility
 
 - Restored the unchanged legacy source to `components/jura`, so Git users can

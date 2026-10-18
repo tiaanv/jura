@@ -1,7 +1,7 @@
 # Jura Native for ESPHome — V2
 
 Monitor and prepare Jura drinks through Home Assistant using ESPHome's native
-API. MQTT is not required. The `V2` branch contains the `jura_native` component;
+API. MQTT is not required. The `main` branch contains both `jura_native` and legacy `jura`;
 its current component version is recorded in [VERSION](VERSION).
 
 ## Features
@@ -63,7 +63,7 @@ depends on the detected profile. See [card integration](docs/home-assistant.md).
 
 The repository provides both **`jura_native` (V2)** and **`jura` (legacy)** under
 `components/`. Existing legacy users can keep `components: [jura]` and their
-`jura:` configuration when V2 is merged into `main`; migration is optional.
+`jura:` configuration on `main`; migration is optional.
 See [continuing with the legacy component](docs/migration.md#keep-using-the-legacy-component).
 The following setup is for the new native component.
 
@@ -74,7 +74,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/tiaanv/jura
-      ref: V2
+      ref: main
     refresh: 0s
     components: [jura_native]
 ```
@@ -138,10 +138,11 @@ legacy/       Historical examples, original README and register documentation
 ```
 
 The legacy component remains installable at [components/jura](components/jura),
-alongside **jura_native** and **jura_coolcontrol**. Its source and configuration
-are unchanged by this layout update. Historical documentation and examples live
-under [legacy/](legacy/README.md); the current legacy installation instructions
-are in the [migration guide](docs/migration.md#keep-using-the-legacy-component).
+alongside **jura_native** and **jura_coolcontrol**. It uses non-blocking UART with
+`queue_command()` buttons and framework-independent C++ for ESP32 ESP-IDF,
+ESP32 Arduino and ESP8266 Arduino. See the [legacy guide](legacy/README.md),
+[C3/IDF example](examples/legacy-e8.yaml) and
+[button migration](docs/migration.md#keep-using-the-legacy-component).
 See the [change log](CHANGELOG.md).
 
 ## Credits and licence

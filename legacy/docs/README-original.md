@@ -1,3 +1,5 @@
+> Updated button examples use the non-blocking queue. `true` means queued, not brewed; commands are not retried. See the [current legacy guide](../README.md) for ESP32/IDF and ESP8266 setup.
+
 > Archived legacy reference. Raw-register interpretations and historical claims are unverified; see [the archive index](../README.md).
 
 # ☕ Jura ESPHome Components
@@ -15,7 +17,7 @@ This project builds on the fantastic work by [Ryan Alden’s original Jura compo
 
 ### 🧰 Key Improvements
 
-- ✅ Migrated from `custom_component` → ESPHome’s **`external_component`** system
+- ✅ Migrated from `custom_component` → ESPHome’s **`external_components`** system
 - ✅ Replaced Arduino `String` with C++ `std::string` → **works on ESP32 IDF**
 - ✅ Fully self-contained component (no external sensors required)
 - ✅ Updated **bit-flags** for the Jura E8 (your model may differ)
@@ -43,16 +45,16 @@ This project builds on the fantastic work by [Ryan Alden’s original Jura compo
 ```yaml
 uart:
   id: uart_bus
-  tx_pin: GPIO21
-  rx_pin: GPIO20
+  tx_pin: GPIO4
+  rx_pin: GPIO3
   baud_rate: 9600
+  rx_buffer_size: 1024
 ```
 
 ### ⚙️ Practical note about voltage tolerance
 
 Officially, ESP devices are **not 5 V tolerant**.
-Unofficially—many of us have connected 5 V UARTs to ESP boards without immediate issues.
-Proceed at your own risk: your luck, your device, your coffee. ☕😅
+Use the [current wiring guide](../../docs/hardware.md) for the 1 kΩ / 2 kΩ RX divider, direct 3.3 V TX and shared ground.
 
 ---
 
@@ -65,25 +67,23 @@ external_components:
   - source:
       type: git
       url: https://github.com/tiaanv/jura
-    components: [ jura, jura_coolcontrol ] #You only need one!
+      ref: main
+    components: [jura]
 
 uart:
   id: uart_bus
-  tx_pin: GPIO21
-  rx_pin: GPIO20
+  tx_pin: GPIO4
+  rx_pin: GPIO3
   baud_rate: 9600
+  rx_buffer_size: 1024
 
 #Only define one! One ESP. One Machine
 #Use this one for coffee machines
 jura:
-  id: jura_main
+  id: jura_coffee
   uart_id: uart_bus
   model: E8
 
-#Use this one for the Milk Cooler!
-jura_coolcontrol:
-  id: jura_cool
-  uart_id: uart_bus
 ```
 
 This is just the barebones structure to show you how to reference external components.
@@ -96,7 +96,7 @@ See the [examples/](../examples/) folder for complete configuration examples.
 
 ## ☕ Jura Component
 
-The **Jura component** polls the machine every **2 seconds**, sending two serial commands and decoding the responses.
+The **Jura component** schedules RT/IC polling every **2 seconds** by default. UART transmission and response handling run non-blocking in `loop()`; poll ticks coalesce while requests are pending.
 
 ### Home Assistant Entities
 
@@ -123,7 +123,7 @@ The sensors exposed by each machine may be different depending on the model sele
 
 ### Control Commands
 
-You can create buttons to control your Jura machine using the `cmd2jura()` function. Here are common commands:
+You can create buttons to control your Jura machine using the `queue_command()` function. Here are common commands:
 
 #### Machine Control
 
@@ -153,7 +153,7 @@ button:
     icon: "mdi:coffee"
     on_press:
       - lambda: |-
-          auto result = id(jura_coffee).cmd2jura("FA:04");
+          id(jura_coffee).queue_command("FA:04");
 ```
 
 See the [examples/](../examples/) folder for complete button configurations for each model.

@@ -1,3 +1,4 @@
+# Legacy jura: queued UART commands; keep one component on this bus.
 esphome:
   name: jura-f7
   friendly_name: "Jura F7"
@@ -9,10 +10,12 @@ external_components:
  - source:
       type: git
       url: https://github.com/tiaanv/jura
+      ref: main
    components: [jura]
 
 # Enable logging
 logger:
+  baud_rate: 0  # Keep serial logging separate from the Jura bus.
   level: DEBUG
 
 # Enable Home Assistant API
@@ -39,6 +42,7 @@ uart:
   tx_pin: D1
   rx_pin: D2
   baud_rate: 9600
+  rx_buffer_size: 1024
   id: uart_bus
 
 # Jura Coffee Machine Component
@@ -55,7 +59,7 @@ button:
     id: jura_turn_on
     on_press:
       - lambda: |-
-          auto result = id(jura_coffee).cmd2jura("AN:01");
+          id(jura_coffee).queue_command("AN:01");
 
   - platform: template
     name: 'Turn Off Coffee Machine'
@@ -63,7 +67,7 @@ button:
     id: jura_turn_off
     on_press:
       - lambda: |-
-          auto result = id(jura_coffee).cmd2jura("AN:02");
+          id(jura_coffee).queue_command("AN:02");
 
   - platform: template
     name: 'Make Hot Water'
@@ -71,7 +75,7 @@ button:
     id: jura_make_hot_water
     on_press:
       - lambda: |-
-          auto result = id(jura_coffee).cmd2jura("FA:06");
+          id(jura_coffee).queue_command("FA:06");
 
   - platform: template
     name: 'Make Espresso'
@@ -79,7 +83,7 @@ button:
     id: jura_make_espresso
     on_press:
       - lambda: |-
-          auto result = id(jura_coffee).cmd2jura("FA:04");
+          id(jura_coffee).queue_command("FA:04");
 
   - platform: template
     name: 'Make Ristretto'
@@ -87,7 +91,7 @@ button:
     id: jura_make_ristretto
     on_press:
       - lambda: |-
-          auto result = id(jura_coffee).cmd2jura("FA:05");
+          id(jura_coffee).queue_command("FA:05");
 
   - platform: template
     name: 'Make Coffee'
@@ -95,7 +99,7 @@ button:
     id: jura_make_coffee
     on_press:
       - lambda: |-
-          auto result = id(jura_coffee).cmd2jura("FA:09");
+          id(jura_coffee).queue_command("FA:09");
 
   - platform: template
     name: 'Make Cappuccino'
@@ -103,7 +107,7 @@ button:
     id: jura_make_cappuccino
     on_press:
       - lambda: |-
-          auto result = id(jura_coffee).cmd2jura("FA:07");
+          id(jura_coffee).queue_command("FA:07");
 
   - platform: restart
     name: Restart

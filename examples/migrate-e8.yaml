@@ -1,10 +1,10 @@
-# Merge into your existing jura-e8 YAML using the V2 branch.
+# Merge into your existing jura-e8 YAML using the main branch.
 # Keep your existing device, Wi-Fi, API encryption and OTA settings.
 external_components:
   - source:
       type: git
       url: https://github.com/tiaanv/jura
-      ref: V2
+      ref: main
     refresh: 0s
     components: [jura_native]
 

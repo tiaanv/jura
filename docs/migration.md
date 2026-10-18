@@ -27,20 +27,19 @@ Local examples now use `../components`, relative to their new `examples/` path.
 
 ## Keep using the legacy component
 
-The legacy `jura` component is available at `components/jura` on V2 alongside
-`jura_native`. After V2 is merged into `main`, existing Git configurations that
-load `components: [jura]` can continue using it. Migration is optional; do not
-replace your `jura:` block or existing buttons merely because the repository
-layout changed. The legacy source is unchanged by its restoration to this path.
+The legacy `jura` component is available at `components/jura` on `main` alongside
+`jura_native`. Migration to native V2 is optional. The legacy header already uses the
+non-blocking, framework-independent implementation; old buttons
+calling `cmd2jura()` must use `queue_command()` as described below.
 
-To test the legacy component from V2, merge this source into your existing YAML:
+Merge this source into your existing YAML:
 
 ```yaml
 external_components:
   - source:
       type: git
       url: https://github.com/tiaanv/jura
-      ref: V2
+      ref: main
     refresh: 0s
     components: [jura]
 
@@ -50,23 +49,28 @@ jura:
   model: E8
 ```
 
-Keep your existing model, UART, board/framework, entity settings and buttons;
-the snippet uses E8 as an example. Once V2 has been merged, use `ref: main`
-or retain your existing source without an explicit ref to follow the default
-branch. Do not switch to `main` expecting these changes before the merge.
+Keep your existing model, UART, board/framework and entity settings; the snippet
+uses E8 as an example. Sources without an explicit ref follow the default branch.
+If your source still specifies the deleted `V2` or `dev` branch, use `ref: main`.
 Local external sources can still point to the repository's `components/` folder.
 
-The legacy component retains its previous polling/control implementation and
-raw-register interpretations. Restoring its path does not add the V2 AT features
-or establish ESP-IDF compatibility. The historical examples target Arduino;
-see [legacy references](../legacy/README.md) for their limitations.
+For legacy buttons replace `auto result = id(jura_coffee).cmd2jura("FA:09");`
+with `id(jura_coffee).queue_command("FA:09");`. Remove raw UART drink writes from
+this bus. A successful return means queued, not brewed; responses are logged
+and commands are never automatically retried. The original sensor keys and
+raw-register interpretations remain. The queue uses standard C++ and ESPHome
+HAL/UART APIs for ESP32 ESP-IDF/Arduino and ESP8266 Arduino. See the
+[current legacy guide](../legacy/README.md) and
+[complete C3/IDF example](../examples/legacy-e8.yaml). Changing button YAML
+requires compiling/uploading; this documentation update does not change the
+component header.
 
 Only one Jura component may consume a given UART: use `jura` or `jura_native`
 for the machine, not both on the same bus.
 
 ## Migrate from legacy to native V2
 
-1. Change the Git source to `ref: V2` and `components: [jura_native]`.
+1. Change the Git source to `ref: main` and `components: [jura_native]`.
 2. Replace the old `jura:` block with the block in
    [the merge example](../examples/migrate-e8.yaml). The ID may remain `jura_coffee`.
 3. Keep the existing UART/electrical wiring, device name, Wi-Fi, API encryption,

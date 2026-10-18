@@ -4,7 +4,8 @@
 
 Reference environment: ESPHome **2026.9.1**, ESP32-C3 / ESP-IDF,
 Jura E8 **EF533M V02.09**. Validation was performed during the 0.1–0.3 development
-on 2026-10-18; later repository cleanup changes documentation/tool paths only.
+on 2026-10-18. The later legacy documentation correction adds example validation
+and queue tests without changing either component's firmware.
 
 | Check | Status and scope |
 | --- | --- |
@@ -12,10 +13,12 @@ on 2026-10-18; later repository cleanup changes documentation/tool paths only.
 | All 75 profile records | Parse, longest EF match and active default recipe validation |
 | ESP8266 flash reader | Same host suite with `USE_ESP8266` and a pgmspace shim; not an ESP8266 binary |
 | Native adapter tests | Pass with lightweight ESPHome headers; include AT handshake and typed recipe controls |
-| ESPHome schemas | Native C3 IDF, C3 Arduino, ESP8266 Arduino, monitor-only/profile hint, separate Cool Control UART, and legacy `jura` discovery/configuration on ESP8266 Arduino |
+| ESPHome schemas | Native C3 IDF/Arduino and ESP8266, monitor-only/profile hint, separate Cool Control UART; legacy C3 IDF/Arduino, ESP8266 and model button examples |
+| Legacy queue tests | FIFO, limits, poll coalescing, wire encoding, split RX, publishing, timeouts, recovery, invalid input and rollover |
 | Invalid configs | Bad baud, handshake hex and unknown profile rejected |
 | C++ generation | Complete E8 actions/entities and Cool Control example |
 | Real C3 compiler check | Generated source checked with riscv32-esp-elf GCC 14.2.0 and actual ESP-IDF/ESPHome headers using `-fsyntax-only` |
+| Legacy C3 compiler check | Generated legacy E8 configuration and queued button lambdas pass the same real ESP-IDF compiler syntax check |
 | Physical E8 observations | Successful AT startup, TF ready/alerts, product/maintenance reads and TV espresso stage/progress logs |
 | Saved espresso water read | Screen change 45 → 60 → 45 ml followed by valid `@TM:41,02` responses |
 | Physical saved-default API brewing | Still needs acceptance testing after the 0.3 update |
@@ -30,6 +33,7 @@ control path or model has been exercised on hardware.
 ## Regression coverage
 
 - Cipher and encoded framing, all-byte/key round trips, escaping, timeouts and rollover.
+- Legacy non-blocking queue behaviour, including actual header execution with fake UART/time.
 - Boot identification through TY or AT T3, bounded missing-device discovery,
   challenge overrides/backoff and persistent model mismatch handling.
 - Product/maintenance/raw parsing, higher product banks, EF545 counter remap,
