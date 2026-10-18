@@ -5,6 +5,13 @@
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/log.h"
+#include "esphome/core/hal.h"
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <vector>
 #include <map>
 
 namespace esphome {
@@ -35,9 +42,9 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     for (int i = 0; i < (int) outbytes.size(); i++) {
       uint8_t src = static_cast<uint8_t>(outbytes[i]);
       for (int s = 0; s < 8; s += 2) {
-        uint8_t rawbyte = 0xFF;
-        bitWrite(rawbyte, 2, bitRead(src, s + 0));
-        bitWrite(rawbyte, 5, bitRead(src, s + 1));
+        // Jura carries two data bits in positions 2 and 5 of each UART byte.
+        uint8_t rawbyte = static_cast<uint8_t>(
+            0xDBu | (((src >> s) & 1u) << 2) | (((src >> (s + 1)) & 1u) << 5));
         write(rawbyte);
       }
       delay(8);
@@ -48,8 +55,8 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     while (!(inbytes.size() >= 2 && inbytes[inbytes.size()-2] == '\r' && inbytes[inbytes.size()-1] == '\n')) {
       if (available()) {
         uint8_t rawbyte = static_cast<uint8_t>(read());
-        bitWrite(inbyte, s + 0, bitRead(rawbyte, 2));
-        bitWrite(inbyte, s + 1, bitRead(rawbyte, 5));
+        inbyte |= static_cast<uint8_t>(
+            (((rawbyte >> 2) & 1u) << s) | (((rawbyte >> 5) & 1u) << (s + 1)));
         if ((s += 2) >= 8) {
           s = 0;
           inbytes.push_back(static_cast<char>(inbyte));
@@ -97,15 +104,15 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     // ---- flags ----
     std::string ic = cmd2jura("IC:");
     if (ic.size() >= 7) {
-      byte a = static_cast<byte>(strtol(ic.substr(3,2).c_str(), NULL, 16));
-      byte b = static_cast<byte>(strtol(ic.substr(5,2).c_str(), NULL, 16));
+      uint8_t a = static_cast<uint8_t>(std::strtol(ic.substr(3,2).c_str(), nullptr, 16));
+      uint8_t b = static_cast<uint8_t>(std::strtol(ic.substr(5,2).c_str(), nullptr, 16));
 
       publish_ic_bits_if_changed_(a, b);     
 
-      byte trayBit       = bitRead(a, 4);
-      byte left_readyBit = bitRead(a, 2);
-      byte tankBit       = bitRead(b, 5);
-      byte right_busyBit = bitRead(b, 6);
+      uint8_t trayBit       = ((a >> 4) & 1u);
+      uint8_t left_readyBit = ((a >> 2) & 1u);
+      uint8_t tankBit       = ((b >> 5) & 1u);
+      uint8_t right_busyBit = ((b >> 6) & 1u);
 
       std::string tray_status = (trayBit == 1) ? "Present" : "Missing";
       std::string tank_status = (tankBit == 1) ? "Fill Tank" : "OK";
@@ -136,7 +143,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
     std::vector<long> out;
     // field i starts at pos = 3 + 4*i (i = 0..)
     for (size_t pos = 3; pos + 4 <= rt.size(); pos += 4) {
-      long val = strtol(rt.substr(pos, 4).c_str(), nullptr, 16);
+      long val = std::strtol(rt.substr(pos, 4).c_str(), nullptr, 16);
       out.push_back(val);
     }
     return out;
@@ -160,7 +167,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
       if (prev != now) {
         if (any) msg += ", ";
         // "counter_%zu %ld→%ld"
-        snprintf(buf, sizeof(buf), "counter_%u %ld\u2192%ld", (unsigned)(i + 1), prev, now);
+        std::snprintf(buf, sizeof(buf), "counter_%u %ld\u2192%ld", (unsigned)(i + 1), prev, now);
         msg += buf;
         any = true;
       }
@@ -185,7 +192,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
       byte_to_bits(a, abits);
       byte_to_bits(b, bbits);
       // "A=xxxxxxxx B=xxxxxxxx"
-      snprintf(buf, sizeof(buf), "A=%s B=%s", abits, bbits);
+      std::snprintf(buf, sizeof(buf), "A=%s B=%s", abits, bbits);
       publish_text("ic_bits", std::string(buf));
   
       last_ic_a_ = a;
