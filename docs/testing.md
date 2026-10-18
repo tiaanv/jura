@@ -22,6 +22,7 @@ and queue tests without changing either component's firmware.
 | Physical E8 observations | Successful AT startup, TF ready/alerts, product/maintenance reads and TV espresso stage/progress logs |
 | Saved espresso water read | Screen change 45 → 60 → 45 ml followed by valid `@TM:41,02` responses |
 | Physical saved-default API brewing | Still needs acceptance testing after the 0.3 update |
+| Dev AN:01 diagnostic | Host-tested blocked-TF dispatch, offline/busy/duplicate rejection, replies, cancellation and no retry; generated YAML checked with the C3 IDF compiler; physical effect unverified |
 | Other models/parameters | Not established by their presence in the database |
 | Arduino/ESP8266 firmware and RAM usage | No complete target build/memory measurement established |
 | New Cool Control receiver | Host-tested parsing/stale expiry; no fresh physical validation |
@@ -34,6 +35,8 @@ control path or model has been exercised on hardware.
 
 - Cipher and encoded framing, all-byte/key round trips, escaping, timeouts and rollover.
 - Legacy non-blocking queue behaviour, including actual header execution with fake UART/time.
+- Current-product cleanup after rinse progress silence, recognised finish, fresh TF,
+  disconnect/reconnect and startup; live TV is preserved on incidental TF frames.
 - Boot identification through TY or AT T3, bounded missing-device discovery,
   challenge overrides/backoff and persistent model mismatch handling.
 - Product/maintenance/raw parsing, higher product banks, EF545 counter remap,

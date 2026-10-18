@@ -43,8 +43,7 @@ class JuraController : public TransportSink {
     text("espresso_probe_result", "Not run");
     text("espresso_probe_raw", "");
     text("espresso_probe_settings", "");
-    text("progress_state", "Unknown");
-    number("progress", NAN);
+    clear_operation_("Unknown", "Unknown", -1);
   }
   bool discovery_ready() const { return discovery_done_; }
   bool profile_ok() const { return !profiles_.ef.empty(); }
@@ -88,19 +87,13 @@ class JuraController : public TransportSink {
       update_status_();
     }
     if (operation_seen_ && uint32_t(now - last_tv_) >= 20000) {
-      operation_seen_ = false;
       if (operation_finished_) {
-        text("progress_state", "Idle");
-        text("current_product", "None");
-        binary("brew_active", 0);
+        clear_operation_("Idle", "None", 0);
       } else {
-        text("progress_state", "Unknown (progress timeout)");
-        binary("brew_active", -1);
+        clear_operation_("Unknown (progress timeout)", "Unknown", -1);
         awaiting_tf_ = true;
         tf_requested_ = true;
       }
-      number("progress", NAN);
-      clear_stage_();
       update_status_();
     }
     if (brew_pending_ && brew_sent_ && !brew_started_ && uint32_t(now - brew_sent_at_) >= 20000) {
@@ -133,6 +126,12 @@ class JuraController : public TransportSink {
     if (!control_.empty()) {
       const Request r = control_.front();
       control_.pop_front();
+      if (r.kind == Kind::TEST_AN01 &&
+          (session_ != Session::READY || model_mismatch_ || busy_() || brew_pending_ ||
+           api_recipe_pending_ || probe_pending_)) {
+        reject_("AN:01 test cancelled: connection or operation changed");
+        return;
+      }
       if (r.kind == Kind::API_RECIPE && (!api_recipe_pending_ || !ready_for_brew_())) {
         cancel_api_recipe_("Machine no longer ready before settings read");
         return;
@@ -150,6 +149,8 @@ class JuraController : public TransportSink {
         return;
       }
       start_(r.command, r.kind, r.encrypted);
+      if (r.kind == Kind::TEST_AN01)
+        text("command_result", "AN:01 test sent; waiting for reply; effect unverified");
       if (r.kind == Kind::API_RECIPE) {
         text("command_result", "Reading saved settings before brew");
         text("command_recipe_status", "Reading machine settings");
@@ -309,6 +310,18 @@ class JuraController : public TransportSink {
     }
     return brew_recipe(name, values);
   }
+  // Manual diagnostic only. Does not require a ready TF state: the intended
+  // experiment is during SwitchOff Delay. Never send during an observed operation.
+  bool test_an01() {
+    if (session_ != Session::READY || model_mismatch_)
+      return reject_("AN:01 test requires a connected AT session");
+    if (busy_() || brew_pending_ || api_recipe_pending_ || probe_pending_ ||
+        active_ == Kind::SAVED_RECIPE || active_ == Kind::TEST_AN01 || !control_.empty())
+      return reject_("AN:01 test rejected: another operation or control is pending");
+    control_.push_back({"AN:01", Kind::TEST_AN01, false});
+    text("command_result", "AN:01 test queued; effect unverified; no automatic retry");
+    return true;
+  }
   bool power_off() {
     if (!allow_power_) return reject_("Power-off control disabled");
     if (brew_pending_ || api_recipe_pending_ || probe_pending_ || active_ == Kind::SAVED_RECIPE ||
@@ -373,6 +386,7 @@ class JuraController : public TransportSink {
     RAW,
     BREW,
     POWER,
+    TEST_AN01,
     RECIPE_PROBE,
     SAVED_RECIPE,
     API_RECIPE
@@ -585,6 +599,7 @@ class JuraController : public TransportSink {
     handshake_kind_ = Kind::H0;
     tf_valid_ = false;
     tf_.clear();
+    clear_operation_("Unknown (AT reconnecting)", "Unknown", -1);
     binary("connected", 0);
     text("session", "Handshake: T0");
     update_status_();
@@ -603,11 +618,8 @@ class JuraController : public TransportSink {
     tf_valid_ = false;
     brew_pending_ = false;
     brew_sent_ = false;
-    operation_seen_ = false;
     binary("connected", 0);
-    binary("brew_active", -1);
-    number("progress", NAN);
-    clear_stage_();
+    clear_operation_("Unknown (AT disconnected)", "Unknown", -1);
     for (const auto &a : profiles_.alerts) binary(key_("alert_", a.bit), -1);
     text("session", why + (model_mismatch_ ? "; restart required" : "; retry in 60 s"));
     text("status", "offline");
@@ -683,7 +695,9 @@ class JuraController : public TransportSink {
         session_failed_("Handshake command timeout");
       else if (kind == Kind::BREW) {
         text("command_result", "Awaiting start; no immediate reply (not retried)");
-      } else if (kind == Kind::POWER)
+      } else if (kind == Kind::TEST_AN01)
+        text("command_result", "AN:01 test reply timeout; effect unknown; not retried");
+      else if (kind == Kind::POWER)
         text("command_result", "Power-off reply timeout; not retried");
     } else if (kind == Kind::H3 && session_ == Session::ACK_MODEL) {
       session_ = Session::READY;
@@ -702,7 +716,10 @@ class JuraController : public TransportSink {
     if (!transport_.waiting()) return;
     if (active_ == Kind::TYPE && starts_(frame, "ty:") && frame.size() > 3)
       transport_.complete(true, now_);
-    else if (active_ == Kind::POWER && starts_(frame, "an:")) {
+    else if (active_ == Kind::TEST_AN01 && (starts_(frame, "an:") || starts_(frame, "ok:"))) {
+      text("command_result", "AN:01 test response: " + frame + "; effect unverified");
+      transport_.complete(true, now_);
+    } else if (active_ == Kind::POWER && starts_(frame, "an:")) {
       text("command_result", "Power-off response: " + frame);
       transport_.complete(true, now_);
     } else if (active_ == Kind::RAW && starts_(frame, "rt:") && frame.size() >= 67 &&
@@ -828,6 +845,12 @@ class JuraController : public TransportSink {
     text("active_alerts", labels.empty() ? "None" : labels.substr(0, 250));
     text("tray_status", flag_(0) ? "Missing" : "Present");
     text("water_tank_status", flag_(1) ? "Fill Tank" : "OK");
+    // A completed or expired operation is not the current product. Preserve
+    // actively arriving TV progress even if an incidental TF frame also arrives.
+    bool complete_status = tf_.size() >= 2;
+    for (const auto &a : profiles_.alerts)
+      if (a.blocking && a.bit / 8 >= tf_.size()) complete_status = false;
+    if (!busy_() && complete_status) clear_operation_("Idle", "None", 0);
     if (api_recipe_pending_ && !ready_for_brew_())
       cancel_api_recipe_("Machine reported not ready during settings read");
     update_status_();
@@ -884,6 +907,18 @@ class JuraController : public TransportSink {
           if (entry.code == state) return entry.name;
         return "State 0x" + hexbyte_(state);
     }
+  }
+  void clear_operation_(const char *state, const char *product, int active) {
+    operation_seen_ = false;
+    operation_finished_ = false;
+    phase_.clear();
+    text("current_product", product);
+    text("progress_state", state);
+    binary("brew_active", active);
+    number("product_code", NAN);
+    number("stage_code", NAN);
+    number("progress", NAN);
+    clear_stage_();
   }
   void clear_stage_() {
     number("stage_current", NAN);

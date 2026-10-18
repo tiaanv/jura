@@ -138,7 +138,7 @@ sensors supply milk level/temperature; the main UART component does not.
 
 | Entity | Meaning |
 | --- | --- |
-| Jura Current Product | Observed drink or known maintenance process |
+| Jura Current Product | Current observed drink/process; `None` when idle, `Unknown` when unavailable |
 | Jura Progress State | Grinding, dispensing, finished or another mapped stage |
 | Jura Progress | Overall machine-reported percentage, if present |
 | Jura Stage Current / Stage Target | Available actual/target values for the current stage |
@@ -147,8 +147,15 @@ sensors supply milk level/temperature; the main UART component does not.
 | Jura Product Code / Stage Code | Raw identifiers for investigation |
 
 Stage values are not overall percentages. Unknown channels/stages retain raw
-codes without invented quantities. Finished information is retained briefly
-before returning to idle. Lack of progress is not treated as successful completion.
+codes without invented quantities. A recognised finish is shown until fresh TF
+status returns or the 20-second progress window expires. Progress silence without
+a recognised finish clears the current product to `Unknown`, makes Brew Active
+unavailable and requests fresh TF status; it does not claim successful completion.
+When fresh TF arrives with no active TV operation, Current Product becomes `None`
+and Progress State becomes `Idle`. Startup, reconnect and connection loss clear
+the product to `Unknown`. Product/stage codes, quantities and percentages are
+also cleared when the live operation is cleared; this is not a last-drink history.
+An incidental TF frame does not erase an actively tracked TV operation.
 
 ## Parameter controls and bounds
 

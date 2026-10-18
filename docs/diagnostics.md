@@ -1,5 +1,8 @@
 # Diagnostics
 
+For the dev-only manual shutdown-delay experiment, see
+[AN:01 test](an01-test.md). Its wake/keep-awake effect is unverified.
+
 ## Saved espresso probe
 
 **Jura Read Espresso Settings** sends `@TM:41,02` once while connected and idle.

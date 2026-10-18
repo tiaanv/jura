@@ -55,6 +55,7 @@ struct Machine {
   bool answer_type = true, answer_at = true, answer_brew = true, reject_brew = false, auto_tf = true;
   std::vector<std::string> commands;
   std::string probe_reply = "@tm:41,0200040A00000200010000000000000000F4";
+  std::string an01_reply;
   std::map<std::string, std::string> recipe_replies;
   void inject(const std::string &s, bool at = true) {
     for (auto raw : encode(at ? cipher::build_frame(s + "\r\n", 0xA0) : s + "\r\n")) dev.input(raw, clock);
@@ -94,6 +95,8 @@ struct Machine {
         inject("ty:" + model, false);
       else if (command == "AN:02")
         inject("an:OK", false);
+      else if (command == "AN:01" && !an01_reply.empty())
+        inject(an01_reply, false);
       else if (command == "RT:0000")
         inject("rt:00F40004014C2D3E003A0014003534F400490024BCB300320000011600000066", false);
       else if (at && answer_at) {
@@ -329,8 +332,11 @@ static void test_banks_and_progress() {
   assert(m.dev.nums["progress"] == 50 && m.dev.nums["stage_current"] == 20);
   m.inject("@TV:3C02");
   assert(std::isnan(m.dev.nums["progress"]));
+  m.auto_tf = false;  // No fresh status to resolve the expired progress stream.
   m.tick(21000);
   assert(m.dev.bins["brew_active"] == -1);
+  m.inject("@TF:00040000000000000000000000000000");  // Full EF1092 alert coverage.
+  assert(m.dev.bins["brew_active"] == 0 && m.dev.texts["current_product"] == "None");
   Machine z;
   z.model = "EF545M V02.00";
   z.begin();
@@ -714,7 +720,102 @@ static void test_api_saved_defaults() {
   stray_ack.tick(2500);
   assert(stray_ack.count("@TP:02000609000002000100000000000000") == 1);
 }
+static void test_an01_diagnostic() {
+  Machine disconnected;
+  assert(!disconnected.dev.test_an01());
+  assert(disconnected.count("AN:01") == 0);
+  for (const auto &reply : {"ok:", "an:OK"}) {
+    Machine m;
+    m.begin(false);
+    m.dev.configure(false, false, true, 100, "");  // Explicit manual diagnostic only.
+    m.tick(16000);
+    m.tf = "000000000001";  // SwitchOff Delay active, intentionally not ready.
+    m.inject("@TF:" + m.tf);
+    assert(m.dev.texts["active_alerts"].find("SwitchOff Delay") != std::string::npos);
+    m.an01_reply = reply;
+    assert(m.dev.test_an01());
+    assert(!m.dev.test_an01());  // No duplicate queued test.
+    m.tick(1500);
+    assert(m.count("AN:01") == 1);
+    assert(m.dev.texts["command_result"] == std::string("AN:01 test response: ") + reply +
+                                               "; effect unverified");
+  }
+  Machine timeout;
+  timeout.begin();
+  timeout.tick(16000);
+  assert(timeout.dev.test_an01());
+  timeout.tick(200);
+  assert(timeout.dev.active() == "AN:01");
+  assert(!timeout.dev.test_an01());  // Reject another test while waiting for a reply.
+  timeout.tick(9800);
+  assert(timeout.count("AN:01") == 1);
+  assert(timeout.dev.texts["command_result"].find("not retried") != std::string::npos);
+  timeout.tick(10000);
+  assert(timeout.count("AN:01") == 1);
+
+  Machine busy;
+  busy.begin();
+  busy.tick(16000);
+  busy.inject("@TB");
+  assert(!busy.dev.test_an01());
+  assert(busy.count("AN:01") == 0);
+
+  Machine race;
+  race.begin();
+  race.tick(16000);
+  assert(race.dev.test_an01());
+  race.inject("@TB");  // An operation starts after acceptance, before dispatch.
+  race.tick(1000);
+  assert(race.count("AN:01") == 0);
+  assert(race.dev.texts["command_result"].find("cancelled") != std::string::npos);
+}
+
+static void test_current_product_lifecycle() {
+  Machine m;
+  m.begin();
+  assert(m.dev.texts["current_product"] == "Unknown");
+  assert(std::isnan(m.dev.nums["product_code"]));
+  m.tick(16000);
+  assert(m.dev.texts["current_product"] == "None");
+  m.inject("@TV:2322");  // Coffee rinsing, often no ENJOY frame follows.
+  assert(m.dev.texts["current_product"] == "Coffee rinsing");
+  m.inject("@TF:000400000000");  // Do not erase live TV on an incidental TF.
+  assert(m.dev.texts["current_product"] == "Coffee rinsing");
+  m.auto_tf = false;
+  m.tick(21000);
+  assert(m.dev.texts["current_product"] == "Unknown");
+  assert(m.dev.texts["progress_state"] == "Unknown (progress timeout)");
+  assert(m.dev.bins["brew_active"] == -1);
+  assert(std::isnan(m.dev.nums["product_code"]) && std::isnan(m.dev.nums["stage_code"]));
+  assert(std::isnan(m.dev.nums["stage_current"]) && std::isnan(m.dev.nums["stage_target"]));
+  m.inject("@TF:00");  // An incomplete status cannot establish idle.
+  assert(m.dev.texts["current_product"] == "Unknown");
+  m.inject("@TF:000400000000");
+  assert(m.dev.texts["current_product"] == "None");
+  assert(m.dev.texts["progress_state"] == "Idle" && m.dev.bins["brew_active"] == 0);
+
+  m.inject("@TV:2322");
+  m.inject("@TV:3E22");
+  assert(m.dev.texts["current_product"] == "Coffee rinsing");
+  m.inject("@TF:000400000000");
+  assert(m.dev.texts["current_product"] == "None");
+  assert(std::isnan(m.dev.nums["progress"]));
+
+  m.inject("@TV:2322");
+  m.answer_at = false;
+  m.tick(61000);
+  assert(m.dev.backoff());
+  assert(m.dev.texts["current_product"] == "Unknown");
+  assert(m.dev.texts["progress_state"] == "Unknown (AT disconnected)");
+  m.answer_at = true;
+  m.auto_tf = true;
+  m.tick(70000);
+  assert(m.dev.ready() && m.dev.texts["current_product"] == "None");
+}
+
 int main() {
+  test_current_product_lifecycle();
+  test_an01_diagnostic();
   test_profiles();
   test_cipher();
   test_startup_and_statistics();

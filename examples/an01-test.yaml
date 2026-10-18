@@ -1,0 +1,11 @@
+# Merge into your existing native jura-e8 device YAML. This is not a standalone config.
+# Change the existing external_components Git ref to dev for this experimental method.
+# Keep only one button: block; append this entry if you already have one.
+button:
+  - platform: template
+    name: "Jura Test AN01"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          if (!id(jura_coffee).test_an01())
+            ESP_LOGW("jura_test", "AN:01 test was not queued; see Jura Command Result");

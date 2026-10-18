@@ -1,5 +1,21 @@
 # Change log
 
+## 0.3.2 (dev)
+
+- Clear stale Current Product, product/stage codes, quantities and progress on
+  startup, reconnect, session loss and progress timeout, including rinses that
+  do not send a recognised finish frame.
+- Publish Unknown while operation state is unavailable; fresh TF status with
+  no active TV operation publishes None/Idle. Live TV remains authoritative.
+
+## 0.3.1 (dev)
+
+- Added a manual native `test_an01()` method and YAML test button for observing
+  shutdown-delay behaviour. Sends only AN:01 through the serial queue, logs
+  replies without claiming wake success, and never automatically retries.
+- Diagnostic permits a connected, blocked shutdown-delay state but rejects
+  active operations or pending controls and rechecks before dispatch.
+
 ## Legacy documentation and examples
 
 - Aligned the legacy documentation with the existing non-blocking,
