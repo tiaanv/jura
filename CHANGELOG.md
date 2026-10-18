@@ -1,5 +1,14 @@
 # Change log
 
+## Hardware and documentation visuals
+
+- Restored the original connector reference and hardware connection guidance.
+- Added a 1 kΩ / 2 kΩ divider diagram for Jura TX to ESP32-C3 RX, direct 3.3 V
+  TX guidance, shared ground and power notes matching the GPIO4/GPIO3 example.
+- Added the owner's native-controls screenshot and a labelled monitoring illustration.
+- Documentation images are included in source packages and checksums.
+- No firmware or device YAML changes are required by this documentation update.
+
 ## Repository layout update
 
 - Current guides moved under `docs/`; root README now describes the native V2 component.

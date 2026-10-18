@@ -89,6 +89,12 @@ writes an ignored ZIP under `dist/`, includes the documented repository layout,
 regenerates `SHA256SUMS`, and verifies archive integrity/exclusions. The archived
 legacy files are included for historical reference, not as current components.
 
+Documentation diagrams can be regenerated with `python tools/render_doc_visuals.py`
+after installing Pillow and a Segoe UI or DejaVu Sans font. This regenerates only
+the wiring diagram and labelled monitoring illustration. The user screenshot and
+original connector reference are retained unchanged. Image files are included in
+the release package and checksum manifest.
+
 ## Physical acceptance checks
 
 1. Confirm model, connected/ready states, alerts and plausible AT counts.

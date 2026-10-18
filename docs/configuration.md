@@ -44,7 +44,8 @@ jura_native:
 
 GPIO4 TX / GPIO3 RX are the reference E8/C3 wiring, not a universal board mapping.
 The Jura link requires TX/RX at 9600 baud, 8 data bits, no parity and one stop bit.
-Use the existing suitable electrical interface between the ESP and the Jura.
+Use the [hardware guide](hardware.md) for the 5 V RX divider, direct 3.3 V TX,
+shared ground and connector reference.
 Remove the old `jura:` block and any raw UART drink automations: only one
 component may own this UART.
 

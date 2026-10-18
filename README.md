@@ -28,6 +28,37 @@ feature has been tested. See [validation status](docs/testing.md).
 Legacy raw-register interpretations are **unverified**; use the profile-based
 AT counters as the primary named readings and see [diagnostics](docs/diagnostics.md).
 
+## Hardware and connectivity
+
+The reference E8 uses a UART connection at **9600 baud, 8N1**, with ESP32-C3
+**GPIO4 TX**, **GPIO3 RX** and a shared ground. Cross the data directions:
+Jura TX goes to ESP RX; ESP TX goes to Jura RX.
+
+For the Jura's **5 V TX signal**, use a **1 kΩ / 2 kΩ voltage divider** before
+GPIO3. The junction supplies approximately **3.33 V** when Jura TX is high.
+The ESP's 3.3 V GPIO4 TX can drive Jura RX directly on the reference E8 interface.
+
+![Jura UART wiring with a voltage divider on ESP RX](docs/assets/uart-voltage-divider.png)
+
+See [hardware and wiring](docs/hardware.md) for the connection table, original
+connector reference, power guidance and matching YAML. The divider is for the
+UART signal; it does not power the ESP. ESP32-C3 GPIO inputs must not be connected
+directly to a 5 V signal.
+
+## In Home Assistant
+
+Native ESPHome entities provide controls and monitoring without MQTT. These
+examples show the standard controls and a possible monitoring layout:
+
+| Native controls — user screenshot | Monitoring — illustration |
+| --- | --- |
+| ![User-provided Home Assistant native controls](docs/assets/ha-native-controls.png) | ![Illustrative E8 monitoring card](docs/assets/ha-monitoring-illustration.png) |
+
+The controls screenshot was taken during earlier testing, before saved-recipe
+synchronisation; its values are examples. The monitoring illustration combines
+E8 test readings and is not a live or simultaneous screenshot. Entity availability
+depends on the detected profile. See [card integration](docs/home-assistant.md).
+
 ## Get started
 
 Merge this source into your existing device YAML:
@@ -78,6 +109,7 @@ not an ESPHome device configuration.
 
 | Guide | Contents |
 | --- | --- |
+| [Hardware and wiring](docs/hardware.md) | Connector reference, RX voltage divider, common ground and power |
 | [Configuration](docs/configuration.md) | Installation, wiring example, options, native controls, Cool Control |
 | [Saved recipes](docs/saved-recipes.md) | Loading, fallback, one-shot edits, API preparation and cancellation |
 | [Home Assistant](docs/home-assistant.md) | Action YAML, native entity contract and card integration |

@@ -5,6 +5,29 @@ no MQTT broker or separate custom integration is required. Use the actual entity
 IDs discovered under your device; friendly names alone do not guarantee the old
 component's IDs or history.
 
+## Device controls and monitoring
+
+| Native controls — user screenshot | Monitoring — illustration |
+| --- | --- |
+| ![Native Home Assistant controls during E8 testing](assets/ha-native-controls.png) | ![Illustrative monitoring layout using E8 readings](assets/ha-monitoring-illustration.png) |
+
+The screenshot is an unmodified image supplied by the project owner during
+earlier testing. It predates saved-recipe synchronisation; the displayed Flat
+White settings must not be treated as a verified saved recipe. Current controls
+load the machine's settings and expose loading/source state as described in
+[saved recipes](saved-recipes.md).
+
+The monitoring panel is a documentation illustration, not a supplied dashboard
+or a live screenshot. It combines values observed during E8 testing, including
+the espresso settings read and profile-based counters. Readiness, recipe and
+counter values were not captured simultaneously. It intentionally does not
+present the historical raw-register interpretations as verified counters.
+
+During a drink, the component also exposes the current product, progress and
+available stage details. A complete live progress screenshot has not yet been
+captured for this documentation. Your existing custom card can consume these
+entities; no particular card layout is required by the component.
+
 ## Define the API actions
 
 Merge the `api.actions` definitions from [examples/e8.yaml](../examples/e8.yaml)

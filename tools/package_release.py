@@ -9,7 +9,7 @@ import zipfile
 
 root = Path(__file__).resolve().parents[1]
 excluded = {".git", ".esphome", ".tools", ".venv", "__pycache__", "build", "generated-configs", "dist"}
-extensions = {".py", ".h", ".cpp", ".yaml", ".md", ".json"}
+extensions = {".py", ".h", ".cpp", ".yaml", ".md", ".json", ".png", ".svg"}
 files = [root / name for name in ("README.md", "CHANGELOG.md", "LICENSE", "VERSION", ".gitignore")]
 for directory in ("components", "docs", "examples", "tests", "tools", "legacy"):
     for file in (root / directory).rglob("*"):
