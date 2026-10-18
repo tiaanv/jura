@@ -332,8 +332,11 @@ static void test_banks_and_progress() {
   assert(m.dev.nums["progress"] == 50 && m.dev.nums["stage_current"] == 20);
   m.inject("@TV:3C02");
   assert(std::isnan(m.dev.nums["progress"]));
+  m.auto_tf = false;  // No fresh status to resolve the expired progress stream.
   m.tick(21000);
   assert(m.dev.bins["brew_active"] == -1);
+  m.inject("@TF:00040000000000000000000000000000");  // Full EF1092 alert coverage.
+  assert(m.dev.bins["brew_active"] == 0 && m.dev.texts["current_product"] == "None");
   Machine z;
   z.model = "EF545M V02.00";
   z.begin();
@@ -767,7 +770,51 @@ static void test_an01_diagnostic() {
   assert(race.dev.texts["command_result"].find("cancelled") != std::string::npos);
 }
 
+static void test_current_product_lifecycle() {
+  Machine m;
+  m.begin();
+  assert(m.dev.texts["current_product"] == "Unknown");
+  assert(std::isnan(m.dev.nums["product_code"]));
+  m.tick(16000);
+  assert(m.dev.texts["current_product"] == "None");
+  m.inject("@TV:2322");  // Coffee rinsing, often no ENJOY frame follows.
+  assert(m.dev.texts["current_product"] == "Coffee rinsing");
+  m.inject("@TF:000400000000");  // Do not erase live TV on an incidental TF.
+  assert(m.dev.texts["current_product"] == "Coffee rinsing");
+  m.auto_tf = false;
+  m.tick(21000);
+  assert(m.dev.texts["current_product"] == "Unknown");
+  assert(m.dev.texts["progress_state"] == "Unknown (progress timeout)");
+  assert(m.dev.bins["brew_active"] == -1);
+  assert(std::isnan(m.dev.nums["product_code"]) && std::isnan(m.dev.nums["stage_code"]));
+  assert(std::isnan(m.dev.nums["stage_current"]) && std::isnan(m.dev.nums["stage_target"]));
+  m.inject("@TF:00");  // An incomplete status cannot establish idle.
+  assert(m.dev.texts["current_product"] == "Unknown");
+  m.inject("@TF:000400000000");
+  assert(m.dev.texts["current_product"] == "None");
+  assert(m.dev.texts["progress_state"] == "Idle" && m.dev.bins["brew_active"] == 0);
+
+  m.inject("@TV:2322");
+  m.inject("@TV:3E22");
+  assert(m.dev.texts["current_product"] == "Coffee rinsing");
+  m.inject("@TF:000400000000");
+  assert(m.dev.texts["current_product"] == "None");
+  assert(std::isnan(m.dev.nums["progress"]));
+
+  m.inject("@TV:2322");
+  m.answer_at = false;
+  m.tick(61000);
+  assert(m.dev.backoff());
+  assert(m.dev.texts["current_product"] == "Unknown");
+  assert(m.dev.texts["progress_state"] == "Unknown (AT disconnected)");
+  m.answer_at = true;
+  m.auto_tf = true;
+  m.tick(70000);
+  assert(m.dev.ready() && m.dev.texts["current_product"] == "None");
+}
+
 int main() {
+  test_current_product_lifecycle();
   test_an01_diagnostic();
   test_profiles();
   test_cipher();

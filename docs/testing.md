@@ -35,6 +35,8 @@ control path or model has been exercised on hardware.
 
 - Cipher and encoded framing, all-byte/key round trips, escaping, timeouts and rollover.
 - Legacy non-blocking queue behaviour, including actual header execution with fake UART/time.
+- Current-product cleanup after rinse progress silence, recognised finish, fresh TF,
+  disconnect/reconnect and startup; live TV is preserved on incidental TF frames.
 - Boot identification through TY or AT T3, bounded missing-device discovery,
   challenge overrides/backoff and persistent model mismatch handling.
 - Product/maintenance/raw parsing, higher product banks, EF545 counter remap,
