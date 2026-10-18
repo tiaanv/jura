@@ -1,0 +1,69 @@
+Validation — Jura Native 0.1.0
+==============================
+
+Performed with ESPHome 2026.9.1 on 2026-10-18.
+
+PASS: C++17 host controller/protocol tests, -Wall -Wextra -Werror:
+  All 75 profiles parse; longest EF match; all active default recipes validate
+  except the explicitly documented EF562 data inconsistency; numeric limits,
+  steps, unsupported fields, choices and profile-default sentinels checked.
+  EF533 and EF536 exact recipe vectors; friendly strength label conversion.
+  Cipher/escaping round trips across all byte values and keys.
+  Encoded UART framing, handshakes, known/unknown challenges and override,
+  polling, maintenance/product/raw counts, higher counter banks, EF545 remap.
+  Request ordering, single pending brew, busy rejection, no automatic retry,
+  matching/different TV products, uncertain starts and explicit rejections.
+  TV liveness without TF during a long operation; stale alerts; normal and
+  extended progress windows; incomplete progress; operation timeout and finish.
+  Handshake backoff/recovery, clock rollover, persistent model mismatch block
+  and incomplete TF refusing readiness.
+
+PASS: same suite compiled with USE_ESP8266 and the test pgmspace shim to
+  exercise the flash-reader path. This is a host test, not an ESP8266 binary.
+
+PASS: native ESPHome adapter tests using lightweight test headers:
+  Bounded boot discovery, native entity names/visibility and choice lists,
+  supported/hidden controls, per-drink limits and rejected invalid settings,
+  and bounded Cool Control reception/stale-state expiry.
+
+PASS: actual ESPHome schema validation:
+  ESP32-C3 ESP-IDF; ESP32-C3 Arduino; ESP8266 Arduino; monitor-only defaults
+  with profile hint; separate Cool Control UART. Bad baud rate, invalid
+  handshake hex and unknown profile hints rejected as intended.
+
+PASS: actual ESPHome C++ generation for the complete E8 example, including
+  native API custom actions and all fixed/profile entity slots, and for the
+  separate Cool Control example.
+
+PASS: generated main.cpp and component headers checked with the actual
+  riscv32-esp-elf GCC 14.2.0 compiler and installed ESP-IDF/ESPHome SDK headers
+  for ESP32-C3, using -fsyntax-only and the SDK compile command's build flags.
+  Both the Jura Native and separate Cool Control example sources pass.
+
+Not performed: complete firmware linking/flashing of this fresh release,
+  measurements of final flash/RAM usage, on-device Arduino/ESP8266 builds,
+  live custom-drink execution or real-device checks across the other models.
+  The supplied earlier EF533 logs establish real handshake, TF/TV espresso
+  monitoring and raw-counter changes, rather than physical validation of every
+  new control path. Cool Control parsing preserves the existing frame layout
+  and is simulated in this release.
+
+Re-run portable tests with Python plus a C++17 compiler:
+  Set CXX to g++ or clang++ (default: g++).
+  python tests/run_tests.py
+
+Re-run schemas/source generation with ESPHome 2026.9.1 installed:
+  python tests/validate_schema.py
+  python -m esphome compile example-e8.yaml --only-generate
+
+Regenerate the readable database exports:
+  python tests/export_profiles.py
+
+Suggested first E8 acceptance check:
+  1. Confirm EF533, connected, ready and sensible existing counters.
+  2. Remove/replace the tank or tray and check the corresponding TF entities.
+  3. Start espresso at the screen; check product, phase, percent and quantities.
+  4. Use brew_drink Espresso once and inspect Command Result + matching TV.
+  5. Test the custom 50ml/strength 6/High espresso from HA_CARD.txt.
+  6. Verify the espresso/grounds counters change, then reset and power-cycle
+     the ESP to check that discovery and AT connection recover consistently.

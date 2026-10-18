@@ -1,0 +1,117 @@
+Home Assistant card contract — Jura Native 0.1.0
+================================================
+
+Use actual entity IDs discovered under the Jura device; names below identify
+their purpose. New profile slots are not guaranteed to reuse old HA entity IDs.
+
+Machine/status panel
+  Jura Status              ready, busy, blocked, heating, finishing, not_ready,
+                           connecting, offline or unknown
+  Jura Status Detail       Current phase, blocking reasons, or connection detail
+  Jura Connected           AT session traffic is available
+  Jura Alerts Stale        TF information is absent or older than 60 seconds
+  Jura Active Alerts       Joined active alert names; individual binary sensors
+                           expose each alert supported by the detected profile
+  Tray Status              Present, Missing, Unknown
+  Water Tank Status        OK, Fill Tank, Unknown
+  Grounds Level            Retained EF533 raw puck reading
+
+Maintenance due alerts may be nonblocking: show active alerts alongside Status
+Detail, even when the machine says ready. Unknown/unavailable must remain visibly
+distinct from OK. Cool Control level/temperature come from its separate receiver.
+
+Drink/progress panel
+  Jura Current Product     Profile product name or known maintenance process
+  Jura Progress State      Grinding, Dispensing coffee, Finished, etc.
+  Jura Progress            Machine-reported overall percent, unavailable if absent
+  Jura Stage Current       Available actual stage quantity
+  Jura Stage Target        Available target stage quantity
+  Jura Stage Unit          ml, s or level; do not hardcode a single sensor unit
+  Jura Brew Active         Operation observed; unavailable if progress times out
+  Jura Product Code        Raw code for investigation
+  Jura Stage Code          Raw stage code for investigation
+
+Use progress as overall percent and current/target as stage quantities. They are
+not interchangeable. Stage quantities only appear for mapped/understood channels.
+The current product/stage remains briefly after finish, then becomes idle.
+
+Recipe panel
+  Jura Drink               Native list of the profile's named drinks
+  Jura Coffee Strength     Profile choice label, not grams or raw byte value
+  Jura Temperature         Profile choice label
+  Jura Grinder Ratio       Only exposed for profiles supporting this setting
+  Jura Water Amount        ml
+  Jura Milk Amount         seconds
+  Jura Milk Foam Amount    seconds
+  Jura Bypass Amount       ml, if supported
+  Jura Milk Pause          seconds, if supported
+  Jura Brew                Start the selected/edited recipe
+  Jura Reset Recipe        Restore selected drink's profile defaults
+
+Jura Water Min/Max/Step, Milk Min/Max/Step, Milk Foam Min/Max/Step, Bypass
+Min/Max/Step and Milk Pause Min/Max/Step report selected-drink bounds. An absent
+setting yields unavailable states. Current Strength/Temperature/Grinder Choices
+are pipe-separated labels (" | "). Native select traits contain the profile-wide
+union; use these current choice sensors to narrow your card's controls.
+
+Counters
+  <profile drink name> Count       One per applicable named product
+  <profile maintenance name> Count
+  <profile maintenance name> Maintenance  Machine-provided percentage
+  Jura Total Products
+  EF533 retained names: Single Espresso Made, Double Espresso Made, Grounds
+  Level, Brew Movements Performed, Brews Performed Since Cleaning, Brews
+  Performed Since Descaling. Do not sum overlapping raw and product counts.
+
+Command feedback
+  Jura Requested Product    The most recently requested recipe name
+  Jura Command Result       Human-readable outcome. Examples: Queued, Started,
+                            Completed, Rejected..., Uncertain...
+  Jura Refresh              Request the next serialised counter refresh
+  Turn Off                  Exposed by allow_power_off: true
+
+ATOMIC API ACTIONS
+------------------
+Merge api.actions from example-e8.yaml into the device configuration first.
+For device name jura-e8, HA normally exposes the following ESPHome actions.
+Confirm the exact names in HA Developer Tools -> Actions.
+
+Named profile-default espresso:
+
+  action: esphome.jura_e8_brew_drink
+  data:
+    drink: Espresso
+
+Custom EF533 espresso, strength label 6, 50ml, high temperature:
+
+  action: esphome.jura_e8_brew_custom
+  data:
+    drink: Espresso
+    strength: "6"
+    water_ml: 50
+    milk_seconds: -1
+    foam_seconds: -1
+    temperature: High
+    bypass_ml: -1
+    pause_seconds: -1
+    grinder_ratio: ""
+
+Send all action fields. For each parameter use a valid setting for that drink,
+or -1/empty string for its profile default. Do not send 0 for an unsupported
+setting; that is an explicit value and will be rejected. Milk/foam are seconds.
+
+The native selector/number/button path also works via HA's select.select_option,
+number.set_value and button.press actions. For a card submitting a complete
+recipe, the atomic custom action avoids shared UI selection changes between
+multiple clients. Request completion is asynchronous: watch Command Result and
+matching TV product/progress. Do not automatically repeat a request on timeout.
+
+Diagnostics (optional in your card)
+  Detected Jura Model, Jura Model Family, Jura Profile, Jura Session,
+  Jura Challenge, Jura TF Raw, Jura TV Raw, Changed Counters,
+  Jura UART Timeouts, Jura UART Framing Errors.
+  Raw Counter 1..16 are disabled by default in HA and available only on EF533.
+
+The first release does not offer a structured JSON state entity. It uses native
+typed ESPHome entities and actions directly. Display names may be overridden
+for the fixed fields under jura_native:, e.g. status: {name: "Machine Status"}.

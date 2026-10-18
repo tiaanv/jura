@@ -1,0 +1,47 @@
+Migration from your existing jura component
+===========================================
+
+1. Use the V2 branch of tiaanv/jura; it includes components/jura_native.
+2. In external_components change components: [jura] to [jura_native]. Keep the
+   same GitHub URL and set ref: V2. Use refresh: 0s while testing for a fresh check
+   on each compile; pin a commit later for repeatable builds.
+3. Remove the old jura: block. Add the jura_native: block in migration-e8.yaml.
+   The ID may stay jura_coffee. The UART stays TX GPIO4, RX GPIO3, 9600 8N1.
+4. Remove the old raw uart.write drink buttons. Use Jura Drink and Jura Brew,
+   or the brew_drink/brew_custom native API actions in example-e8.yaml. Remove
+   the old template Turn Off button because the component creates one.
+5. Merge api.actions into your existing api: block; retain encryption. Do not
+   create a second api: block. Keep your current device name jura-e8, Wi-Fi,
+   OTA, secrets and fallback AP settings. The example's device name and Wi-Fi
+   values are build placeholders, not your production settings.
+6. Compile and upload. If an external-component cache persists, use ESPHome's
+   Clean Build Files and compile again. This is a new component name, so all
+   old jura headers must be replaced by the complete new folder in the repo.
+7. Check HA entities and update your card mappings. Product counters and
+   profile alerts have new native identities. Preserved friendly names do not
+   guarantee preserved entity IDs or HA history: discovery slot IDs differ.
+   Keep the old entities/history until the new card mappings are confirmed.
+
+Old settings are replaced as follows:
+  enable_at_protocol  -> always enabled in jura_native
+  status_source: tf   -> native TF/TV status; no source selector
+  poll_ic: false      -> no IC polling
+  at_handshake_response -> handshake_response (auto for your tested E8)
+  startup_delay      -> same option name
+  model: E8          -> automatic EF detection; optional profile_hint: EF533
+
+The recipe buttons call methods with a different meaning than raw FA numbers:
+  id(jura_coffee).brew_named("Espresso");
+  id(jura_coffee).brew_selected();
+  id(jura_coffee).power_off();
+  id(jura_coffee).refresh();
+
+Prefer the native buttons and API actions. Do not send raw UART commands beside
+the component; doing so bypasses its transaction ordering and readiness checks.
+
+For your HA card, start with the mappings and example action payloads in
+HA_CARD.txt. Exact HA entity IDs must be selected from the discovered device.
+
+Cool Control is optional and separate. If your existing receiver works, leave
+it on its own device/UART. The new receiver can replace it using
+example-coolcontrol.yaml; it is not a Jura-machine UART feature.

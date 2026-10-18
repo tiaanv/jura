@@ -1,8 +1,35 @@
+# Jura Native V2 — 0.1.0 testing release
+
+The `V2` branch includes the new native ESPHome component in
+[`components/jura_native`](components/jura_native), using all 75 bundled model
+profiles, TF alerts, TV drink/stage/progress monitoring, named product counters,
+and native recipe controls and API actions. MQTT is not required.
+
+Start with [the complete GitHub-source YAML](example-e8-github.yaml),
+[the migration snippet](migration-e8.yaml), and [migration instructions](MIGRATION.txt).
+Use `ref: V2` and `components: [jura_native]`. Replace the old `jura:` block and
+raw UART drink buttons; keep your device name, API encryption, Wi-Fi and OTA.
+Only one component should consume the Jura UART.
+
+[Component documentation](README.txt) · [HA card/action contract](HA_CARD.txt) ·
+[Profile index](PROFILE_REFERENCE.txt) · [Readable profile data](PROFILE_DATABASE.json) ·
+[Validation and remaining hardware checks](VALIDATION.txt) · [Sources and attribution](SOURCES.txt)
+
+The new source passes protocol/entity tests, ESPHome schema validation, and an
+ESP32-C3 ESP-IDF compiler syntax check. Full firmware linking/flashing and physical
+acceptance of the fresh implementation remain to be done. Named/custom recipes
+use profile defaults and do not read or overwrite the machine's saved recipes.
+
+The legacy `components/jura` remains available below for existing configurations.
+The optional `jura_coolcontrol` receiver has also been updated to nonblocking reception.
+
+---
+
 # ☕ Jura ESPHome Components
 
 **Control and monitor your Jura Coffee Machine and CoolControl milk cooler directly from ESPHome and Home Assistant.**
 
-> ⚠️ *Use at your own risk.*  
+> ⚠️ *Use at your own risk.*
 > This project interfaces with hardware not meant for third-party control. While it’s been tested successfully on several Jura models (notably the **E8**), you are responsible for any damage or warranty issues.
 
 ---
@@ -13,12 +40,12 @@ This project builds on the fantastic work by [Ryan Alden’s original Jura compo
 
 ### 🧰 Key Improvements
 
-- ✅ Migrated from `custom_component` → ESPHome’s **`external_component`** system  
-- ✅ Replaced Arduino `String` with C++ `std::string` → **works on ESP32 IDF**  
-- ✅ Fully self-contained component (no external sensors required)  
+- ✅ Migrated from `custom_component` → ESPHome’s **`external_component`** system
+- ✅ Replaced Arduino `String` with C++ `std::string` → **works on ESP32 IDF**
+- ✅ Fully self-contained component (no external sensors required)
 - ✅ Updated **bit-flags** for the Jura E8 (your model may differ)
 - ✅ Introduced model selection. With the help of the community, we will refine this for each machine type.
-- ✅ Added **Jura CoolControl** support (milk cooler integration)  
+- ✅ Added **Jura CoolControl** support (milk cooler integration)
 - ✅ Diagnostic Sensors to help discover counter and flag meanings. See below
 
 ---
@@ -177,9 +204,9 @@ Monitors the official Jura **CoolControl milk cooler**, which continuously broad
 
 ## 🧠 Advanced Info
 
-- Communication uses a **custom 2-bit serial protocol** over UART.  
-- Each message is sent as encoded bytes with timing delays (`8 ms` between chars).  
-- The machine echoes responses ending with `\r\n`.  
+- Communication uses a **custom 2-bit serial protocol** over UART.
+- Each message is sent as encoded bytes with timing delays (`8 ms` between chars).
+- The machine echoes responses ending with `\r\n`.
 - Bit positions differ between models — use the debug logs to identify your own.
 
 ---
@@ -245,9 +272,9 @@ Please see the [Jura UART map](https://github.com/tiaanv/jura/blob/main/Jura_uar
 
 ## ⚠️ Final Thoughts
 
-> ☕ “Just because you *can*, doesn’t mean you *should*.”  
-> This project is purely for educational tinkering.  
-> Interfacing directly with commercial appliances **can be dangerous**.  
+> ☕ “Just because you *can*, doesn’t mean you *should*.”
+> This project is purely for educational tinkering.
+> Interfacing directly with commercial appliances **can be dangerous**.
 > Be cautious, monitor your device, and never leave it unattended.
 
 ---
@@ -256,5 +283,5 @@ Please see the [Jura UART map](https://github.com/tiaanv/jura/blob/main/Jura_uar
 
 Please use the diagnostics procedure above to contribute your machine values and bit status flags!
 
-Pull requests, improvements, or new flag maps for other Jura models are very welcome!  
+Pull requests, improvements, or new flag maps for other Jura models are very welcome!
 Let’s make our coffee smarter — responsibly.

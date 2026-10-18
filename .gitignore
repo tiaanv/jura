@@ -7,3 +7,13 @@ CLAUDE.md
 __pycache__/
 *.pyc
 *.pyo
+# Native component build and test outputs
+.esphome/
+.tools/
+secrets.yaml
+tests/build/
+tests/generated-configs/
+tests/*.exe
+tests/*.pdb
+tests/*.lib
+tests/*.rsp

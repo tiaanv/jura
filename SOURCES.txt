@@ -1,0 +1,52 @@
+Sources and attribution
+=======================
+
+Upstream reference: harryzz/jura-uart-esphome, main, inspected 2026-10-18.
+https://github.com/harryzz/jura-uart-esphome/tree/main/components/jura_link
+License: MIT, copyright (c) 2026 harryzz; full notice is retained in
+components/jura_native/LICENSE.harryzz.
+
+Complete model/profile database:
+https://github.com/harryzz/jura-uart-esphome/blob/main/components/jura_link/jura_profiles_blob.h
+Retrieved Git blob SHA: d8b98e15e5e388899ff5d06b027b7b1c858ff553
+JPRF version 4, 75 model profiles. Embedded bytes are preserved. The local header
+adds flash storage annotations for ESP8266. Python/C++ readers are new; the
+JSON export and model/product index are generated from this same bundled blob.
+
+AT cipher/framing reference:
+https://github.com/harryzz/jura-uart-esphome/tree/main/components/jura_link
+Retrieved upstream cipher Git blob SHA: 6c8765202a22aed2eaea2ff783058637fe948cf0
+The local cipher/framing port includes strict unescape/frame validation.
+Known progress names are ported from the upstream progress glossary, with the
+MIT notice retained. Unknown stages remain raw stage codes.
+
+Protocol cross-reference:
+https://github.com/makefu/jura-connect/blob/master/docs/PROTOCOL.md
+
+Existing user component and device evidence:
+https://github.com/tiaanv/jura/tree/dev
+EF533M V02.09 logs supplied by Tiaan, including AT challenge, TV espresso stages,
+TF idle/ready payload and RT counter changes during a physical espresso test.
+The retained six EF533 extras are scoped to that tested register layout.
+
+Fresh native layer: nonblocking transport/session/controller, native ESPHome
+entity integration, recipe validation, test fixtures and migration documentation.
+There is no dependency on upstream MQTT discovery or its MQTT command router.
+The runtime does not fetch model profiles from the network.
+
+Differences from a direct upstream port:
+* Read banks are derived from the profile's product codes, including above 0B.
+* EF545 uses the documented 31/36 -> 12/13 counter remap with a direct fallback.
+* Unknown/sentinel counts remain unavailable instead of being presented as zero.
+* Valid TV keeps the session live while TF is absent; TF alerts can become stale
+  independently of product progress. Idle read polls pause during operations.
+* The command layer validates readiness, choices, ranges, steps and layout and
+  never automatically retries a brew. A matching TV product confirms start.
+* ESPHome entity allocation happens at code generation. Runtime model detection
+  finalises names and visibility during setup, before native API discovery.
+
+Known upstream database inconsistency:
+EF562 / 2 Ristretti has temperature default 0, but its allowed choices are 1
+(Normal) and 2 (High). The default recipe is rejected rather than silently
+changed. Explicitly choose Normal or High for this product. All other active
+product default recipes validate across the included 75 profiles.
