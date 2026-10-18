@@ -7,3 +7,20 @@ CLAUDE.md
 __pycache__/
 *.pyc
 *.pyo
+# Native component build and test outputs
+.esphome/
+.tools/
+secrets.yaml
+tests/build/
+tests/generated-configs/
+tests/*.exe
+tests/*.pdb
+tests/*.lib
+tests/*.rsp
+
+# Development environments and source packages
+.venv/
+dist/
+
+# ESPHome may create this while generating the local example projects
+examples/.gitignore

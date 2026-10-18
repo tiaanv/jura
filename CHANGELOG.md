@@ -1,0 +1,48 @@
+# Change log
+
+## Legacy component installation compatibility
+
+- Restored the unchanged legacy source to `components/jura`, so Git users can
+  continue loading `components: [jura]` on V2 and after its merge into `main`.
+- Historical documentation and examples remain under `legacy/`.
+- Documented continued legacy use separately from optional native migration.
+
+## Hardware and documentation visuals
+
+- Restored the original connector reference and hardware connection guidance.
+- Added a 1 kΩ / 2 kΩ divider diagram for Jura TX to ESP32-C3 RX, direct 3.3 V
+  TX guidance, shared ground and power notes matching the GPIO4/GPIO3 example.
+- Added the owner's native-controls screenshot and a labelled monitoring illustration.
+- Documentation images are included in source packages and checksums.
+- No firmware or device YAML changes are required by this documentation update.
+
+## Repository layout update
+
+- Current guides moved under `docs/`; root README now describes the native V2 component.
+- Current ESPHome configurations and HA actions live under `examples/`.
+- Profile exports live under `docs/profiles/`; export and packaging tools live under `tools/`.
+- Historical examples and documentation are archived under `legacy/`; the legacy
+  source remains installable at `components/jura` following the compatibility update.
+- Documentation marks all inherited raw-register interpretations as unverified.
+- Portable tool paths, example validation, source packaging and documentation links updated.
+- No change to native firmware behaviour, component install paths or entity names.
+
+## 0.3.0
+
+Named/custom API actions read the requested product's saved settings before
+brewing. Explicit custom fields override saved values; read failures use a
+labelled profile-default fallback. Readiness is rechecked and pending preparation
+is cancelled if an operation begins or the connection/readiness is lost.
+
+## 0.2.0
+
+Selecting a drink loads its saved settings into native controls. Source/loading/
+modified state and fallback reasons are exposed. Native Brew consumes edits for
+one accepted request; Reset Recipe reloads the machine's saved recipe. Selection
+and reset races discard obsolete replies.
+
+## 0.1.x
+
+Initial native component with the full bundled profile database, TF/TV monitoring,
+profile-labelled counters, native controls and nonblocking transactions. Follow-up
+fixes cover AT-only boot identification and read-only saved-espresso diagnostics.

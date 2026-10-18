@@ -1,0 +1,31 @@
+# Merge into your existing jura-e8 YAML using the V2 branch.
+# Keep your existing device, Wi-Fi, API encryption and OTA settings.
+external_components:
+  - source:
+      type: git
+      url: https://github.com/tiaanv/jura
+      ref: V2
+    refresh: 0s
+    components: [jura_native]
+
+uart:
+  id: uart_bus
+  tx_pin: GPIO4
+  rx_pin: GPIO3
+  baud_rate: 9600
+  rx_buffer_size: 2048
+
+jura_native:
+  id: jura_coffee
+  uart_id: uart_bus
+  allow_brew: true
+  allow_power_off: true
+  raw_extras: true
+  update_interval: 60s
+  startup_delay: 8s
+  handshake_response: auto
+  # profile_hint: EF533  # Use if TY cannot identify the machine at boot.
+
+# Remove jura: and the old raw UART/template drink buttons.
+# Copy api.actions from examples/e8.yaml into your existing api: block
+# if your HA card will call named/custom drinks directly.

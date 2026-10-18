@@ -1,0 +1,78 @@
+# Merge these component settings into your existing device YAML.
+# Retain your own Wi-Fi, native API encryption, OTA and secrets.
+esphome:
+  name: jura-native-test
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [jura_native]
+
+logger:
+
+wifi:
+  ssid: "replace-with-your-network"
+  password: "replace-with-your-password"
+
+uart:
+  id: uart_bus
+  tx_pin: GPIO4
+  rx_pin: GPIO3
+  baud_rate: 9600
+  rx_buffer_size: 2048
+
+jura_native:
+  id: jura_coffee
+  uart_id: uart_bus
+  allow_brew: true
+  allow_power_off: true
+  raw_extras: true
+  update_interval: 60s
+  startup_delay: 8s
+  handshake_response: auto
+  # Optional fallback if the machine cannot answer TY during boot:
+  # profile_hint: EF533
+
+api:
+  # Keep your existing encryption: block here.
+  actions:
+    # Optional card action: sends the loaded/edited controls as a one-shot recipe.
+    - action: brew_selected
+      then:
+        - lambda: |-
+            id(jura_coffee).brew_selected();
+
+    - action: brew_drink
+      variables:
+        drink: string
+      then:
+        - lambda: |-
+            id(jura_coffee).brew_named(drink);
+
+    - action: brew_custom
+      variables:
+        drink: string
+        strength: string
+        water_ml: int
+        milk_seconds: int
+        foam_seconds: int
+        temperature: string
+        bypass_ml: int
+        pause_seconds: int
+        grinder_ratio: string
+      then:
+        - lambda: |-
+            // Empty strings and -1 use saved settings (profile fallback on read failure).
+            // Choice strings use
+            // the labels shown by the native selectors, such as "6" or "High".
+            id(jura_coffee).brew_custom(drink, strength, water_ml, milk_seconds,
+              foam_seconds, temperature, bypass_ml, pause_seconds, grinder_ratio);
+
+# No template drink buttons are needed: Drink, recipe controls, Brew, Reset
+# Recipe, Refresh and Turn Off are native entities created by the component.

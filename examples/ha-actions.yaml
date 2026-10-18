@@ -1,0 +1,24 @@
+# Home Assistant Developer Tools -> Actions examples, not ESPHome device YAML.
+# Run ONE document at a time. Check the exact action names for your device.
+# Wait until the machine is ready again before testing another brew.
+
+# Saved Flat White (the EF533 profile calls it "1 Flat White").
+action: esphome.jura_e8_brew_drink
+data:
+  drink: "1 Flat White"
+---
+# Water override: all other values inherit the saved recipe, with labelled fallback.
+action: esphome.jura_e8_brew_custom
+data:
+  drink: "1 Flat White"
+  strength: ""
+  water_ml: 60
+  milk_seconds: -1
+  foam_seconds: -1
+  temperature: ""
+  bypass_ml: -1
+  pause_seconds: -1
+  grinder_ratio: ""
+---
+# The currently loaded native controls and their pending one-shot edits.
+action: esphome.jura_e8_brew_selected

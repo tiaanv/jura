@@ -1,0 +1,35 @@
+# Independent example for a Cool Control receiver. Use its existing wiring.
+esphome:
+  name: jura-coolcontrol-test
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [jura_coolcontrol]
+
+logger:
+api:
+wifi:
+  ssid: "replace-with-your-network"
+  password: "replace-with-your-password"
+
+uart:
+  id: cool_uart
+  rx_pin: GPIO20
+  baud_rate: 9600
+
+jura_coolcontrol:
+  uart_id: cool_uart
+  level:
+    name: "Jura Coolcontrol Level"
+  temperature:
+    name: "Jura Coolcontrol Temperature"
+
+# For GitHub installation use your repository source and
+# components: [jura_coolcontrol] instead of the local source above.

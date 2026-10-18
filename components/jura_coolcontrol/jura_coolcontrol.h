@@ -1,96 +1,62 @@
 #pragma once
+#include <cmath>
+#include <cstdlib>
+#include <string>
 
-#include "esphome/core/component.h"
-#include "esphome/components/uart/uart.h"
 #include "esphome/components/sensor/sensor.h"
-#include "esphome/core/log.h"
+#include "esphome/components/uart/uart.h"
+#include "esphome/core/component.h"
+#include "esphome/core/hal.h"
 
 namespace esphome {
 namespace jura_coolcontrol {
-
-static const char *const TAG = "jura_coolcontrol";  
-
+// Passive receiver; retains the original component's observed ASCII offsets.
 class JuraCoolcontrol : public PollingComponent, public uart::UARTDevice {
-
  public:
-  void set_level_sensor(sensor::Sensor *s) { this->level_sensor_ = s; }
-  void set_temperature_sensor(sensor::Sensor *s) { this->temperature_sensor_ = s; }
-
-// Sends 'out' plus CRLF using Jura's bit placement, then reads until CRLF or timeout.
-std::string cmd2jura(const std::string &out, uint32_t rx_timeout_ms = 1000) {
-  // 1) Flush any stale input
-  while (this->available()) this->read();
-
-  // 3) RX: bounded by timeout
-  std::string inbytes;
-  inbytes.reserve(64);
-  uint8_t assembled = 0;
-  int bitidx = 0;
-
-  const uint32_t start = millis();
-  while (millis() - start < rx_timeout_ms) {
-    if (this->available()) {
-      int raw = this->read();
-      //ESP_LOGI(TAG, "RAW: %i,%c", raw, raw);      
-      inbytes.push_back(static_cast<char>(raw));
-
-      // CRLF terminator?
-      const size_t n = inbytes.size();
-      if (n >= 2 && inbytes[n - 2] == '\r' && inbytes[n - 1] == '\n') {
-        inbytes.resize(n - 2);  // strip CRLF
-        return inbytes;
+  void set_level_sensor(sensor::Sensor *s) { level_ = s; }
+  void set_temperature_sensor(sensor::Sensor *s) { temperature_ = s; }
+  void loop() override {
+    uint8_t value;
+    for (size_t n = 0; n < 128 && available(); ++n) {
+      if (!read_byte(&value)) break;
+      if (!line_.empty() && uint32_t(millis() - last_byte_) > 500) line_.clear();
+      last_byte_ = millis();
+      if (line_.size() >= 128) {
+        line_.clear();
+        continue;
       }
-
-      // guard against runaway data
-      if (inbytes.size() > 2048) {
-        ESP_LOGW(TAG, "RX buffer exceeded 2KB; truncating and returning partial.");
-        return inbytes;
+      line_ += static_cast<char>(value);
+      if (line_.size() < 2 || line_.compare(line_.size() - 2, 2, "\r\n") != 0) continue;
+      if (line_.size() >= 10 && is_hex_(line_.substr(4, 4))) {
+        const unsigned level = unsigned(std::strtoul(line_.substr(4, 2).c_str(), nullptr, 16));
+        const unsigned temp = unsigned(std::strtoul(line_.substr(6, 2).c_str(), nullptr, 16));
+        if (level <= 100) {
+          last_level_ = float(level);
+          last_temperature_ = temp == 255 ? NAN : temp / 10.0f;
+          last_frame_ = millis();
+          seen_ = true;
+        }
       }
-    } else {
-      delay(1);  // brief yield
+      line_.clear();
     }
   }
-  // Timeout: return whatever we have (or {} if you prefer)
-  return inbytes;
-}
-
-  void setup() override {
-    this->set_update_interval(2000); // 600000 = 10 minutes // Now 60 seconds
-  }
-
-  // void loop() override {
-  // }
-
   void update() override {
-      // Send the configured command and log the parsed response
-      std::string resp = this->cmd2jura("RT:0000");
-      float level = NAN;
-      float temp_c = NAN;        
-      if (!resp.empty()) {
-        ESP_LOGI(TAG, "Response (text): %s", resp.c_str());
+    const bool fresh = seen_ && uint32_t(millis() - last_frame_) < 10000;
+    if (level_) level_->publish_state(fresh ? last_level_ : NAN);
+    if (temperature_) temperature_->publish_state(fresh ? last_temperature_ : NAN);
+  }
 
-        uint8_t value = std::stoul(resp.substr(4, 2), nullptr, 16);
-        ESP_LOGI(TAG, "Level: %i", value);
-        level = value;
-        value = std::stoul(resp.substr(6, 2), nullptr, 16);
-        ESP_LOGI(TAG, "Temperature: %i", value);
-        temp_c = value / 10.0;
-
-      if (this->level_sensor_ && !std::isnan(level)) {
-        this->level_sensor_->publish_state(level);
-      }
-      if (this->temperature_sensor_ && !std::isnan(temp_c)) {
-        this->temperature_sensor_->publish_state(temp_c);
-      }
-
-      } else {
-        ESP_LOGW(TAG, "No response (timeout or empty).");
-      }
-    }
-  protected:    
-   sensor::Sensor *level_sensor_{nullptr};
-   sensor::Sensor *temperature_sensor_{nullptr};
+ private:
+  static bool is_hex_(const std::string &s) {
+    for (char c : s)
+      if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) return false;
+    return true;
+  }
+  sensor::Sensor *level_{nullptr}, *temperature_{nullptr};
+  std::string line_;
+  uint32_t last_byte_{0}, last_frame_{0};
+  bool seen_{false};
+  float last_level_{NAN}, last_temperature_{NAN};
 };
-
 }  // namespace jura_coolcontrol
 }  // namespace esphome
