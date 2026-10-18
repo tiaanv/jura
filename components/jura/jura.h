@@ -6,6 +6,7 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
+#include "esphome/core/application.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -35,9 +36,16 @@ class Jura : public PollingComponent, public uart::UARTDevice {
 
   std::string cmd2jura(std::string outbytes) {
     std::string inbytes;
-    int w = 0;
-
-    while (available()) { read(); }
+    const uint32_t drain_started = millis();
+    while (available()) {
+      App.feed_wdt();
+      if (static_cast<uint32_t>(millis() - drain_started) >= 100) {
+        ESP_LOGW("jura", "UART input did not drain; check wiring and UART settings");
+        return "";
+      }
+      uint8_t discarded;
+      if (!read_byte(&discarded)) break;
+    }
     outbytes += "\r\n";
     for (int i = 0; i < (int) outbytes.size(); i++) {
       uint8_t src = static_cast<uint8_t>(outbytes[i]);
@@ -47,14 +55,22 @@ class Jura : public PollingComponent, public uart::UARTDevice {
             0xDBu | (((src >> s) & 1u) << 2) | (((src >> (s + 1)) & 1u) << 5));
         write(rawbyte);
       }
+      App.feed_wdt();
       delay(8);
     }
 
+    const uint32_t response_started = millis();
     int s = 0;
     uint8_t inbyte = 0;
     while (!(inbytes.size() >= 2 && inbytes[inbytes.size()-2] == '\r' && inbytes[inbytes.size()-1] == '\n')) {
-      if (available()) {
-        uint8_t rawbyte = static_cast<uint8_t>(read());
+      App.feed_wdt();
+      if (static_cast<uint32_t>(millis() - response_started) >= 5000) {
+        ESP_LOGW("jura", "Response timeout for %s: received %u decoded bytes", outbytes.c_str(),
+                 static_cast<unsigned>(inbytes.size()));
+        return "";
+      }
+      uint8_t rawbyte;
+      if (available() && read_byte(&rawbyte)) {
         inbyte |= static_cast<uint8_t>(
             (((rawbyte >> 2) & 1u) << s) | (((rawbyte >> 5) & 1u) << (s + 1)));
         if ((s += 2) >= 8) {
@@ -65,7 +81,7 @@ class Jura : public PollingComponent, public uart::UARTDevice {
       } else {
         delay(10);
       }
-      if (w++ > 500) return "";
+
     }
     return inbytes.substr(0, inbytes.size() - 2);
   }
