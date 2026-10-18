@@ -25,7 +25,8 @@ int main() {
   RecipeNumber water, milk;
   ProfileSensor espresso, unrelated, grounds;
   ProfileBinarySensor tray, unrelated_alert;
-  CommandButton brew, off;
+  CommandButton brew, off, probe;
+  esphome::text_sensor::TextSensor probe_result;
   esphome::sensor::Sensor water_min;
   device.register_select(-1, &drink);
   device.register_select(0, &strength);
@@ -41,6 +42,8 @@ int main() {
   device.register_alert(55, &unrelated_alert);
   device.register_button(0, &brew);
   device.register_button(3, &off);
+  device.register_button(4, &probe);
+  device.register_text("espresso_probe_result", &probe_result);
   device.set_allow_brew(true);
   device.set_allow_power_off(true);
   device.setup();
@@ -65,6 +68,9 @@ int main() {
   device.number_value(3, 80);
   assert(water.state == 80);
   assert(!brew.is_internal() && !off.is_internal());
+  assert(!probe.is_internal());
+  device.press(4);  // Identification alone is not an AT connection.
+  assert(probe_result.state.find("Rejected") == 0);
 
   JuraNative unavailable;
   RecipeSelect missing;

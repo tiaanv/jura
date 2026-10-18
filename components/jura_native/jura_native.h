@@ -145,6 +145,8 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
       refresh();
     else if (role == 3)
       power_off();
+    else if (role == 4)
+      probe_espresso_settings();
   }
 
  protected:

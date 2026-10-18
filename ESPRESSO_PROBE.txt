@@ -1,0 +1,64 @@
+Read-only espresso settings probe — 0.1.2
+=========================================
+
+Update the component from the V2 branch, recompile and upload. No additional
+YAML is required: the diagnostic button and three text entities are automatic.
+Use refresh: 0s on external_components while testing. If ESPHome keeps an old
+component version, use Clean Build Files and compile again.
+
+1. Leave the E8 idle and wait for Jura Connected to turn on.
+2. In the HA device's diagnostic entities, press Jura Read Espresso Settings.
+3. Inspect Jura Espresso Probe Result, Jura Espresso Probe Raw and
+   Jura Espresso Probe Settings. The AT raw response is also in ESPHome logs.
+4. Compare the decoded strength, water ml and temperature with the settings
+   saved for Espresso on the Jura's screen. Record the screen values and raw
+   response together. The decoder maps wire choices through your model profile
+   (for EF533, strength raw 04 means displayed strength 6).
+5. To establish that the response follows your saved recipe, change one saved
+   setting at the screen, return the machine to idle, and press the probe again.
+   A valid checksum alone does not establish the meaning of a returned field.
+
+The exact request is @TM:41,02 (product 02 = Espresso). It is sent once through
+the existing AT transport. The button works with allow_brew: false as well.
+There is no automatic startup/polling probe and no automatic retry.
+
+It sends no @TP brew, @TS lock/unlock, @TM settings-write payload or EEPROM
+write. The existing recipe controls and profile defaults remain unchanged.
+Probe use requires a connected, idle machine and fresh TF information; a
+queued read is cancelled if an operation begins before it can be transmitted.
+Another brew/control request is rejected while this probe is pending.
+
+Result interpretation:
+  Valid response         Checksum and product code match; fields fit the profile.
+                         Compare values with the screen before calling them verified.
+  Unsupported            E8 returned @tm:C1; this read is not exposed by its firmware.
+  Unexpected response    Raw response is retained, e.g. @an:error or another token.
+  Invalid response       Bad hex, bad checksum or another product's payload.
+  Incomplete/unknown     Checksum matches, but expected fields are absent or values
+                         do not fit the profile. Partial decoding is labelled.
+  Timeout                No matching response in the transport timeout; not retried.
+
+Starting another accepted probe clears its previous raw/decoded values. A rejected
+button press does not clear an in-flight request or its pending response.
+
+Optional YAML naming overrides (merge into your existing jura_native block):
+
+  jura_native:
+    id: jura_coffee
+    uart_id: uart_bus
+    espresso_probe:
+      name: "Read Espresso Settings"
+    espresso_probe_result:
+      name: "Espresso Probe Result"
+    espresso_probe_raw:
+      name: "Espresso Probe Raw"
+    espresso_probe_settings:
+      name: "Espresso Probe Settings"
+
+Read-only wire format/checksum reference:
+https://github.com/makefu/jura-connect/blob/main/jura_connect/client.py
+  read_pmode_product, _parse_pmode_product, _pmode_strip_checksum
+https://github.com/makefu/jura-connect/blob/main/docs/PROTOCOL.md
+
+This feature is a diagnostic probe, not saved-recipe synchronisation. Real EF533
+support and the field interpretations must be established from your comparison.

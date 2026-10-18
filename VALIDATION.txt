@@ -1,4 +1,4 @@
-Validation — Jura Native 0.1.1
+Validation — Jura Native 0.1.2
 ==============================
 
 Performed with ESPHome 2026.9.1 on 2026-10-18.
@@ -71,3 +71,14 @@ Suggested first E8 acceptance check:
   5. Test the custom 50ml/strength 6/High espresso from HA_CARD.txt.
   6. Verify the espresso/grounds counters change, then reset and power-cycle
      the ESP to check that discovery and AT connection recover consistently.
+
+0.1.2 espresso probe regression checks:
+  Native diagnostic button/text schema and generated source pass; actual C3
+  ESP-IDF syntax check passes. Host tests cover checksum and espresso-code
+  validation, profile label/volume decoding, missing/unknown fields, malformed
+  payloads, C1 rejection, unexpected/error replies, timeout without retry,
+  offline/busy rejection, a queued read cancelled on operation start, duplicate
+  presses, broadcasts during a pending read and blocked competing controls.
+  Monitoring-only use is covered. No brew/lock/write request is emitted and
+  selected recipe values remain unchanged. Actual EF533 read support and
+  agreement with the saved screen settings remain unverified pending the probe.

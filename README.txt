@@ -1,4 +1,4 @@
-Jura Native 0.1.1 — testing release
+Jura Native 0.1.2 — testing release
 ======================================
 
 Native ESPHome integration using harryzz's complete 75-profile JPRF v4 database.
@@ -132,3 +132,12 @@ this release to your E8 and check model, ready/alert states and counters, then
 test one named espresso and one customised espresso. Your earlier logs establish
 the E8 handshake/TF/TV behaviour; this fresh implementation still needs that
 on-device acceptance test.
+
+READ-ONLY SAVED ESPRESSO SETTINGS PROBE
+--------------------------------------
+Press Jura Read Espresso Settings while connected and idle. The diagnostic
+Result, Raw and Settings text entities show the outcome of @TM:41,02. There
+is no automatic polling, settings write, brew or change to the recipe controls.
+This can establish whether EF533 exposes its saved espresso recipe. Compare
+the returned values with the machine screen before trusting the interpretation.
+See ESPRESSO_PROBE.txt for the exact test steps and response meanings.

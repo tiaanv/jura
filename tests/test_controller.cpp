@@ -54,6 +54,7 @@ struct Machine {
   std::string model = "EF533M V02.09", challenge = "010001B228", tf = "000400000000";
   bool answer_type = true, answer_at = true, answer_brew = true, reject_brew = false, auto_tf = true;
   std::vector<std::string> commands;
+  std::string probe_reply = "@tm:41,0200040A00000200010000000000000000F4";
   void inject(const std::string &s, bool at = true) {
     for (auto raw : encode(at ? cipher::build_frame(s + "\r\n", 0xA0) : s + "\r\n")) dev.input(raw, clock);
   }
@@ -110,6 +111,8 @@ struct Machine {
           inject("@tg:43000100020003000400050006");
         else if (command == "@TG:C0")
           inject("@tg:C00A141E");
+        else if (command == "@TM:41,02" && !probe_reply.empty())
+          inject(probe_reply);
         else if (command.compare(0, 4, "@TP:") == 0 && answer_brew) {
           if (reject_brew)
             inject("@tp:00");
@@ -378,6 +381,78 @@ static void test_at_only_identification() {
   hint.tick(10000);
   assert(hint.dev.ready() && hint.dev.installed == 1);
 }
+static void test_espresso_probe() {
+  Machine m;
+  m.begin(false);  // Monitoring-only devices can run this read.
+  m.tick(16000);
+  assert(m.count("@TM:41,02") == 0);  // Never automatic.
+  const auto selected = m.dev.selected_values();
+  assert(m.dev.probe_espresso_settings());
+  assert(!m.dev.probe_espresso_settings());
+  assert(!m.dev.brew_named("Espresso"));
+  m.tick(2000);
+  assert(m.count("@TM:41,02") == 1);
+  assert(m.dev.texts["espresso_probe_result"].find("Valid response") == 0);
+  const auto decoded = m.dev.texts["espresso_probe_settings"];
+  assert(decoded.find("strength=6") != std::string::npos);
+  assert(decoded.find("water=50 ml") != std::string::npos);
+  assert(decoded.find("temperature=High") != std::string::npos);
+  assert(m.dev.selected_values() == selected);
+  assert(m.dev.texts["espresso_probe_raw"] == m.probe_reply);
+  for (const auto &command : m.commands) {
+    assert(command.compare(0, 4, "@TP:") != 0);
+    assert(command.compare(0, 4, "@TS:") != 0);
+    if (command.compare(0, 4, "@TM:") == 0) assert(command == "@TM:41,02");
+  }
+  const std::pair<const char *, const char *> failures[] = {
+      {"@tm:C1", "Unsupported"},
+      {"@an:error", "Unexpected response"},
+      {"@tm:41,0200040A0000020001000000000000000000", "checksum mismatch"},
+      {"@tm:41,0300040A00000200010000000000000000F3", "not espresso"},
+      {"@tm:41,020C", "incomplete or unknown"},
+      {"@tm:41,0200FF0A00000200010000000000000000CC", "incomplete or unknown"},
+      {"@tm:41,xyz", "malformed payload"}};
+  for (const auto &failure : failures) {
+    m.probe_reply = failure.first;
+    assert(m.dev.probe_espresso_settings());
+    m.tick(2000);
+    assert(m.dev.texts["espresso_probe_result"].find(failure.second) != std::string::npos);
+    assert(m.dev.selected_values() == selected);
+  }
+  m.probe_reply = "";
+  assert(m.dev.probe_espresso_settings());
+  m.tick(7000);
+  assert(m.dev.texts["espresso_probe_result"].find("Timeout") == 0);
+  const auto reads = m.count("@TM:41,02");
+  m.tick(10000);
+  assert(m.count("@TM:41,02") == reads);
+  m.inject("@TB");
+  assert(!m.dev.probe_espresso_settings());
+
+  Machine queued;
+  queued.begin();
+  queued.tick(16000);
+  assert(queued.dev.probe_espresso_settings());
+  queued.inject("@TB");
+  queued.tick(500);
+  assert(queued.count("@TM:41,02") == 0);
+  assert(queued.dev.texts["espresso_probe_result"].find("Cancelled") == 0);
+  Machine active;
+  active.begin();
+  active.tick(16000);
+  active.probe_reply = "";
+  assert(active.dev.probe_espresso_settings());
+  active.tick(1500);
+  assert(active.dev.active() == "@TM:41,02" && active.dev.waiting());
+  assert(!active.dev.brew_named("Espresso") && !active.dev.power_off());
+  active.inject("@TF:000400000000");  // Broadcasts must not complete the probe.
+  assert(active.dev.waiting());
+  active.tick(6000);
+  assert(active.dev.texts["espresso_probe_result"].find("Timeout") == 0);
+  Machine offline;
+  offline.begin();
+  assert(!offline.dev.probe_espresso_settings());
+}
 int main() {
   test_profiles();
   test_cipher();
@@ -386,6 +461,7 @@ int main() {
   test_failure_and_rejection();
   test_banks_and_progress();
   test_at_only_identification();
+  test_espresso_probe();
   std::cout << "PASS: all 75 profiles, cipher, statistics, native recipe semantics, brewing lifecycle, busy "
                "rejection, TV liveness, retry/rejection and rollover\n";
 }

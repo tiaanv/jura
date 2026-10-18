@@ -21,7 +21,7 @@ Known progress names are ported from the upstream progress glossary, with the
 MIT notice retained. Unknown stages remain raw stage codes.
 
 Protocol cross-reference:
-https://github.com/makefu/jura-connect/blob/master/docs/PROTOCOL.md
+https://github.com/makefu/jura-connect/blob/main/docs/PROTOCOL.md
 
 Existing user component and device evidence:
 https://github.com/tiaanv/jura/tree/dev
@@ -50,3 +50,8 @@ EF562 / 2 Ristretti has temperature default 0, but its allowed choices are 1
 (Normal) and 2 (High). The default recipe is rejected rather than silently
 changed. Explicitly choose Normal or High for this product. All other active
 product default recipes validate across the included 75 profiles.
+
+Read-only espresso probe: @TM:41,02 request, echoed product and trailing
+ASCII-checksum verification follow the protocol documented in makefu/jura-connect
+(main, inspected 2026-10-18). The decoder/queue implementation here is native C++.
+https://github.com/makefu/jura-connect/blob/main/jura_connect/client.py

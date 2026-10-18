@@ -26,6 +26,9 @@ TEXT = {
     "tray_status": "Tray Status", "water_tank_status": "Water Tank Status",
     "strength_choices": "Jura Current Strength Choices", "temperature_choices": "Jura Current Temperature Choices",
     "grinder_choices": "Jura Current Grinder Choices",
+    "espresso_probe_result": "Jura Espresso Probe Result",
+    "espresso_probe_raw": "Jura Espresso Probe Raw",
+    "espresso_probe_settings": "Jura Espresso Probe Settings",
 }
 NUMERIC = {
     "progress": ("Jura Progress", "%"), "stage_current": ("Jura Stage Current", ""),
@@ -50,7 +53,8 @@ NUMBERS = {"water_amount": (3, "Jura Water Amount", "ml"), "milk_amount": (4, "J
            "milk_foam_amount": (5, "Jura Milk Foam Amount", "s"), "bypass_amount": (6, "Jura Bypass Amount", "ml"),
            "milk_pause": (7, "Jura Milk Pause", "s")}
 BUTTONS = {"brew": (0, "Jura Brew"), "reset_recipe": (1, "Jura Reset Recipe"),
-           "refresh": (2, "Jura Refresh"), "power_off": (3, "Turn Off")}
+           "refresh": (2, "Jura Refresh"), "power_off": (3, "Turn Off"),
+           "espresso_probe": (4, "Jura Read Espresso Settings")}
 
 
 def response(value):
@@ -77,7 +81,10 @@ schema = {
     cv.Optional("profile_hint", default="auto"): profile_hint,
 }
 for key, name in TEXT.items():
-    schema[cv.Optional(key, default={CONF_NAME: name})] = text_sensor.text_sensor_schema()
+    default = {CONF_NAME: name}
+    if key.startswith("espresso_probe"):
+        default["entity_category"] = ENTITY_CATEGORY_DIAGNOSTIC
+    schema[cv.Optional(key, default=default)] = text_sensor.text_sensor_schema()
 for key, (name, unit) in NUMERIC.items():
     schema[cv.Optional(key, default={CONF_NAME: name})] = sensor.sensor_schema(unit_of_measurement=unit, accuracy_decimals=0)
 for key, name in BINARY.items():
@@ -87,7 +94,10 @@ for key, (_, name) in SELECTS.items():
 for key, (_, name, unit) in NUMBERS.items():
     schema[cv.Optional(key, default={CONF_NAME: name})] = number.number_schema(RecipeNumber, unit_of_measurement=unit)
 for key, (_, name) in BUTTONS.items():
-    schema[cv.Optional(key, default={CONF_NAME: name})] = button.button_schema(CommandButton)
+    default = {CONF_NAME: name}
+    if key == "espresso_probe":
+        default["entity_category"] = ENTITY_CATEGORY_DIAGNOSTIC
+    schema[cv.Optional(key, default=default)] = button.button_schema(CommandButton)
 CONFIG_SCHEMA = cv.Schema(schema).extend(uart.UART_DEVICE_SCHEMA).extend(cv.polling_component_schema("60s"))
 FINAL_VALIDATE_SCHEMA = uart.final_validate_device_schema("jura_native", baud_rate=9600, require_tx=True, require_rx=True,
                                                         data_bits=8, parity="NONE", stop_bits=1)

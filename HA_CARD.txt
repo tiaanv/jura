@@ -1,4 +1,4 @@
-Home Assistant card contract — Jura Native 0.1.1
+Home Assistant card contract — Jura Native 0.1.2
 ================================================
 
 Use actual entity IDs discovered under the Jura device; names below identify
@@ -115,3 +115,10 @@ Diagnostics (optional in your card)
 The first release does not offer a structured JSON state entity. It uses native
 typed ESPHome entities and actions directly. Display names may be overridden
 for the fixed fields under jura_native:, e.g. status: {name: "Machine Status"}.
+
+Read-only espresso settings probe (diagnostic; no YAML additions needed)
+  Jura Read Espresso Settings       Button; queues @TM:41,02 once while idle
+  Jura Espresso Probe Result        Valid, unsupported, invalid or timed out
+  Jura Espresso Probe Raw           Raw response, including payload/checksum
+  Jura Espresso Probe Settings      Decoded profile labels, water ml, temperature
+This probe does not initialise or change the recipe controls. See ESPRESSO_PROBE.txt.

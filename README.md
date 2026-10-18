@@ -1,4 +1,4 @@
-# Jura Native V2 — 0.1.1 testing release
+# Jura Native V2 — 0.1.2 testing release
 
 The `V2` branch includes the new native ESPHome component in
 [`components/jura_native`](components/jura_native), using all 75 bundled model
@@ -13,6 +13,7 @@ Only one component should consume the Jura UART.
 
 [Component documentation](README.txt) · [HA card/action contract](HA_CARD.txt) ·
 [Profile index](PROFILE_REFERENCE.txt) · [Readable profile data](PROFILE_DATABASE.json) ·
+[Read-only espresso settings probe](ESPRESSO_PROBE.txt) ·
 [Validation and remaining hardware checks](VALIDATION.txt) · [Sources and attribution](SOURCES.txt)
 
 The new source passes protocol/entity tests, ESPHome schema validation, and an
