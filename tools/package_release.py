@@ -9,13 +9,14 @@ import zipfile
 
 root = Path(__file__).resolve().parents[1]
 excluded = {".git", ".esphome", ".tools", ".venv", "__pycache__", "build", "generated-configs", "dist"}
-extensions = {".py", ".h", ".cpp", ".yaml", ".md", ".json", ".png", ".svg"}
-files = [root / name for name in ("README.md", "CHANGELOG.md", "LICENSE", "VERSION", ".gitignore")]
-for directory in ("components", "docs", "examples", "tests", "tools", "legacy"):
+extensions = {".py", ".h", ".cpp", ".yaml", ".yml", ".md", ".json", ".png", ".jpg", ".svg", ".js", ".css", ".html"}
+files = [root / name for name in ("README.md", "CHANGELOG.md", "LICENSE", "VERSION", ".gitignore", "hacs.json")]
+files.append(root / "dist/jura-native-card.js")
+for directory in ("components", "docs", "examples", "tests", "tools", "legacy", "card", ".github"):
     for file in (root / directory).rglob("*"):
         relative = file.relative_to(root)
         if (file.is_file() and not any(part in excluded for part in relative.parts)
-                and (file.suffix in extensions or file.name.startswith("LICENSE"))
+                and (file.suffix in extensions or file.name.startswith("LICENSE") or file.name == "VERSION")
                 and file.name != "secrets.yaml"):
             files.append(file)
 files = sorted(set(files), key=lambda p: p.relative_to(root).as_posix())
@@ -32,7 +33,8 @@ with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as archive:
 with zipfile.ZipFile(dest) as archive:
     assert archive.testzip() is None
     names = archive.namelist()
-    assert not any(any(part in excluded for part in Path(name).parts) for name in names)
+    assert not any(any(part in excluded for part in Path(name).parts)
+                   for name in names if name != "jura-native/dist/jura-native-card.js")
     assert not any(name.endswith((".exe", ".pdb", ".lib", ".rsp", ".pyc", ".zip", "/secrets.yaml")) for name in names)
     for line in archive.read("jura-native/SHA256SUMS").decode("utf-8").splitlines():
         digest, path = line.split("  ", 1)

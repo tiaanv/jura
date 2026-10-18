@@ -23,10 +23,12 @@ the espresso settings read and profile-based counters. Readiness, recipe and
 counter values were not captured simultaneously. It intentionally does not
 present the historical raw-register interpretations as verified counters.
 
-During a drink, the component also exposes the current product, progress and
-available stage details. A complete live progress screenshot has not yet been
-captured for this documentation. Your existing custom card can consume these
-entities; no particular card layout is required by the component.
+The optional **[Jura Graphical Card](card.md)** now provides an installable
+monitoring and control layout with graphical drink selection, saved recipes,
+friendly stages and live native progress. Its documentation includes real E8
+screenshots and HACS/manual installation instructions. The illustration above
+remains a historical design illustration; it is not the installable card.
+Other custom cards can also consume the same native entities.
 
 ## Define the API actions
 

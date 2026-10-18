@@ -59,6 +59,19 @@ synchronisation; its values are examples. The monitoring illustration combines
 E8 test readings and is not a live or simultaneous screenshot. Entity availability
 depends on the detected profile. See [card integration](docs/home-assistant.md).
 
+## Jura Graphical Card
+
+The optional **[Jura Graphical Card](docs/card.md)** adds illustrated drink
+selection, machine-saved recipes, native progress and friendly machine alerts.
+It supports a separate Cool Control and runs entirely in the HA dashboard.
+
+![Jura Graphical Card on a live E8](docs/assets/card/ready.jpg)
+
+See **[HACS/manual installation and configuration](docs/card.md)**. The card
+bundle is `dist/jura-native-card.js`; its version is tracked in `card/VERSION`,
+independently of the ESPHome component. HACS availability starts after the card
+is merged from `dev` to `main` and its release is published.
+
 ## Get started
 
 The repository provides both **`jura_native` (V2)** and **`jura` (legacy)** under
@@ -118,6 +131,7 @@ not an ESPHome device configuration.
 | [Hardware and wiring](docs/hardware.md) | Connector reference, RX voltage divider, common ground and power |
 | [Configuration](docs/configuration.md) | Installation, wiring example, options, native controls, Cool Control |
 | [Saved recipes](docs/saved-recipes.md) | Loading, fallback, one-shot edits, API preparation and cancellation |
+| [Graphical card](docs/card.md) | HACS/manual installation, configuration and live screenshots |
 | [Home Assistant](docs/home-assistant.md) | Action YAML, native entity contract and card integration |
 | [Diagnostics](docs/diagnostics.md) | Espresso probe, startup troubleshooting, stale state, raw registers |
 | [Migration](docs/migration.md) | Replacing the old `jura` component and updating an existing V2 device |
@@ -133,6 +147,8 @@ components/   Installable jura_native, legacy jura and jura_coolcontrol componen
 examples/     Current ESPHome configurations and HA action examples
 docs/         Current guides and readable profile exports
 tests/        Portable regression tests and ESPHome schema validation
+card/         Dashboard card source, examples, tests and build script
+dist/         Standalone HACS dashboard bundle
 tools/        Profile export, documentation checks and source packaging
 legacy/       Historical examples, original README and register documentation
 ```

@@ -1,0 +1,4 @@
+type: custom:jura-native-card
+name: Jura E8
+entity_prefix: jura_e8
+coolcontrol: false
