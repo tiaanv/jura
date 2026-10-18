@@ -389,6 +389,7 @@ static void test_espresso_probe() {
   const auto selected = m.dev.selected_values();
   assert(m.dev.probe_espresso_settings());
   assert(!m.dev.probe_espresso_settings());
+  assert(m.dev.texts["espresso_probe_result"].find("already pending") != std::string::npos);
   assert(!m.dev.brew_named("Espresso"));
   m.tick(2000);
   assert(m.count("@TM:41,02") == 1);
@@ -399,6 +400,18 @@ static void test_espresso_probe() {
   assert(decoded.find("temperature=High") != std::string::npos);
   assert(m.dev.selected_values() == selected);
   assert(m.dev.texts["espresso_probe_raw"] == m.probe_reply);
+  // A successful read releases the request; use the actual EF533 wire payload.
+  m.probe_reply = "@tm:41,020006090000020000000000DB";
+  assert(m.dev.probe_espresso_settings());
+  m.tick(2000);
+  assert(m.dev.texts["espresso_probe_settings"].find("strength=8") != std::string::npos);
+  assert(m.dev.texts["espresso_probe_settings"].find("water=45 ml") != std::string::npos);
+  m.probe_reply = "@tm:41,0200060A0000020000000000D3";
+  m.inject("@TF:000400000000");
+  assert(m.dev.probe_espresso_settings());
+  m.tick(2000);
+  assert(m.dev.texts["espresso_probe_settings"].find("water=50 ml") != std::string::npos);
+  assert(m.dev.selected_values() == selected);
   for (const auto &command : m.commands) {
     assert(command.compare(0, 4, "@TP:") != 0);
     assert(command.compare(0, 4, "@TS:") != 0);
@@ -428,6 +441,10 @@ static void test_espresso_probe() {
   assert(m.count("@TM:41,02") == reads);
   m.inject("@TB");
   assert(!m.dev.probe_espresso_settings());
+  assert(m.dev.texts["espresso_probe_result"].find("operation active") != std::string::npos);
+  m.inject("@TV:3E02");
+  assert(!m.dev.probe_espresso_settings());
+  assert(m.dev.texts["espresso_probe_result"].find("waiting for fresh TF") != std::string::npos);
 
   Machine queued;
   queued.begin();
@@ -452,6 +469,16 @@ static void test_espresso_probe() {
   Machine offline;
   offline.begin();
   assert(!offline.dev.probe_espresso_settings());
+  Machine stale;
+  stale.begin();
+  stale.tick(16000);
+  stale.auto_tf = false;
+  for (int i = 0; i < 3; ++i) {
+    stale.tick(21000);
+    stale.inject("@tm:00");  // Keep AT alive while deliberately withholding TF.
+  }
+  assert(!stale.dev.probe_espresso_settings());
+  assert(stale.dev.texts["espresso_probe_result"].find("older than 60") != std::string::npos);
 }
 int main() {
   test_profiles();

@@ -131,7 +131,9 @@ class JuraController : public TransportSink {
       control_.pop_front();
       if (r.kind == Kind::RECIPE_PROBE && !can_probe_()) {
         probe_pending_ = false;
-        text("espresso_probe_result", "Cancelled: machine no longer idle and connected");
+        const auto why = "Cancelled: " + probe_block_reason_();
+        text("espresso_probe_result", why);
+        trace("Espresso probe: " + why);
         return;
       }
       if (r.kind == Kind::BREW && (!ready_for_brew_() || !brew_pending_)) {
@@ -249,8 +251,13 @@ class JuraController : public TransportSink {
   }
   // Deliberately fixed to a read request. No settings writes or recipe application.
   bool probe_espresso_settings() {
-    if (!can_probe_() || brew_pending_ || probe_pending_ || !control_.empty()) {
-      text("espresso_probe_result", "Rejected: wait for idle connection and no pending command");
+    std::string why = probe_block_reason_();
+    if (why.empty() && brew_pending_) why = "brew command still pending";
+    if (why.empty() && probe_pending_) why = "espresso settings read already pending";
+    if (why.empty() && !control_.empty()) why = "another control command queued";
+    if (!why.empty()) {
+      text("espresso_probe_result", "Rejected: " + why);
+      trace("Espresso probe rejected: " + why + "; last command=" + active_command_);
       return false;
     }
     probe_pending_ = true;
@@ -332,9 +339,21 @@ class JuraController : public TransportSink {
     return false;
   }
   bool busy_() const { return operation_seen_ && !operation_finished_; }
+  std::string probe_block_reason_() const {
+    if (model_mismatch_) return "machine/profile changed; restart required";
+    if (!profile_ok()) return "machine profile unavailable";
+    if (!profiles_.find(uint8_t(2))) return "profile has no espresso product (02)";
+    if (session_ != Session::READY) return "AT session not connected";
+    if (busy_())
+      return "machine operation active: " + phase_ + " (last progress " +
+             std::to_string(uint32_t(now_ - last_tv_) / 1000) + " s ago)";
+    if (awaiting_tf_) return "waiting for fresh TF status after operation";
+    if (!tf_valid_) return "no valid TF status received";
+    if (uint32_t(now_ - last_tf_) >= 60000) return "TF status is older than 60 seconds";
+    return "";
+  }
   bool can_probe_() const {
-    return !model_mismatch_ && profile_ok() && profiles_.find(uint8_t(2)) && session_ == Session::READY &&
-           !busy_() && !awaiting_tf_ && tf_valid_ && uint32_t(now_ - last_tf_) < 60000;
+    return probe_block_reason_().empty();
   }
   bool flag_(unsigned bit) const { return bit / 8 < tf_.size() && (tf_[bit / 8] & (0x80u >> (bit % 8))); }
   bool blocked_() const {

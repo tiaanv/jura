@@ -1,4 +1,4 @@
-Jura Native 0.1.2 — testing release
+Jura Native 0.1.3 — testing release
 ======================================
 
 Native ESPHome integration using harryzz's complete 75-profile JPRF v4 database.

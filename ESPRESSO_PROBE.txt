@@ -1,4 +1,4 @@
-Read-only espresso settings probe — 0.1.2
+Read-only espresso settings probe — 0.1.3
 =========================================
 
 Update the component from the V2 branch, recompile and upload. No additional
@@ -62,3 +62,11 @@ https://github.com/makefu/jura-connect/blob/main/docs/PROTOCOL.md
 
 This feature is a diagnostic probe, not saved-recipe synchronisation. Real EF533
 support and the field interpretations must be established from your comparison.
+
+If another press is rejected, Result now names the specific cause: no profile,
+AT disconnected, active operation (phase and last progress age), waiting for
+fresh TF after an operation, TF older than 60 seconds, an existing probe, a
+pending brew, or another queued control command. The reason also appears at
+DEBUG log level with the last command. Return to the machine home screen and
+check the exact cause. Raw/Settings retain the previous accepted read when a
+new press is rejected; they are not evidence of a second response.
