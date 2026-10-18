@@ -1,5 +1,5 @@
-# Merge into your existing jura-e8 YAML after uploading components/jura_native
-# to the V2 branch. Keep your existing device, Wi-Fi, API encryption and OTA.
+# Merge into your existing jura-e8 YAML using the V2 branch.
+# Keep your existing device, Wi-Fi, API encryption and OTA settings.
 external_components:
   - source:
       type: git
@@ -27,5 +27,5 @@ jura_native:
   # profile_hint: EF533  # Use if TY cannot identify the machine at boot.
 
 # Remove jura: and the old raw UART/template drink buttons.
-# Copy api.actions from example-e8.yaml into your existing api: block
+# Copy api.actions from examples/e8.yaml into your existing api: block
 # if your HA card will call named/custom drinks directly.

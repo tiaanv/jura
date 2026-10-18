@@ -1,17 +1,13 @@
 """Run with Python and ESPHome 2026.9.1 installed."""
 import copy
-import os
 from pathlib import Path
 import subprocess
 import sys
 
 root = Path(__file__).resolve().parents[1]
-local = root.parent / "jura-extended/.schema-env"
-if local.exists():
-    sys.path.insert(0, str(local))
 import yaml
 
-base = yaml.safe_load((root / "example-e8.yaml").read_text())
+base = yaml.safe_load((root / "examples/e8-local.yaml").read_text())
 base["external_components"][0]["source"]["path"] = str(root / "components")
 variants = [("esp32-c3-idf", base, True)]
 arduino = copy.deepcopy(base)
@@ -44,7 +40,7 @@ dest.mkdir(exist_ok=True)
 for name, config, expected in variants:
     file = dest / (name + ".yaml")
     file.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
-    result = subprocess.run([sys.executable, str(root / "tests/run_esphome.py"), "config", str(file)],
+    result = subprocess.run([sys.executable, "-m", "esphome", "config", str(file)],
                             capture_output=True, text=True)
     if (result.returncode == 0) != expected:
         print(result.stdout, result.stderr)

@@ -1,7 +1,9 @@
+> Archived legacy reference. Raw-register interpretations and historical claims are unverified; see [the archive index](../README.md).
+
 # Jura UART Register Map
 
 This document provides an overview of the known **registers (counters)** returned by the `RT:0000` command
-for various Jura coffee machine models.  
+for various Jura coffee machine models.
 Each register corresponds to a 4-character hexadecimal field in the response payload (starting from offset `0x03`).
 
 The goal of this table is to consolidate knowledge from community efforts

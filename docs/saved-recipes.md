@@ -1,15 +1,13 @@
-Saved drink recipes and one-shot HA edits — 0.3.0
-================================================
+# Saved recipes and one-shot HA edits
 
 Update from V2, compile and upload. No YAML changes are required for the native
 selectors, numbers, buttons and new recipe-state entities. Keep allow_brew: true
-to use Brew. The optional brew_selected API action is included in both examples;
-merge it into your api.actions only if your card wants that action rather than
+to use Brew. The optional brew_selected API action is included in the [GitHub](../examples/e8.yaml) and [local](../examples/e8-local.yaml) E8 examples;
+merge it into your `api.actions` only if your card wants that action rather than
 pressing the native Jura Brew button.
 
-NORMAL USE
-----------
-Select a drink in Jura Drink. The component schedules @TM:41,<product code>,
+## Normal use
+Select a drink in Jura Drink. The component schedules `@TM:41,<product code>`,
 waits for an idle connected machine/fresh status, and reads its saved settings.
 Jura Recipe Loading stays on until that read succeeds or fails. While waiting,
 the controls show provisional profile defaults; Brew rejects rather than silently
@@ -17,10 +15,13 @@ using them. Changing another control while loading is allowed and that explicit
 HA edit is retained when the machine values arrive.
 
 Once Recipe Loading is off, inspect:
-  Jura Recipe Source     Machine or Profile defaults (the baseline source)
-  Jura Recipe Status     Loaded product, pending read, or fallback explanation
-  Jura Recipe Modified   HA overrides are pending for one Brew request
-  Jura Saved Recipe Raw  Current-selection read response, for diagnostics
+
+| Entity | Meaning |
+| --- | --- |
+| Jura Recipe Source | Machine or Profile defaults (the baseline source) |
+| Jura Recipe Status | Loaded product, pending read, or fallback explanation |
+| Jura Recipe Modified | HA overrides are pending for one Brew request |
+| Jura Saved Recipe Raw | Current-selection raw response for diagnostics |
 
 Edit settings and press Jura Brew. The queued @TP command contains a frozen copy
 of the loaded recipe plus overrides. The controls immediately return to the
@@ -34,8 +35,7 @@ same drink also reloads it. The baseline stays in RAM until a selection/reset;
 it is not a continuous mirror of changes made at the machine screen. After a
 screen edit, leave Expert Mode, return to idle, then select/reset in HA to reload.
 
-READ VALIDATION AND FALLBACK
-----------------------------
+## Read validation and fallback
 The reply must have a valid ASCII checksum, echo the requested product, contain
 all options declared for that product, and decode to permitted profile values.
 Unknown/sentinel/out-of-range values cause a complete profile-default fallback;
@@ -52,8 +52,7 @@ in-flight transaction finishes or times out, then the newest selection is read.
 Reads defer during a machine operation and do not change its saved recipes.
 The initial default selection (Espresso where available) loads after connection.
 
-API/CARD USAGE
---------------
+## API and card usage
 Use button.press on the native Jura Brew entity, or brew_selected(), to use the
 selected controls. The example's optional API action is normally exposed as
 esphome.jura_e8_brew_selected for the existing device name jura-e8.
@@ -89,8 +88,7 @@ model-specific drink buttons, with different numbers from AT product IDs. No
 universal ID-only AT preset-start command is assumed here. No settings write,
 EEPROM write, @TS lock/unlock or screen-navigation command has been added.
 
-FIRST TESTS ON YOUR E8
-----------------------
+## First tests on your E8
 1. Select Espresso; expect Machine source and your saved 8 / 45ml / High values.
 2. Select another drink and compare every available control with its screen.
    Espresso's saved-water read is physically established; other products and
