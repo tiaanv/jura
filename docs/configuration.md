@@ -73,8 +73,10 @@ above disables those legacy interpretations by preference; this is optional.
 | `profile_hint` | `auto` | Optional EF fallback if boot identification fails |
 | `update_interval` | `60s` | Counter/maintenance refresh requests; not the live progress rate |
 
-`handshake_response: auto` handles captured challenges `010001B228` and `01C000`.
-The tested EF533 challenge uses `8120000000`. An unknown challenge is reported
+`handshake_response: auto` handles captured challenges `010001B228` and `01C000`,
+and the E8 EF1092M V01.07 challenge `01C041B628`.
+The tested EF533 challenge uses `8120000000`; the EF1092 accepts the same reply.
+An unknown challenge is reported
 in Jura Challenge and needs a captured, correctly sized override. Model support
 in the database does not establish handshake support on every firmware.
 

@@ -1,5 +1,10 @@
 # Change log
 
+## Unreleased
+
+- `handshake_response: auto` now answers the E8 EF1092M V01.07 challenge
+  `01C041B628` with `8120000000`, verified on hardware; no override needed.
+
 ## 0.3.2 (dev)
 
 - Clear stale Current Product, product/stage codes, quantities and progress on
