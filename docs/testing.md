@@ -12,7 +12,7 @@ on 2026-10-18; later repository cleanup changes documentation/tool paths only.
 | All 75 profile records | Parse, longest EF match and active default recipe validation |
 | ESP8266 flash reader | Same host suite with `USE_ESP8266` and a pgmspace shim; not an ESP8266 binary |
 | Native adapter tests | Pass with lightweight ESPHome headers; include AT handshake and typed recipe controls |
-| ESPHome schemas | C3 IDF, C3 Arduino, ESP8266 Arduino, monitor-only/profile hint and separate Cool Control UART |
+| ESPHome schemas | Native C3 IDF, C3 Arduino, ESP8266 Arduino, monitor-only/profile hint, separate Cool Control UART, and legacy `jura` discovery/configuration on ESP8266 Arduino |
 | Invalid configs | Bad baud, handshake hex and unknown profile rejected |
 | C++ generation | Complete E8 actions/entities and Cool Control example |
 | Real C3 compiler check | Generated source checked with riscv32-esp-elf GCC 14.2.0 and actual ESP-IDF/ESPHome headers using `-fsyntax-only` |
@@ -87,7 +87,8 @@ The exporter regenerates the readable JSON/model index from the bundled runtime
 blob. The checker verifies local Markdown targets and YAML source paths. Packaging
 writes an ignored ZIP under `dist/`, includes the documented repository layout,
 regenerates `SHA256SUMS`, and verifies archive integrity/exclusions. The archived
-legacy files are included for historical reference, not as current components.
+legacy documentation/examples are included for historical reference. The legacy
+`jura` source is included separately at its installable `components/jura` path.
 
 Documentation diagrams can be regenerated with `python tools/render_doc_visuals.py`
 after installing Pillow and a Segoe UI or DejaVu Sans font. This regenerates only

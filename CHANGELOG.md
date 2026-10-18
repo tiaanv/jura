@@ -1,5 +1,12 @@
 # Change log
 
+## Legacy component installation compatibility
+
+- Restored the unchanged legacy source to `components/jura`, so Git users can
+  continue loading `components: [jura]` on V2 and after its merge into `main`.
+- Historical documentation and examples remain under `legacy/`.
+- Documented continued legacy use separately from optional native migration.
+
 ## Hardware and documentation visuals
 
 - Restored the original connector reference and hardware connection guidance.
@@ -14,7 +21,8 @@
 - Current guides moved under `docs/`; root README now describes the native V2 component.
 - Current ESPHome configurations and HA actions live under `examples/`.
 - Profile exports live under `docs/profiles/`; export and packaging tools live under `tools/`.
-- The old `jura` source, examples and documentation are archived under `legacy/`.
+- Historical examples and documentation are archived under `legacy/`; the legacy
+  source remains installable at `components/jura` following the compatibility update.
 - Documentation marks all inherited raw-register interpretations as unverified.
 - Portable tool paths, example validation, source packaging and documentation links updated.
 - No change to native firmware behaviour, component install paths or entity names.

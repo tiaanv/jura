@@ -61,6 +61,12 @@ depends on the detected profile. See [card integration](docs/home-assistant.md).
 
 ## Get started
 
+The repository provides both **`jura_native` (V2)** and **`jura` (legacy)** under
+`components/`. Existing legacy users can keep `components: [jura]` and their
+`jura:` configuration when V2 is merged into `main`; migration is optional.
+See [continuing with the legacy component](docs/migration.md#keep-using-the-legacy-component).
+The following setup is for the new native component.
+
 Merge this source into your existing device YAML:
 
 ```yaml
@@ -123,18 +129,20 @@ not an ESPHome device configuration.
 ## Repository layout
 
 ```text
-components/   Installable jura_native and jura_coolcontrol components
+components/   Installable jura_native, legacy jura and jura_coolcontrol components
 examples/     Current ESPHome configurations and HA action examples
 docs/         Current guides and readable profile exports
 tests/        Portable regression tests and ESPHome schema validation
 tools/        Profile export, documentation checks and source packaging
-legacy/       Archived old component, examples and register documentation
+legacy/       Historical examples, original README and register documentation
 ```
 
-The old `components/jura` has moved to [legacy/components/jura](legacy/components/jura).
-Its documentation and examples are historical references, not V2 instructions.
-The install paths and entity names for **jura_native** and **jura_coolcontrol**
-are unchanged. See the [legacy archive](legacy/README.md) and [change log](CHANGELOG.md).
+The legacy component remains installable at [components/jura](components/jura),
+alongside **jura_native** and **jura_coolcontrol**. Its source and configuration
+are unchanged by this layout update. Historical documentation and examples live
+under [legacy/](legacy/README.md); the current legacy installation instructions
+are in the [migration guide](docs/migration.md#keep-using-the-legacy-component).
+See the [change log](CHANGELOG.md).
 
 ## Credits and licence
 

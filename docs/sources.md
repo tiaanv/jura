@@ -33,8 +33,9 @@ universal ID-only AT preset command.
 
 ## This project's history and device evidence
 
-The [legacy archive](../legacy/README.md) preserves the old component, its credits
-and register hypotheses. Earlier work credits
+The [legacy archive](../legacy/README.md) preserves historical documentation,
+credits and register hypotheses. The legacy component remains installable at
+[components/jura](../components/jura). Earlier work credits
 [Ryan Alden](https://github.com/ryanalden/esphome-jura-component),
 [alco28/Jura-F7-ESPHOME](https://github.com/alco28/Jura-F7-ESPHOME),
 [Jutta-Proto](https://github.com/Jutta-Proto/protocol-cpp) and other contributors

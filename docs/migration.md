@@ -20,11 +20,51 @@ File locations changed:
 | `PROFILE_REFERENCE.txt` | [docs/profiles/models.md](profiles/models.md) |
 | `tests/export_profiles.py` | [tools/export_profiles.py](../tools/export_profiles.py) |
 | `tests/package_release.py` | [tools/package_release.py](../tools/package_release.py) |
-| Old `components/jura` and examples | [legacy/](../legacy/README.md) |
+| Legacy `components/jura` | Unchanged: [components/jura](../components/jura) |
+| Old README, command notes and examples | [legacy/](../legacy/README.md) |
 
 Local examples now use `../components`, relative to their new `examples/` path.
 
-## The legacy `jura` component
+## Keep using the legacy component
+
+The legacy `jura` component is available at `components/jura` on V2 alongside
+`jura_native`. After V2 is merged into `main`, existing Git configurations that
+load `components: [jura]` can continue using it. Migration is optional; do not
+replace your `jura:` block or existing buttons merely because the repository
+layout changed. The legacy source is unchanged by its restoration to this path.
+
+To test the legacy component from V2, merge this source into your existing YAML:
+
+```yaml
+external_components:
+  - source:
+      type: git
+      url: https://github.com/tiaanv/jura
+      ref: V2
+    refresh: 0s
+    components: [jura]
+
+jura:
+  id: jura_coffee
+  uart_id: uart_bus
+  model: E8
+```
+
+Keep your existing model, UART, board/framework, entity settings and buttons;
+the snippet uses E8 as an example. Once V2 has been merged, use `ref: main`
+or retain your existing source without an explicit ref to follow the default
+branch. Do not switch to `main` expecting these changes before the merge.
+Local external sources can still point to the repository's `components/` folder.
+
+The legacy component retains its previous polling/control implementation and
+raw-register interpretations. Restoring its path does not add the V2 AT features
+or establish ESP-IDF compatibility. The historical examples target Arduino;
+see [legacy references](../legacy/README.md) for their limitations.
+
+Only one Jura component may consume a given UART: use `jura` or `jura_native`
+for the machine, not both on the same bus.
+
+## Migrate from legacy to native V2
 
 1. Change the Git source to `ref: V2` and `components: [jura_native]`.
 2. Replace the old `jura:` block with the block in
@@ -48,11 +88,6 @@ Local examples now use `../components`, relative to their new `examples/` path.
 | `at_handshake_response` | `handshake_response`, normally `auto` on the tested E8 |
 | `startup_delay` | Same option name |
 | `model: E8` | Automatic EF identification; optional `profile_hint: EF533` |
-
-`components/jura` is no longer an installable root component on V2. Its source
-is preserved under [legacy/components/jura](../legacy/components/jura). Use Git
-history/an appropriate older branch for the old installation, or migrate to
-`jura_native`; the archive is not the current installation path.
 
 Legacy FA button numbers are not interchangeable with AT product codes. The
 new API accepts the profile's drink names, such as `1 Flat White`, and reads

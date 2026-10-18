@@ -1,9 +1,12 @@
 # Legacy archive
 
-This directory preserves the previous `jura` component, its examples and its
-historical documentation. It is not the installation guide for V2.
+This directory preserves the legacy examples and historical documentation.
+The legacy `jura` component itself remains installable under
+[`components/jura`](../components/jura), alongside the native V2 component.
+See [keep using the legacy component](../docs/migration.md#keep-using-the-legacy-component)
+for Git source configuration on V2 and after its eventual merge into `main`.
 
-- [Old component](components/jura)
+- [Installable legacy component](../components/jura)
 - [Old README](docs/README-original.md)
 - [Old command notes](docs/commands.md)
 - [Old register interpretations](docs/uart-register-map.md)
@@ -15,6 +18,6 @@ model and compatibility claims must also be read as historical claims.
 
 Use the [current README](../README.md), [configuration](../docs/configuration.md)
 and [migration guide](../docs/migration.md) for the native component.
-Current installable code remains in `components/jura_native` and
+Installable code lives under `components/jura`, `components/jura_native` and
 `components/jura_coolcontrol`. The historical Cool Control example here refers
 to the older receiver configuration; use the current receiver examples instead.

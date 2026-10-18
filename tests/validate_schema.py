@@ -18,6 +18,12 @@ del esp8266["esp32"]
 esp8266["esp8266"] = {"board": "d1_mini"}
 esp8266["logger"] = {"baud_rate": 0}
 variants.append(("esp8266-arduino", esp8266, True))
+legacy = copy.deepcopy(esp8266)
+legacy["external_components"][0]["components"] = ["jura"]
+del legacy["jura_native"]
+legacy["jura"] = {"uart_id": "uart_bus", "id": "jura_coffee", "model": "E8"}
+legacy["api"] = {}  # Native recipe API lambdas do not belong to the legacy component.
+variants.append(("legacy-jura-esp8266", legacy, True))
 monitor = copy.deepcopy(base)
 monitor["jura_native"] = {"uart_id": "uart_bus", "id": "jura_coffee", "profile_hint": "EF533"}
 variants.append(("monitor-defaults-profile-hint", monitor, True))
