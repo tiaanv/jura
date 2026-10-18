@@ -1,0 +1,27 @@
+name: Validate card bundle
+on:
+  push:
+    branches: [main, dev]
+    paths: ['card/**', 'dist/jura-native-card.js', 'hacs.json', '.github/workflows/card.yml']
+  pull_request:
+    paths: ['card/**', 'dist/jura-native-card.js', 'hacs.json', '.github/workflows/card.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python card/build.py --check
+      - run: node --check dist/jura-native-card.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jura-native-card
+          path: dist/jura-native-card.js

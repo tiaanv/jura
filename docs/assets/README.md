@@ -10,3 +10,7 @@
 The two generated illustrations can be reproduced with
 [tools/render_doc_visuals.py](../../tools/render_doc_visuals.py), using Pillow
 and Segoe UI or DejaVu Sans fonts. They do not contain Wi-Fi or API credentials.
+
+The `card/` directory contains live, owner-authorised E8 dashboard captures.
+Images are cropped to the Jura card only, excluding unrelated dashboard content.
+See [card documentation](../card.md) for capture context.

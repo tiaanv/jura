@@ -24,3 +24,8 @@ dist/
 
 # ESPHome may create this while generating the local example projects
 examples/.gitignore
+
+# The dashboard card is distributed as a committed standalone HACS bundle.
+!dist/
+dist/*
+!dist/jura-native-card.js

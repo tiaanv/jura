@@ -1,0 +1,6 @@
+type: custom:jura-native-card
+name: Jura E8
+entity_prefix: jura_e8
+coolcontrol:
+  level: sensor.jura_coolcontrol_jura_coolcontrol_level
+  temperature: sensor.jura_coolcontrol_jura_coolcontrol_temperature

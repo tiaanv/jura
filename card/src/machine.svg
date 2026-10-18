@@ -1,0 +1,25 @@
+<svg viewBox="0 0 540 300" role="img" aria-labelledby="jura-title jura-desc">
+    <title id="jura-title">Jura E8 and Cool Control</title><desc id="jura-desc">Outlined coffee machine with water tank, grounds tray, cup and connected milk cooler. Highlighted parts reflect live machine status and operation phase.</desc>
+    <defs><linearGradient id="jura-metal" x1="0" x2="1"><stop stop-color="currentColor" stop-opacity=".04"/><stop offset=".5" stop-color="currentColor" stop-opacity=".14"/><stop offset="1" stop-color="currentColor" stop-opacity=".04"/></linearGradient></defs>
+    <g class="shell" stroke-width="2" stroke-linejoin="round">
+     <path d="M112 46 Q112 32 126 32 H306 Q320 32 320 46 V255 H112Z" fill="url(#jura-metal)"/>
+     <path d="M139 68 H294 V221 H139Z" fill="none" opacity=".3"/><path d="M112 62 H320 M135 62 V223 M299 62 V223" fill="none" opacity=".45"/>
+     <path d="M155 32 V23 H279 V32" fill="none" opacity=".6"/>
+     <path d="M155 23 L165 16 H269 L279 23" fill="none" opacity=".35"/>
+     <rect x="168" y="76" width="97" height="49" rx="5" fill="var(--jura-screen)"/>
+     <path d="M149 82 V88 M149 104 V110 M282 82 V88 M282 104 V110" stroke-linecap="round" opacity=".7"/>
+     <path d="M177 145 H252 V165 H177Z" fill="url(#jura-metal)"/>
+     <path d="M191 165 V177 H202 V165 M226 165 V177 H237 V165" fill="var(--jura-surface)"/>
+     <path d="M123 230 H309 V255 H123Z" fill="var(--jura-surface)"/>
+     <path d="M136 238 H297 M143 244 H290" opacity=".35"/>
+     <path d="M125 256 V263 H145 V256 M287 256 V263 H307 V256" fill="none"/>
+    </g>
+    <g class="water-part" stroke-width="2"><path d="M113 72 H93 Q85 72 85 80 V218 H113Z" fill="currentColor" fill-opacity=".05"/><path d="M92 92 H106 M92 105 H106 M92 118 H106" opacity=".4"/></g>
+    <g class="tray-part" stroke-width="2"><rect x="154" y="249" width="122" height="7" rx="2" fill="currentColor" fill-opacity=".1"/></g>
+    <g class="coffee-part" stroke-width="2" fill="none"><path d="M185 191 H242 L237 221 Q214 231 190 221Z"/><path d="M242 196 H248 Q260 207 239 214"/><path d="M183 229 H244" stroke-linecap="round" opacity=".4"/></g>
+    <g class="streams" stroke-width="2.5" stroke-linecap="round" fill="none"><path d="M197 178 V203 M232 178 V203"/></g>
+    <g class="shell cooler" stroke-width="2" fill="none"><path d="M320 118 C347 118 338 168 364 169" opacity=".4"/><rect x="362" y="149" width="96" height="104" rx="17" fill="url(#jura-metal)"/><path d="M366 151 Q410 138 453 151 M374 253 V260 H446 V253"/><path d="M383 143 V137 H438 V143"/><circle cx="408" cy="168" r="3" fill="var(--jura-accent)" stroke="none"/></g>
+    <circle class="milk-flow cooler" r="2.7" fill="currentColor" stroke="none" aria-hidden="true"><animateMotion dur="2.4s" repeatCount="indefinite" calcMode="paced" path="M364 169 C338 168 347 118 320 118"/></circle><g class="milk-part"><rect x="382" y="188" width="53" height="43" rx="6" fill="currentColor" opacity=".10"/><rect id="jura-milk-fill" x="382" y="204" width="53" height="27" rx="4" fill="currentColor" opacity=".35"/><path d="M383 187 H434" stroke="currentColor" stroke-width="1" opacity=".3"/></g>
+    <text x="216" y="98" text-anchor="middle" class="screen-brand">JURA</text><text x="216" y="115" text-anchor="middle" id="jura-screen-status" class="screen-state">Ready</text>
+    <text x="410" y="283" text-anchor="middle" class="graphic-label cooler">COOL CONTROL</text>
+   </svg>
