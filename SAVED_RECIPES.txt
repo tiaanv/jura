@@ -1,4 +1,4 @@
-Saved drink recipes and one-shot HA edits — 0.2.0
+Saved drink recipes and one-shot HA edits — 0.3.0
 ================================================
 
 Update from V2, compile and upload. No YAML changes are required for the native
@@ -58,17 +58,36 @@ Use button.press on the native Jura Brew entity, or brew_selected(), to use the
 selected controls. The example's optional API action is normally exposed as
 esphome.jura_e8_brew_selected for the existing device name jura-e8.
 
-The earlier brew_drink(name)/brew_named(name) and brew_custom(...) shortcuts
-retain their existing independent semantics: unspecified values use profile
-defaults. They do not read another product on demand or consume UI edits.
-This avoids silently changing existing explicit API callers. For a card using
-the saved-recipe workflow, select the drink, wait until Recipe Loading is false,
-change native controls if desired, and press Brew/brew_selected.
+brew_drink(name)/brew_named(name) now read the requested product's current
+saved settings and brew them. brew_custom(...) reads the same saved baseline
+and then overlays the explicit arguments. Numeric -1 and empty/"default" choice
+strings use the saved values. If the read is unsupported, invalid or times out,
+the full baseline falls back to profile defaults; explicit overrides still apply.
 
-For a fresh baseline with no overrides, use Reset Recipe, wait, then Brew.
-To brew profile defaults deliberately, the existing named API action is available.
-No saved-recipe write, EEPROM write, @TS lock/unlock or screen-navigation command
-has been added. Only @TM reads and the existing one-shot @TP brewing are used.
+Each API call snapshots its requested product and overrides. Changing the native
+Drink selection or editing its controls cannot change the pending API request.
+The API actions do not use or consume native UI edits. Use brew_selected for
+those. They read the requested product afresh, even if a different one is selected.
+Existing API names, fields and YAML lambdas do not need changing.
+
+Jura Command Recipe Source reports Pending, Machine, Profile defaults or Not used
+(for cancellation). Jura Command Recipe Status explains the read or fallback and
+Jura Command Recipe Raw retains its reply. These describe the API request, while
+Jura Recipe Source/Status continue to describe the native selected controls.
+
+Requests must be made while the machine is ready; only one can be pending. The
+read completes before a single @TP command is queued. Readiness is checked again
+before brewing; a start/progress notification, not-ready TF status or disconnect
+during the read cancels preparation. A later valid reply cannot revive it. No
+future drink is queued behind a machine operation, and no brew is auto-retried.
+An API timeout/fallback adds the settings-read timeout to the brew latency.
+Watch Command Result/progress for the eventual outcome; the HA action returning
+only means it submitted a request, not that the physical drink has finished.
+
+These APIs use the full AT recipe format. Legacy FA commands simulate some known
+model-specific drink buttons, with different numbers from AT product IDs. No
+universal ID-only AT preset-start command is assumed here. No settings write,
+EEPROM write, @TS lock/unlock or screen-navigation command has been added.
 
 FIRST TESTS ON YOUR E8
 ----------------------

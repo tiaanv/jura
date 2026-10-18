@@ -31,6 +31,9 @@ TEXT = {
     "espresso_probe_settings": "Jura Espresso Probe Settings",
     "recipe_source": "Jura Recipe Source", "recipe_status": "Jura Recipe Status",
     "saved_recipe_raw": "Jura Saved Recipe Raw",
+    "command_recipe_source": "Jura Command Recipe Source",
+    "command_recipe_status": "Jura Command Recipe Status",
+    "command_recipe_raw": "Jura Command Recipe Raw",
 }
 NUMERIC = {
     "progress": ("Jura Progress", "%"), "stage_current": ("Jura Stage Current", ""),
@@ -85,7 +88,7 @@ schema = {
 }
 for key, name in TEXT.items():
     default = {CONF_NAME: name}
-    if key.startswith("espresso_probe") or key == "saved_recipe_raw":
+    if key.startswith("espresso_probe") or key in ("saved_recipe_raw", "command_recipe_raw"):
         default["entity_category"] = ENTITY_CATEGORY_DIAGNOSTIC
     schema[cv.Optional(key, default=default)] = text_sensor.text_sensor_schema()
 for key, (name, unit) in NUMERIC.items():

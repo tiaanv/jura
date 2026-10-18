@@ -1,4 +1,4 @@
-Home Assistant card contract — Jura Native 0.2.0
+Home Assistant card contract — Jura Native 0.3.0
 ================================================
 
 Use actual entity IDs discovered under the Jura device; names below identify
@@ -76,7 +76,7 @@ Merge api.actions from example-e8.yaml into the device configuration first.
 For device name jura-e8, HA normally exposes the following ESPHome actions.
 Confirm the exact names in HA Developer Tools -> Actions.
 
-Named profile-default espresso:
+Named espresso using its current saved recipe:
 
   action: esphome.jura_e8_brew_drink
   data:
@@ -97,7 +97,7 @@ Custom EF533 espresso, strength label 6, 50ml, high temperature:
     grinder_ratio: ""
 
 Send all action fields. For each parameter use a valid setting for that drink,
-or -1/empty string for its profile default. Do not send 0 for an unsupported
+or -1/empty string for its machine-saved default (profile fallback if unreadable). Do not send 0 for an unsupported
 setting; that is an explicit value and will be rejected. Milk/foam are seconds.
 
 The native selector/number/button path also works via HA's select.select_option,
@@ -123,7 +123,7 @@ Read-only espresso settings probe (diagnostic; no YAML additions needed)
   Jura Espresso Probe Settings      Decoded profile labels, water ml, temperature
 This probe does not initialise or change the recipe controls. See ESPRESSO_PROBE.txt.
 
-Saved selected recipe controls (0.2.0)
+Saved selected recipe controls (0.3.0)
   Jura Recipe Source     Machine or Profile defaults (the unedited baseline)
   Jura Recipe Status     Waiting/reading/success, or the reason for fallback
   Jura Recipe Loading    Disable Brew while true
@@ -137,7 +137,18 @@ read are preserved; a reply for an earlier selection/reset is ignored. The
 controls return to their baseline as soon as the request is accepted into the
 queue, not after physical completion. Rejected requests retain edits.
 
-The existing brew_drink and brew_custom actions remain independent shortcuts:
-unspecified parameters still use profile defaults. They do not consume the
-selected controls or their edits. Use brew_selected for this new workflow.
-See SAVED_RECIPES.txt for fallback and physical comparison details.
+The brew_drink and brew_custom actions now read the requested product's saved
+settings before brewing. Empty/default choice strings and numeric -1 inherit
+saved values; explicit custom parameters override them. Failed reads use a
+labelled profile-default baseline. Existing action names and fields are unchanged.
+They do not use or consume unrelated native UI edits; brew_selected does.
+
+  Jura Command Recipe Source   Pending / Machine / Profile defaults / Not used
+  Jura Command Recipe Status   Read/fallback/cancellation detail
+  Jura Command Recipe Raw      Raw API recipe-read response (diagnostic)
+
+Keep these separate from Jura Recipe Source/Status, which describe the currently
+selected native controls. Disable repeated submissions while Command Result
+shows preparation/pending activity. An accepted API call is asynchronous: first
+settings are read, then one brew is queued, subject to fresh readiness checks.
+See SAVED_RECIPES.txt for the complete request and cancellation behaviour.

@@ -37,6 +37,9 @@ class JuraController : public TransportSink {
     text("session", "Starting");
     binary("connected", 0);
     text("command_result", "No command");
+    text("command_recipe_source", "Not requested");
+    text("command_recipe_status", "No API request");
+    text("command_recipe_raw", "");
     text("espresso_probe_result", "Not run");
     text("espresso_probe_raw", "");
     text("espresso_probe_settings", "");
@@ -130,6 +133,10 @@ class JuraController : public TransportSink {
     if (!control_.empty()) {
       const Request r = control_.front();
       control_.pop_front();
+      if (r.kind == Kind::API_RECIPE && (!api_recipe_pending_ || !ready_for_brew_())) {
+        cancel_api_recipe_("Machine no longer ready before settings read");
+        return;
+      }
       if (r.kind == Kind::RECIPE_PROBE && !can_probe_()) {
         probe_pending_ = false;
         const auto why = "Cancelled: " + probe_block_reason_();
@@ -143,6 +150,10 @@ class JuraController : public TransportSink {
         return;
       }
       start_(r.command, r.kind, r.encrypted);
+      if (r.kind == Kind::API_RECIPE) {
+        text("command_result", "Reading saved settings before brew");
+        text("command_recipe_status", "Reading machine settings");
+      }
       if (r.kind == Kind::RECIPE_PROBE) text("espresso_probe_result", "Sent @TM:41,02; waiting for response");
       if (r.kind == Kind::BREW) {
         brew_sent_ = true;
@@ -160,7 +171,8 @@ class JuraController : public TransportSink {
       return;
     }
     if (busy_()) return;
-    if (recipe_read_requested_ && !brew_pending_ && !probe_pending_ && can_read_recipe_()) {
+    if (recipe_read_requested_ && !brew_pending_ && !api_recipe_pending_ && !probe_pending_ &&
+        can_read_recipe_()) {
       const auto *p = selection();
       if (p) {
         recipe_read_requested_ = false;
@@ -248,7 +260,31 @@ class JuraController : public TransportSink {
   }
   bool brew_recipe(const std::string &name, const std::array<int32_t, ATTRIBUTE_COUNT> &values) {
     const auto *p = profiles_.find(name);
-    return p ? submit_(*p, values.data()) : reject_("Unknown drink");
+    if (!p) return reject_("Unknown drink");
+    if (!allow_brew_) return reject_("Brewing control disabled");
+    if (brew_pending_ || api_recipe_pending_ || probe_pending_ || active_ == Kind::API_RECIPE ||
+        !control_.empty())
+      return reject_("Another command is pending");
+    if (!ready_for_brew_()) return reject_("Machine not ready or status unavailable");
+    // Validate explicit overrides now; omitted values are filled after the read.
+    for (uint8_t attr = 0; attr < ATTRIBUTE_COUNT; ++attr) {
+      if (values[attr] == -1) continue;
+      const auto opt = profiles_.option_for(*p, attr);
+      if (values[attr] < -1 || !opt.valid() || !opt.accepts(values[attr]))
+        return reject_("Unsupported override for requested drink");
+    }
+    api_recipe_code_ = p->code;
+    api_overrides_ = values;
+    api_recipe_response_.clear();
+    api_recipe_pending_ = brew_pending_ = true;
+    brew_sent_ = brew_started_ = false;
+    text("requested_product", p->name);
+    text("command_recipe_source", "Pending");
+    text("command_recipe_status", "Queued saved-settings read for " + p->name);
+    text("command_recipe_raw", "");
+    text("command_result", "Queued settings read before brew");
+    control_.push_back({"@TM:41," + hexbyte_(p->code), Kind::API_RECIPE, true});
+    return true;
   }
   bool brew_custom(const std::string &name, const std::string &strength, int water_ml, int milk_seconds,
                    int foam_seconds, const std::string &temperature, int bypass_ml, int pause_seconds,
@@ -275,7 +311,8 @@ class JuraController : public TransportSink {
   }
   bool power_off() {
     if (!allow_power_) return reject_("Power-off control disabled");
-    if (brew_pending_ || probe_pending_ || active_ == Kind::SAVED_RECIPE || busy_() || !control_.empty())
+    if (brew_pending_ || api_recipe_pending_ || probe_pending_ || active_ == Kind::SAVED_RECIPE ||
+        active_ == Kind::API_RECIPE || busy_() || !control_.empty())
       return reject_("Machine busy");
     control_.push_back({"AN:02", Kind::POWER, false});
     text("command_result", "Power off queued");
@@ -285,6 +322,8 @@ class JuraController : public TransportSink {
   bool probe_espresso_settings() {
     std::string why = probe_block_reason_();
     if (why.empty() && brew_pending_) why = "brew command still pending";
+    if (why.empty() && (api_recipe_pending_ || active_ == Kind::API_RECIPE))
+      why = "API settings read in progress";
     if (why.empty() && probe_pending_) why = "espresso settings read already pending";
     if (why.empty() && !control_.empty()) why = "another control command queued";
     if (why.empty() && active_ == Kind::SAVED_RECIPE) why = "selected drink settings read in progress";
@@ -335,7 +374,8 @@ class JuraController : public TransportSink {
     BREW,
     POWER,
     RECIPE_PROBE,
-    SAVED_RECIPE
+    SAVED_RECIPE,
+    API_RECIPE
   };
   struct Request {
     std::string command;
@@ -443,9 +483,47 @@ class JuraController : public TransportSink {
       if (Profiles::lower(a.name) == "coffee ready") return flag_(a.bit);
     return false;  // No positive readiness signal: don't guess.
   }
+  void cancel_api_recipe_(const std::string &why) {
+    if (!api_recipe_pending_) return;
+    api_recipe_pending_ = brew_pending_ = brew_sent_ = false;
+    text("command_recipe_source", "Not used");
+    text("command_recipe_status", "Cancelled: " + why);
+    text("command_result", "Cancelled: " + why);
+    trace("API recipe cancelled: " + why);
+  }
+  void resolve_api_recipe_(bool received_response) {
+    if (!api_recipe_pending_) return;
+    if (!ready_for_brew_()) {
+      cancel_api_recipe_("Machine no longer ready after settings read");
+      return;
+    }
+    const auto *p = profiles_.find(api_recipe_code_);
+    if (!p) {
+      cancel_api_recipe_("Requested product unavailable");
+      return;
+    }
+    std::array<int32_t, ATTRIBUTE_COUNT> values;
+    values.fill(-1);
+    std::string summary, error;
+    bool loaded = received_response &&
+                  decode_saved_recipe_(api_recipe_response_, api_recipe_code_, values, summary, error);
+    if (!loaded) {
+      values.fill(-1);  // All-or-nothing fallback; never use partially decoded values.
+      if (!received_response) error = "Settings read timed out";
+    }
+    text("command_recipe_source", loaded ? "Machine" : "Profile defaults");
+    text("command_recipe_status",
+         loaded ? "Saved settings loaded for " + p->name : "Profile defaults: " + error);
+    text("command_recipe_raw", received_response ? api_recipe_response_ : "");
+    for (uint8_t attr = 0; attr < ATTRIBUTE_COUNT; ++attr)
+      if (api_overrides_[attr] >= 0) values[attr] = api_overrides_[attr];
+    api_recipe_pending_ = brew_pending_ = false;
+    submit_(*p, values.data());  // Rechecks readiness, validates/encodes, freezes one brew.
+  }
   bool submit_(const Product &product, const int32_t *values) {
     if (!allow_brew_) return reject_("Brewing control disabled");
-    if (brew_pending_ || probe_pending_ || active_ == Kind::SAVED_RECIPE || !control_.empty())
+    if (brew_pending_ || api_recipe_pending_ || probe_pending_ || active_ == Kind::SAVED_RECIPE ||
+        active_ == Kind::API_RECIPE || !control_.empty())
       return reject_("Another command is pending");
     if (!ready_for_brew_()) return reject_("Machine not ready or status unavailable");
     std::string payload, error;
@@ -512,6 +590,7 @@ class JuraController : public TransportSink {
     update_status_();
   }
   void session_failed_(const std::string &why) {
+    cancel_api_recipe_("Connection lost during settings read");
     session_ = Session::BACKOFF;
     session_failed_at_ = now_;
     handshake_command_.clear();
@@ -590,6 +669,7 @@ class JuraController : public TransportSink {
   void completed(bool success) override {
     const Kind kind = active_;
     active_ = Kind::NONE;
+    if (kind == Kind::API_RECIPE) resolve_api_recipe_(success);
     if (kind == Kind::SAVED_RECIPE && !success && active_recipe_epoch_ == recipe_epoch_ && recipe_loading_)
       saved_recipe_fallback_("Settings read timed out; select drink or Reset Recipe to retry");
     if (kind == Kind::RECIPE_PROBE) {
@@ -677,8 +757,13 @@ class JuraController : public TransportSink {
       handshake_command_ = "@t3";
       handshake_kind_ = Kind::H3;
     } else if (session_ == Session::READY) {
-      if (active_ == Kind::SAVED_RECIPE && transport_.waiting() &&
+      if (active_ == Kind::API_RECIPE && transport_.waiting() &&
           (starts_(frame, "@tm:") || starts_(frame, "@an:error"))) {
+        api_recipe_response_ = frame;
+        text("command_recipe_raw", frame);
+        transport_.complete(true, now_);
+      } else if (active_ == Kind::SAVED_RECIPE && transport_.waiting() &&
+                 (starts_(frame, "@tm:") || starts_(frame, "@an:error"))) {
         receive_saved_recipe_(frame);
         transport_.complete(true, now_);
       } else if (active_ == Kind::RECIPE_PROBE && transport_.waiting() &&
@@ -690,6 +775,7 @@ class JuraController : public TransportSink {
       } else if (starts_(frame, "@TV:")) {
         parse_tv_(frame);
       } else if (frame == "@TB") {
+        cancel_api_recipe_("Machine operation began during settings read");
         operation_seen_ = true;
         operation_finished_ = false;
         last_tv_ = now_;
@@ -702,10 +788,10 @@ class JuraController : public TransportSink {
           if (active_ == Kind::BREW && transport_.waiting()) transport_.complete(true, now_);
         }
         update_status_();
-      } else if (frame == "@tp" && brew_pending_) {
+      } else if (frame == "@tp" && brew_pending_ && brew_sent_) {
         text("command_result", "Accepted; waiting for start");
         if (active_ == Kind::BREW && transport_.waiting()) transport_.complete(true, now_);
-      } else if (starts_(frame, "@tp:") && brew_pending_) {
+      } else if (starts_(frame, "@tp:") && brew_pending_ && brew_sent_) {
         brew_pending_ = false;
         brew_sent_ = false;
         text("command_result", "Rejected by machine: " + frame);
@@ -742,6 +828,8 @@ class JuraController : public TransportSink {
     text("active_alerts", labels.empty() ? "None" : labels.substr(0, 250));
     text("tray_status", flag_(0) ? "Missing" : "Present");
     text("water_tank_status", flag_(1) ? "Fill Tank" : "OK");
+    if (api_recipe_pending_ && !ready_for_brew_())
+      cancel_api_recipe_("Machine reported not ready during settings read");
     update_status_();
     return true;
   }
@@ -813,6 +901,7 @@ class JuraController : public TransportSink {
     const auto *p = profiles_.find(code);
     const char *process = process_(code);
     if (!p && !process) return;
+    cancel_api_recipe_("Machine progress observed during settings read");
     operation_seen_ = true;
     operation_finished_ = state == 0x3E;
     last_tv_ = now_;
@@ -1022,6 +1111,10 @@ class JuraController : public TransportSink {
   std::deque<Request> polls_, control_;
   std::array<int32_t, ATTRIBUTE_COUNT> selected_;
   std::array<int32_t, ATTRIBUTE_COUNT> baseline_;
+  std::array<int32_t, ATTRIBUTE_COUNT> api_overrides_;
+  std::string api_recipe_response_;
+  uint8_t api_recipe_code_{0};
+  bool api_recipe_pending_{false};
   std::string recipe_source_{"Profile defaults"}, recipe_read_status_;
   uint32_t recipe_epoch_{0}, active_recipe_epoch_{0};
   uint8_t edited_mask_{0}, active_recipe_code_{0};

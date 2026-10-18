@@ -1,4 +1,4 @@
-# Jura Native V2 — 0.2.0 testing release
+# Jura Native V2 — 0.3.0 testing release
 
 The `V2` branch includes the new native ESPHome component in
 [`components/jura_native`](components/jura_native), using all 75 bundled model
@@ -23,7 +23,7 @@ acceptance of this saved-recipe loader remain to be done. Selecting a drink
 reads its saved settings into the native controls, with profile defaults as a
 labelled fallback. HA edits apply to one accepted Brew request;
 the machine's saved recipe is never overwritten. See SAVED_RECIPES.txt for the
-explicit profile-default named/custom API shortcuts.
+saved-default named/custom API actions and one-shot edit behaviour.
 
 The legacy `components/jura` remains available below for existing configurations.
 The optional `jura_coolcontrol` receiver has also been updated to nonblocking reception.

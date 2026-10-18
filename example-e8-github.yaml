@@ -70,7 +70,8 @@ api:
         grinder_ratio: string
       then:
         - lambda: |-
-            // Empty strings and -1 use profile defaults. Choice strings use
+            // Empty strings and -1 use saved settings (profile fallback on read failure).
+            // Choice strings use
             // the labels shown by the native selectors, such as "6" or "High".
             id(jura_coffee).brew_custom(drink, strength, water_ml, milk_seconds,
               foam_seconds, temperature, bypass_ml, pause_seconds, grinder_ratio);

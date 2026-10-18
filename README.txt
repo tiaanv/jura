@@ -1,4 +1,4 @@
-Jura Native 0.2.0 — testing release
+Jura Native 0.3.0 — testing release
 ======================================
 
 Native ESPHome integration using harryzz's complete 75-profile JPRF v4 database.
@@ -63,16 +63,25 @@ max, step and choice-list sensors allow your card to show only valid settings.
 A setting unsupported by the current drink has an unavailable number state or
 "Not available" choice. A rejected setting leaves the previous recipe intact.
 
-brew_named(name) and the brew_drink API action use profile defaults, independent
-of the currently edited UI recipe. brew_selected() uses the edited recipe.
-brew_custom() validates all arguments together and does not alter UI selections.
-Empty choice strings (or "default") and numeric -1 use profile defaults.
+brew_named(name)/brew_drink read that product's saved settings before brewing.
+brew_custom() uses the same saved baseline, then overlays explicit arguments.
+Empty choice strings (or "default") and numeric -1 mean machine-saved defaults,
+with a labelled all-or-nothing profile fallback if the read fails. These actions
+read afresh even when another drink is selected in HA; they never use or consume
+unrelated native control edits. Names/arguments in existing YAML stay the same.
 
-Selected recipes are read using @TM:41,<product>. Brew commands are one-shot
-@TP recipes and never write EEPROM or alter the machine's saved recipe. The
-explicit brew_named/brew_custom API shortcuts above retain profile-default
-semantics for omitted values; use Jura Brew or brew_selected() for the loaded
-native controls. Other products/models still need real screen comparisons.
+brew_selected() / Jura Brew use the currently loaded/edited native controls.
+All paths send one-shot @TP recipes. No EEPROM or saved-recipe write is added.
+The API actions first send @TM:41,<product>, validate its reply, then send the
+full @TP recipe. They do not use model-specific FA button numbers or assume
+an ID-only @TP command means "brew my saved preset".
+
+Jura Command Recipe Source/Status/Raw expose the API request's default source,
+fallback reason and raw response independently of the selected recipe's state.
+An API request is asynchronous; a second request is rejected while pending.
+If readiness is lost or another operation starts during the settings read,
+the request is cancelled. A settings-read timeout can use profile defaults only
+while the machine is still ready. Brew commands are never automatically retried.
 
 Brewing requires allow_brew: true and a fresh positive ready state without
 blocking alerts. Only one control request is pending at a time. Requests made

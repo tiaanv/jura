@@ -1,4 +1,4 @@
-Read-only espresso settings probe — 0.2.0
+Read-only espresso settings probe — 0.3.0
 =========================================
 
 Update the component from the V2 branch, recompile and upload. No additional

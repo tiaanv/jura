@@ -585,6 +585,135 @@ static void test_saved_selected_recipes() {
   assert(old_timeout.dev.texts["recipe_source"] == "Machine");
   assert(old_timeout.dev.selected_values()[WATER] == 80);
 }
+static size_t brew_count(const Machine &m) {
+  size_t n = 0;
+  for (const auto &command : m.commands) n += command.compare(0, 4, "@TP:") == 0;
+  return n;
+}
+static void test_api_saved_defaults() {
+  const std::string actual = "@tm:41,020006090000020000000000DB";
+  Machine named;
+  named.probe_reply = actual;
+  named.begin();
+  named.tick(16000);
+  named.probe_reply = "@tm:41,0200060C0000020000000000D1";  // Saved water changed at screen.
+  assert(named.dev.brew_named("Espresso"));
+  assert(!named.dev.brew_named("Coffee"));
+  named.dev.choose("Coffee");  // UI selection cannot change the reserved API product.
+  named.tick(2500);
+  assert(named.count("@TP:0200060C000002000100000000000000") == 1);
+  assert(named.dev.texts["command_recipe_source"] == "Machine");
+  assert(named.dev.selection()->name == "Coffee");
+
+  Machine custom;
+  custom.probe_reply = actual;
+  custom.begin();
+  custom.tick(16000);
+  custom.dev.set_parameter(WATER, 80);  // API must not take or consume unrelated UI overrides.
+  const auto ui = custom.dev.selected_values();
+  assert(custom.dev.brew_custom("Espresso", "", 60, -1, -1, "default", -1, -1, ""));
+  custom.tick(2500);
+  assert(custom.count("@TP:0200060C000002000100000000000000") == 1);
+  assert(custom.dev.selected_values() == ui && custom.dev.bins["recipe_modified"] == 1);
+
+  Machine coffee;
+  coffee.recipe_replies["@TM:41,03"] = "@tm:41,030006100000020000000000E2";
+  coffee.begin();
+  coffee.tick(16000);
+  assert(coffee.dev.brew_custom("Coffee", "", 95, -1, -1, "", -1, -1, ""));
+  coffee.tick(2500);
+  assert(coffee.count("@TP:03000613000002000100000000000000") == 1);
+  assert(coffee.dev.selection()->name == "Espresso");
+
+  for (const auto &bad : {"@tm:C1", "@tm:41,0200040A0000020001000000000000000000",
+                          "@tm:41,0300040A00000200010000000000000000F3", "@tm:41,020C", ""}) {
+    Machine fallback;
+    fallback.probe_reply = actual;
+    fallback.begin();
+    fallback.tick(16000);
+    fallback.probe_reply = bad;
+    assert(fallback.dev.brew_named("Espresso"));
+    fallback.tick(10000);
+    assert(fallback.count("@TP:02000409000002000100000000000000") == 1);
+    assert(fallback.dev.texts["command_recipe_source"] == "Profile defaults");
+    assert(fallback.dev.texts["command_recipe_status"].find("Profile defaults:") == 0);
+    assert(fallback.dev.texts["recipe_source"] == "Machine");
+    fallback.tick(20000);
+    assert(brew_count(fallback) == 1);
+  }
+  Machine fallback_custom;
+  fallback_custom.begin();
+  fallback_custom.tick(16000);
+  fallback_custom.probe_reply = "@tm:C1";
+  assert(fallback_custom.dev.brew_custom("Espresso", "", 60, -1, -1, "Normal", -1, -1, ""));
+  fallback_custom.tick(2500);
+  assert(fallback_custom.count("@TP:0200040C000001000100000000000000") == 1);
+
+  for (const auto &busy : {"@TB", "@TV:390206060009FFFFFFFF22FFFF1100FF", "@TF:400400000000"}) {
+    Machine interrupted;
+    interrupted.begin();
+    interrupted.tick(16000);
+    interrupted.probe_reply.clear();
+    assert(interrupted.dev.brew_named("Espresso"));
+    interrupted.tick(1200);
+    interrupted.inject(busy);
+    interrupted.inject("@TF:000400000000");
+    interrupted.inject(actual);  // A late valid read must not revive a cancelled brew.
+    interrupted.tick(8000);
+    assert(brew_count(interrupted) == 0);
+    assert(interrupted.dev.texts["command_recipe_status"].find("Cancelled:") == 0);
+  }
+  Machine before_read;
+  before_read.begin();
+  before_read.tick(16000);
+  assert(before_read.dev.brew_named("Espresso"));
+  before_read.inject("@TF:400400000000");
+  before_read.tick(3000);
+  assert(brew_count(before_read) == 0 && before_read.count("@TM:41,02") == 1);
+
+  Machine native_read;
+  native_read.probe_reply = actual;
+  native_read.begin();
+  native_read.tick(16000);
+  native_read.dev.choose("Coffee");  // This native read has no simulated response.
+  native_read.tick(1200);
+  assert(native_read.dev.waiting());
+  assert(native_read.dev.brew_named("Espresso"));
+  native_read.dev.choose("Cappuccino");
+  native_read.tick(10000);
+  assert(native_read.count("@TP:02000609000002000100000000000000") == 1);
+
+  Machine invalid;
+  invalid.begin();
+  invalid.tick(16000);
+  const auto reads = invalid.count("@TM:41,02");
+  assert(!invalid.dev.brew_custom("Espresso", "", 52, -1, -1, "", -1, -1, ""));
+  assert(!invalid.dev.brew_custom("Espresso", "", -2, -1, -1, "", -1, -1, ""));
+  invalid.tick(2000);
+  assert(invalid.count("@TM:41,02") == reads && brew_count(invalid) == 0);
+  Machine disconnected;
+  disconnected.begin();
+  disconnected.tick(16000);
+  disconnected.probe_reply.clear();
+  assert(disconnected.dev.brew_named("Espresso"));
+  disconnected.tick(1200);
+  disconnected.inject("ty:EF536M V02.09", false);
+  disconnected.tick(12000);
+  assert(brew_count(disconnected) == 0);
+  assert(disconnected.dev.texts["command_recipe_status"].find("Cancelled:") == 0);
+  Machine stray_ack;
+  stray_ack.begin();
+  stray_ack.tick(16000);
+  stray_ack.probe_reply.clear();
+  assert(stray_ack.dev.brew_named("Espresso"));
+  stray_ack.tick(1200);
+  stray_ack.inject("@tp:00");
+  stray_ack.inject("@tp");
+  assert(stray_ack.dev.texts["command_result"] == "Reading saved settings before brew");
+  stray_ack.inject(actual);
+  stray_ack.tick(2500);
+  assert(stray_ack.count("@TP:02000609000002000100000000000000") == 1);
+}
 int main() {
   test_profiles();
   test_cipher();
@@ -595,6 +724,7 @@ int main() {
   test_at_only_identification();
   test_espresso_probe();
   test_saved_selected_recipes();
+  test_api_saved_defaults();
   std::cout << "PASS: all 75 profiles, cipher, statistics, native recipe semantics, brewing lifecycle, busy "
                "rejection, TV liveness, retry/rejection and rollover\n";
 }
