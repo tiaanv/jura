@@ -270,6 +270,16 @@ static void test_brew() {
   assert(!m.dev.brew_custom("Espresso", "6", 52, -1, -1, "High", -1, -1, ""));
   assert(!m.dev.brew_custom("Espresso", "6", 50, 20, -1, "High", -1, -1, ""));
 }
+static void test_ef1092_handshake() {
+  Machine m;
+  m.model = "EF1092M V01.07";
+  m.challenge = "01C041B628";
+  m.begin();
+  m.tick(16000);
+  assert(m.dev.discovery_ready() && m.dev.ready());
+  assert(m.dev.texts["profile"] == "EF1092" && m.dev.texts["challenge"] == "01C041B628");
+  assert(m.count("@t2:8120000000") == 1);
+}
 static void test_failure_and_rejection() {
   Machine m;
   m.reject_brew = true;
@@ -819,6 +829,7 @@ int main() {
   test_profiles();
   test_cipher();
   test_startup_and_statistics();
+  test_ef1092_handshake();
   test_brew();
   test_failure_and_rejection();
   test_banks_and_progress();

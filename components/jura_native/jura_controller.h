@@ -748,12 +748,15 @@ class JuraController : public TransportSink {
       text("challenge", challenge);
       if (active_ == Kind::H1 && transport_.waiting()) transport_.complete(true, now_);
       std::string response = response_override_;
-      // Both responses are captured dongle exchanges. Unknown challenges require an override.
+      // Captured dongle exchanges, plus the EF1092 reply verified on hardware. Unknown challenges
+      // require an override.
       if (response.empty()) {
         if (Profiles::lower(challenge) == "010001b228")
           response = "8120000000";
         else if (Profiles::lower(challenge) == "01c000")
           response = "818000";
+        else if (Profiles::lower(challenge) == "01c041b628")  // E8 EF1092M V01.07
+          response = "8120000000";
       }
       if (!hex_(challenge) || challenge.size() % 2 || !hex_(response) ||
           response.size() != challenge.size()) {
