@@ -280,6 +280,41 @@ static void test_ef1092_handshake() {
   assert(m.dev.texts["profile"] == "EF1092" && m.dev.texts["challenge"] == "01C041B628");
   assert(m.count("@t2:8120000000") == 1);
 }
+static void test_length_based_handshake() {
+  for (const auto &challenge : {"01C000", "01FFFF", "aBcDeF", "010001B228", "01C041B628", "aBcDeF1234"}) {
+    Machine m;
+    m.challenge = challenge;
+    m.begin();
+    m.tick(16000);
+    assert(m.dev.ready());
+    const std::string response = m.challenge.size() == 6 ? "818000" : "8120000000";
+    assert(m.count("@t2:" + response) == 1);
+  }
+  for (const auto &challenge : {"", "01", "0102", "01020304", "010203040506", "01FFF", "01GG00",
+                               "010001B22G"}) {
+    Machine m;
+    m.challenge = challenge;
+    m.begin();
+    m.tick(8000);
+    assert(m.dev.backoff());
+    for (const auto &command : m.commands) assert(command.compare(0, 4, "@t2:") != 0);
+  }
+  for (const auto &challenge : {"01C000", "01C041B628", "01020304"}) {
+    Machine m;
+    m.challenge = challenge;
+    const std::string response = m.challenge.size() == 6 ? "810000" :
+                                 m.challenge.size() == 10 ? "8100000000" : "81000000";
+    m.begin(true, response);
+    m.tick(16000);
+    assert(m.dev.ready() && m.count("@t2:" + response) == 1);
+  }
+  Machine mismatch;
+  mismatch.begin(true, "818000");  // Three-byte override cannot answer a five-byte challenge.
+  mismatch.tick(8000);
+  assert(mismatch.dev.backoff());
+  assert(mismatch.count("@t2:818000") == 0);
+}
+
 static void test_failure_and_rejection() {
   Machine m;
   m.reject_brew = true;
@@ -300,7 +335,7 @@ static void test_failure_and_rejection() {
   lost.tick(70000);
   assert(lost.dev.ready());
   Machine unsupported;
-  unsupported.challenge = "01FFFF";
+  unsupported.challenge = "01FFFFFF";  // Four-byte challenges still require an override.
   unsupported.begin();
   unsupported.tick(8000);
   assert(unsupported.dev.backoff());
@@ -830,6 +865,7 @@ int main() {
   test_cipher();
   test_startup_and_statistics();
   test_ef1092_handshake();
+  test_length_based_handshake();
   test_brew();
   test_failure_and_rejection();
   test_banks_and_progress();
