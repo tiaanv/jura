@@ -1,10 +1,14 @@
-// Jura Native Graphical Card 2.1.4 — native ESPHome entities, no MQTT or external dependencies.
+// Jura Native Graphical Card 2.1.5 — native ESPHome entities, no MQTT or external dependencies.
 (() => {
   const GRAPHIC = /*GRAPHIC*/;
   const STYLES = /*STYLES*/;
   const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const known = value => value !== null && value !== undefined && !['','unknown','unavailable','not available'].includes(String(value).trim().toLowerCase());
   const numeric = value => known(value) && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+  const percentage = value => {
+    if(!['number','string'].includes(typeof value)||String(value).trim()==='')return null;
+    const n=Number(value);return Number.isFinite(n)&&n>=0&&n<=100?n:null;
+  };
   const terminalUncertain = value => /uncertain|unconfirmed|no start confirmation|connection lost/i.test(value || '');
   const pendingCommand = value => /^(queued|reading saved|sent[; ]|awaiting start|accepted[; ]|machine active|started$)/i.test(value || '');
   const pretty = name => String(name || '').replace(/^1\s+/, '').replace(/^Hotwater Portion\(normal\)$/i,'Hot water').replace(/^Milk Portion$/i,'Milk').replace(/^2 Espressi$/,'Double espresso').replace(/^2 Ristretti$/,'Double ristretto').replace(/^2 Coffee$/,'Double coffee');
@@ -131,7 +135,7 @@
       this._recipeRun=null;this._customRecipe=null;this._recipeError='';
       this._config={entity_prefix:'jura_e8',name:'Jura E8',...config};
       const p=this._config.entity_prefix,sensor=suffix=>`sensor.${p}_${suffix}`,binary=suffix=>`binary_sensor.${p}_${suffix}`;
-      const textKeys=['status','status_detail','active_alerts','current_product','progress_state','stage_unit','command_result','requested_product','recipe_source','recipe_status','saved_recipe_raw','command_recipe_source','command_recipe_status','command_recipe_raw','session','profile','tf_raw','tv_raw','progress','stage_current','stage_target','product_code','stage_code','total_products','uart_timeouts','uart_framing_errors'];
+      const textKeys=['status','status_detail','active_alerts','current_product','progress_state','stage_unit','command_result','requested_product','recipe_source','recipe_status','saved_recipe_raw','command_recipe_source','command_recipe_status','command_recipe_raw','session','profile','tf_raw','tv_raw','progress','stage_progress','stage_current','stage_target','product_code','stage_code','total_products','uart_timeouts','uart_framing_errors'];
       this._entities=Object.fromEntries(textKeys.map(k=>[k,sensor(`jura_${k}`)]));
       for(const k of ['connected','brew_active','alerts_stale','recipe_loading','recipe_modified'])this._entities[k]=binary(`jura_${k}`);
       for(const k of ['tray_status','water_tank_status','grounds_level','changed_counters'])this._entities[k]=sensor(k);
@@ -171,7 +175,7 @@
        <section class="drink-section" aria-label="Drink selection"><div class="section-label">CHOOSE A DRINK<span>${this._config.hold_to_brew?'Tap or hold to brew':'Select, then brew'}</span></div><div id="drink-tiles" class="drink-tiles"></div><details id="more-drinks"><summary>More drinks<span id="more-count"></span></summary><div id="extra-tiles" class="drink-tiles"></div></details></section>
        <section id="recipe" class="recipe" aria-label="Selected drink recipe"><div class="recipe-heading"><strong id="selected-name">Select a drink</strong><span id="recipe-source" class="source-chip"></span></div><div id="recipe-summary"></div><div id="recipe-message" class="recipe-message"></div><details id="adjust"><summary>Adjust this drink<span id="modified"></span></summary><div class="recipe-controls">${choiceControls.map(([key,,,label])=>`<label data-control="${key}" hidden>${label}<select data-input="${key}" aria-label="${label}"></select></label>`).join('')}${numberControls.map(([key,,,label,unit])=>`<label data-control="${key}" hidden>${label} <span class="unit">${unit}</span><input type="number" data-input="${key}" aria-label="${label}" inputmode="numeric"><span class="bounds" data-bounds="${key}"></span></label>`).join('')}</div><button id="reset" class="text-button" type="button">Reset to saved recipe</button></details><button id="brew" class="brew-button" type="button" disabled><ha-icon icon="mdi:coffee-maker"></ha-icon><span>Brew</span></button><div id="brew-reason" class="brew-reason"></div><div id="command" class="command" role="status" hidden></div><button id="acknowledge" class="text-button" type="button" hidden>I checked the machine</button><div id="error" class="error" role="alert" hidden></div></section>
        <details id="maintenance"><summary><span><ha-icon icon="mdi:wrench-outline"></ha-icon>Maintenance & totals</span><span id="total"></span></summary><div class="maintenance-meters">${maintenance.slice(0,3).map(([key,label])=>`<button class="maintenance-meter" data-info="${key}_maintenance"><span>${label}</span><strong data-number="${key}_maintenance" data-unit="%">—</strong><div class="meter-track"><div data-meter="${key}_maintenance"></div></div></button>`).join('')}</div><div class="detail-rows">${maintenance.map(([key,label])=>`<button data-info="${key}_count" class="detail-row"><span>${label} count</span><strong data-number="${key}_count">—</strong></button>`).join('')}</div><div id="all-counters" class="detail-rows"></div><button id="refresh" class="text-button">Refresh readings</button></details>
-       <details id="diagnostics"><summary><span><ha-icon icon="mdi:pulse"></ha-icon>Diagnostics</span></summary>${['detected_model','profile','session','current_product','progress_state','stage_code','requested_product','command_result','command_recipe_source','command_recipe_status','recipe_status','saved_recipe_raw','command_recipe_raw','tf_raw','tv_raw','uart_timeouts','uart_framing_errors','grounds_level','changed_counters'].map(key=>`<button class="diagnostic-row" data-info="${key}"><span>${key.replaceAll('_',' ')}</span><code data-diagnostic="${key}">—</code></button>`).join('')}<div class="diagnostic-note">Legacy grounds and raw counters are unverified. They are not used for drink totals or readiness.</div></details>
+       <details id="diagnostics"><summary><span><ha-icon icon="mdi:pulse"></ha-icon>Diagnostics</span></summary>${['detected_model','profile','session','current_product','progress_state','stage_code','stage_progress','requested_product','command_result','command_recipe_source','command_recipe_status','recipe_status','saved_recipe_raw','command_recipe_raw','tf_raw','tv_raw','uart_timeouts','uart_framing_errors','grounds_level','changed_counters'].map(key=>`<button class="diagnostic-row" data-info="${key}"><span>${key.replaceAll('_',' ')}</span><code data-diagnostic="${key}">—</code></button>`).join('')}<div class="diagnostic-note">Legacy grounds and raw counters are unverified. They are not used for drink totals or readiness.</div></details>
       </ha-card>`;
       this._root=this.shadowRoot;this._card=this._root.querySelector('ha-card');
       this._root.addEventListener('click',event=>{const node=event.target.closest('[data-info]');if(node)this._info(node.dataset.info);});
@@ -376,9 +380,14 @@
       const freshReady=connected&&!stale&&status==='ready';
       const operation=connected&&!shuttingDown&&!freshReady&&(active||finished||/progress timeout/i.test(phase));$('#operation').hidden=!operation;
       set('#actual-product',pretty(this._text('current_product','Machine operation')));set('#phase',displayPhase||'Waiting for progress');
-      const overall=numeric(this._state('progress'));const percent=overall!==null&&overall<=100?overall:null;
-      $('#overall').hidden=percent===null;set('#overall',percent===null?'':`${this._format(percent)}%`);
-      $('#progress-track').hidden=percent===null;$('#progress-track').setAttribute('aria-valuenow',percent===null?'0':String(percent));$('#progress-fill').style.width=`${percent||0}%`;
+      const overall=connected?percentage(this._state('progress')):null;
+      const stageProgress=active&&!/progress timeout|^idle$|^finished$/i.test(phase)?percentage(this._state('stage_progress')):null;
+      const useStage=overall===null&&stageProgress!==null,percent=overall??stageProgress;
+      const percentText=percent===null?'':useStage?`${displayPhase||'Current stage'} — ${this._format(percent)}%`:`${this._format(percent)}%`;
+      $('#overall').hidden=percent===null;set('#overall',percentText);
+      $('#progress-track').hidden=percent===null;$('#progress-track').setAttribute('aria-valuenow',percent===null?'0':String(percent));
+      $('#progress-track').setAttribute('aria-label',useStage?`${displayPhase||'Current stage'} stage progress`:'Overall drink progress');
+      $('#progress-track').setAttribute('aria-valuetext',percentText);$('#progress-fill').style.width=`${percent??0}%`;
       const current=numeric(this._state('stage_current')),target=numeric(this._state('stage_target')),unit=this._text('stage_unit','');
       set('#stage',(current!==null||target!==null)&&['ml','s','level'].includes(unit)?`${this._format(current)} / ${this._format(target)} ${unit}`:'');
       const screen=shuttingDown?'Switching Off':connected?(active?(/grind/i.test(phase)?'Grinding':/brewing/i.test(displayPhase)?'Brewing':phase==='Dispensing milk foam'?'Adding Foam':phase==='Dispensing milk'?'Adding Milk':/heating/i.test(phase)?'Heating':phase==='Milk pause'?'Settling Milk':phase==='Dispensing water'?'Hot Water':/rinsing the milk/i.test(displayPhase)?'Milk Rinse':/rinsing the coffee/i.test(displayPhase)?'Coffee Rinse':displayPhase.slice(0,16)):statusNames[status]||'Unknown'):'Offline';
