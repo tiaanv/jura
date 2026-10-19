@@ -78,13 +78,14 @@ of its contents (hex is validated first before any reply is sent):
 
 | Challenge length | Automatic response |
 | --- | --- |
+| 1 byte / 2 hex characters | `81` |
 | 3 bytes / 6 hex characters | `818000` |
 | 5 bytes / 10 hex characters | `8120000000` |
 | Other lengths | No automatic response; configure a manual override |
 
-This retains the observed EF533 (`010001B228`), EF1092M V01.07 (`01C041B628`)
-and EF536 (`01C000`) combinations while allowing unfamiliar challenges of the
-same lengths. It is a length-based compatibility policy, not a discovered
+This retains the observed EF533 (`010001B228`), EF1092M V01.07 (`01C041B628`),
+EF536 (`01C000`) and EF533M V01.18 (`01`) combinations while allowing unfamiliar
+challenges of the same lengths. It is a length-based compatibility policy, not a discovered
 cryptographic calculation or proof of support for every model.
 
 An explicit hex `handshake_response`, such as `"8120000000"`, takes precedence
