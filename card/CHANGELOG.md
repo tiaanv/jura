@@ -1,5 +1,13 @@
 # Card changelog
 
+## 2.1.4
+
+- Hide the percentage and progress bar when no native progress is supplied;
+  heating and rinse stages no longer show an error-like unavailable message.
+- Show known operation context instead of unmapped hexadecimal TV stage codes.
+  Raw stage text/code remains in Diagnostics; no unverified substage is inferred.
+
+
 ## 2.1.3
 
 - Recognise plain and alternate stale-alert labels during brewing.

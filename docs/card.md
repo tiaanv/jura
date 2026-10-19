@@ -71,7 +71,7 @@ external-component configuration and UART setup are unaffected.
 3. Add a dashboard resource of type **JavaScript module**:
 
    ```text
-   /local/jura-native-card.js?v=2.1.3
+   /local/jura-native-card.js?v=2.1.4
    ```
 
 4. Refresh the browser and add the card YAML.
@@ -191,8 +191,9 @@ same observed operation's preceding coffee stage establishes its purpose.
 
 Stage quantity and overall progress are separate: `60 / 80 ml` is one stage,
 while `40%` is the native overall percentage. Milk/foam quantities are seconds,
-not millilitres. Unknown progress is shown as unavailable, never estimated from
-elapsed time. Some machines do not report a terminal frame for every rinse;
+not millilitres. When no percentage is supplied (normal during heating or rinsing), the
+percentage and progress bar are hidden; the operation message remains visible.
+Progress is never estimated from elapsed time. Some machines do not report a terminal frame for every rinse;
 fresh Ready status hides retained operation panels. Fresh shutdown status clears
 retained coffee-rinse visuals once the explicit rinse flag clears.
 
@@ -210,6 +211,11 @@ The tray reading shows **Full** with an amber icon when emptying is requested,
 **Missing** when removed, and **Present** otherwise. Missing takes priority;
 stale or unavailable tray readings show a dash.
 
+Unknown stage codes such as `State 0x9A` are retained in Diagnostics. The main
+card uses the known operation context, such as **Rinsing the Milk System**,
+without assigning an unverified meaning to the substage. With no known specific
+operation, it shows **Machine Operation in Progress**.
+
 ## Troubleshooting
 
 | Symptom | Check |
@@ -218,7 +224,7 @@ stale or unavailable tray readings show a dash.
 | Card says Offline while device is online | Actual `connected` entity ID and configured prefix; inspect raw States first. |
 | Brew disabled | Machine readiness, fresh alerts, `allow_brew`, selected-recipe loading, pending edits or uncertain command. |
 | Setting missing | Selected drink's supported bounds/options and entity availability; different profiles differ. |
-| Progress unavailable | The machine did not supply a usable native percentage; check Diagnostics rather than assuming a fault. |
+| No percentage during a stage | Normal when the machine supplies none, such as heating or rinsing. The percentage area is hidden; native data remains in Diagnostics. |
 | Duplicate/old visuals after upgrade | Remove old manual resource if using HACS; refresh every open browser/device. |
 | Cooler appears without a cooler | Set `coolcontrol: false`. |
 | Unknown alert or stage | Unrecognised text is retained; check the machine display and report profile plus raw state, without credentials. |

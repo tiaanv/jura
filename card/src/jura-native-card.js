@@ -1,4 +1,4 @@
-// Jura Native Graphical Card 2.1.3 — native ESPHome entities, no MQTT or external dependencies.
+// Jura Native Graphical Card 2.1.4 — native ESPHome entities, no MQTT or external dependencies.
 (() => {
   const GRAPHIC = /*GRAPHIC*/;
   const STYLES = /*STYLES*/;
@@ -68,6 +68,17 @@
   const friendlyAlert = value => String(value || '').split(/([,;]\s*)/).map(part => ALERT_MESSAGES[part.trim().toLowerCase().replace(/_/g,' ')] || part).join('');
   function friendlyStage(phase, product, heatingForMilk=false) {
     const name=known(product)?pretty(product):'', milkDrink=/flat white|cappuccino|latte|milk portion/i.test(product || '');
+    // Unknown TV stage codes describe no verified substage. Use the known
+    // operation context for presentation; retain the original in Diagnostics.
+    if(/^(?:state\s+)?0x[0-9a-f]+$/i.test(String(phase || '').trim())) {
+      if(/milk.*rins/i.test(product || ''))return 'Rinsing the Milk System';
+      if(/coffee.*rins/i.test(product || ''))return 'Rinsing the Coffee System';
+      if(/milk.*clean/i.test(product || ''))return 'Cleaning the Milk System';
+      if(/descal/i.test(product || ''))return 'Descaling the Machine';
+      if(/clean/i.test(product || ''))return 'Cleaning the Machine';
+      if(/filter change/i.test(product || ''))return 'Changing the Water Filter';
+      return 'Machine Operation in Progress';
+    }
     switch(String(phase || '').toLowerCase()) {
       case 'grinding': case 'grinding (milk drink)': return 'Grinding the Coffee';
       case 'dispensing water (milk drink)': return 'Brewing the Coffee';
@@ -353,7 +364,7 @@
       this._phaseProduct=observedProduct;
       const displayPhase=friendlyStage(phase,observedProduct,this._coffeeBeforeMilk);
       const mode=!connected?(status==='connecting'?'connecting':'offline'):shuttingDown?'switching_off':status==='blocked'?'blocked':status==='heating'?'heating':active?'busy':status;
-      this._card.dataset.mode=mode;this._card.dataset.phase=active?(code===33?'heating':code===49||code===57?'grinding':code===50?'milk':code===52?'foam':code===51?'pause':code===55||code===60?'coffee':code===65?'water':/rins|clean|descal/i.test(phase)?'rinse':'working'):mode==='heating'?'heating':finished?'finished':'idle';
+      this._card.dataset.mode=mode;this._card.dataset.phase=active?(code===33?'heating':code===49||code===57?'grinding':code===50?'milk':code===52?'foam':code===51?'pause':code===55||code===60?'coffee':code===65?'water':/rins|clean|descal/i.test(displayPhase)?'rinse':'working'):mode==='heating'?'heating':finished?'finished':'idle';
       const statusNames={switching_off:'Switching off',ready:'Ready',busy:'Making a drink',blocked:'Needs attention',heating:'Heating',finishing:'Finishing',not_ready:'Not ready',connecting:'Connecting',offline:'Offline',unknown:'Unknown'};
       set('#status',statusNames[mode]||'Unknown');set('#detail',shuttingDown?'Preparing to Switch Off':!connected&&status!=='connecting'?'Machine disconnected':active?displayPhase||'Machine operation in progress':friendlyAlert(this._text('status_detail','Waiting for machine status')));
       // Active operations report TV progress instead of TF. Suppress only the
@@ -366,11 +377,11 @@
       const operation=connected&&!shuttingDown&&!freshReady&&(active||finished||/progress timeout/i.test(phase));$('#operation').hidden=!operation;
       set('#actual-product',pretty(this._text('current_product','Machine operation')));set('#phase',displayPhase||'Waiting for progress');
       const overall=numeric(this._state('progress'));const percent=overall!==null&&overall<=100?overall:null;
-      set('#overall',percent===null?'Progress unavailable':`${this._format(percent)}%`);
+      $('#overall').hidden=percent===null;set('#overall',percent===null?'':`${this._format(percent)}%`);
       $('#progress-track').hidden=percent===null;$('#progress-track').setAttribute('aria-valuenow',percent===null?'0':String(percent));$('#progress-fill').style.width=`${percent||0}%`;
       const current=numeric(this._state('stage_current')),target=numeric(this._state('stage_target')),unit=this._text('stage_unit','');
       set('#stage',(current!==null||target!==null)&&['ml','s','level'].includes(unit)?`${this._format(current)} / ${this._format(target)} ${unit}`:'');
-      const screen=shuttingDown?'Switching Off':connected?(active?(/grind/i.test(phase)?'Grinding':/brewing/i.test(displayPhase)?'Brewing':phase==='Dispensing milk foam'?'Adding Foam':phase==='Dispensing milk'?'Adding Milk':/heating/i.test(phase)?'Heating':phase==='Milk pause'?'Settling Milk':phase==='Dispensing water'?'Hot Water':displayPhase.slice(0,16)):statusNames[status]||'Unknown'):'Offline';
+      const screen=shuttingDown?'Switching Off':connected?(active?(/grind/i.test(phase)?'Grinding':/brewing/i.test(displayPhase)?'Brewing':phase==='Dispensing milk foam'?'Adding Foam':phase==='Dispensing milk'?'Adding Milk':/heating/i.test(phase)?'Heating':phase==='Milk pause'?'Settling Milk':phase==='Dispensing water'?'Hot Water':/rinsing the milk/i.test(displayPhase)?'Milk Rinse':/rinsing the coffee/i.test(displayPhase)?'Coffee Rinse':displayPhase.slice(0,16)):statusNames[status]||'Unknown'):'Offline';
       set('#jura-screen-status',screen);
       const reading=(key,value,alert=false)=>{const el=$(`[data-reading="${key}"]`);if(el){el.textContent=value;el.closest('button').classList.toggle('alert',alert);}};
       reading('water_tank_status',connected&&!stale?this._text('water_tank_status'):'—',this._state('fill_water')==='on');
