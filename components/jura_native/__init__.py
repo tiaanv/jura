@@ -36,7 +36,7 @@ TEXT = {
     "command_recipe_raw": "Jura Command Recipe Raw",
 }
 NUMERIC = {
-    "progress": ("Jura Progress", "%"), "stage_current": ("Jura Stage Current", ""),
+    "progress": ("Jura Progress", "%"), "stage_progress": ("Jura Stage Progress", "%"), "stage_current": ("Jura Stage Current", ""),
     "stage_target": ("Jura Stage Target", ""), "product_code": ("Jura Product Code", ""),
     "stage_code": ("Jura Stage Code", ""), "total_products": ("Jura Total Products", "products"),
     "timeouts": ("Jura UART Timeouts", ""), "framing_errors": ("Jura UART Framing Errors", ""),
@@ -47,7 +47,7 @@ for parameter, label, unit in [("water", "Water", "ml"), ("milk", "Milk", "s"), 
         NUMERIC[f"{parameter}_{limit}"] = (f"Jura {label} {limit.title()}", unit)
 EXTRAS = {
     "single_espresso_made": ("Single Espresso Made", "cups"), "double_espresso_made": ("Double Espresso Made", "cups"),
-    "grounds_level": ("Grounds Level", "pucks"), "brew_movements": ("Brew Movements Performed", "times"),
+    "grounds_level": ("Grounds Level", "pucks"), "brew_movements": ("Legacy Coffee Rinse Count (unverified)", "times"),
     "brews_since_cleaning": ("Brews Performed Since Cleaning", "times"),
     "brews_since_descaling": ("Brews Performed Since Descaling", "times"),
 }
@@ -82,6 +82,7 @@ schema = {
     cv.Optional("allow_brew", default=False): cv.boolean,
     cv.Optional("allow_power_off", default=False): cv.boolean,
     cv.Optional("raw_extras", default=True): cv.boolean,
+    cv.Optional("read_saved_recipes", default=True): cv.boolean,
     cv.Optional("startup_delay", default="8s"): cv.positive_time_period_milliseconds,
     cv.Optional("handshake_response", default="auto"): response,
     cv.Optional("profile_hint", default="auto"): profile_hint,
@@ -120,6 +121,7 @@ async def to_code(config):
     cg.add(var.set_startup_delay(config["startup_delay"].total_milliseconds))
     cg.add(var.set_handshake_response("" if config["handshake_response"] == "AUTO" else config["handshake_response"]))
     cg.add(var.set_profile_hint("" if config["profile_hint"] == "AUTO" else config["profile_hint"]))
+    cg.add(var.set_read_saved_recipes(config["read_saved_recipes"]))
     cg.add(var.set_accept_short_status(config["accept_short_status"]))
     for key in TEXT:
         entity = await text_sensor.new_text_sensor(config[key])

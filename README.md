@@ -172,3 +172,12 @@ The historical component credits are preserved in the legacy archive.
 
 MIT licensed; see [LICENSE](LICENSE) and the retained
 [harryzz notice](components/jura_native/LICENSE.harryzz).
+
+### Older firmware recipe reads and stage progress
+
+Set `read_saved_recipes: false` under `jura_native` when firmware does not answer
+saved-settings requests. Native/API recipes then start from profile defaults,
+with one-shot overrides still supported. See [saved recipes](docs/saved-recipes.md).
+`Jura Stage Progress` supplies dispensing-stage percentage separately from overall
+progress; see [HA entity semantics](docs/home-assistant.md#dispensing-stage-progress).
+The EF533 raw Brew Movements label is now Legacy Coffee Rinse Count (unverified).

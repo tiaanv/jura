@@ -11,6 +11,14 @@
 
 ## Unreleased
 
+- Add `read_saved_recipes` (default true). Disabling automatic recipe reads uses
+  profile defaults plus one-shot overrides for native/API brewing, with explicit
+  source/status reporting. The manual diagnostic probe remains available.
+- Relabel the EF533 native raw extra as Legacy Coffee Rinse Count (unverified),
+  retaining its `brew_movements` registration key and raw value.
+- Add `Jura Stage Progress` for dispensing current/target quantities without
+  changing overall `Jura Progress`. Card fallback requires a separate update.
+
 - `handshake_response: auto` now answers a 1-byte challenge with `81`
   (byte 0 = challenge[0] | 0x80, same length), as sent by the E8 EF533M V01.18
   (`@T2:01` → `@t2:81` → `@T3:…EF533M V01.18`), verified on hardware.

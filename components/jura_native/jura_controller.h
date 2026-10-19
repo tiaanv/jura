@@ -29,6 +29,7 @@ class JuraController : public TransportSink {
     response_override_ = response;
     profile_hint_ = hint;
   }
+  void set_read_saved_recipes(bool v) { read_saved_recipes_ = v; }
   void set_accept_short_status(bool v) { accept_short_status_ = v; }
   void begin(uint32_t now) {
     now_ = boot_ = now;
@@ -226,8 +227,9 @@ class JuraController : public TransportSink {
     selected_ = baseline_;
     edited_mask_ = 0;
     recipe_source_ = "Profile defaults";
-    recipe_read_status_ = "Waiting to read saved recipe";
-    recipe_read_requested_ = recipe_loading_ = selection() != nullptr;
+    recipe_read_status_ = read_saved_recipes_ ? "Waiting to read saved recipe"
+                                             : "Profile defaults: saved recipe reads disabled";
+    recipe_read_requested_ = recipe_loading_ = read_saved_recipes_ && selection() != nullptr;
     text("saved_recipe_raw", "");
     publish_recipe_state_();
     recipe_changed();
@@ -274,6 +276,13 @@ class JuraController : public TransportSink {
       const auto opt = profiles_.option_for(*p, attr);
       if (values[attr] < -1 || !opt.valid() || !opt.accepts(values[attr]))
         return reject_("Unsupported override for requested drink");
+    }
+    if (!read_saved_recipes_) {
+      if (!submit_(*p, values.data())) return false;
+      text("command_recipe_source", "Profile defaults");
+      text("command_recipe_status", "Profile defaults: saved recipe reads disabled");
+      text("command_recipe_raw", "");
+      return true;
     }
     api_recipe_code_ = p->code;
     api_overrides_ = values;
@@ -932,6 +941,7 @@ class JuraController : public TransportSink {
     clear_stage_();
   }
   void clear_stage_() {
+    number("stage_progress", NAN);
     number("stage_current", NAN);
     number("stage_target", NAN);
     text("stage_unit", "");
@@ -990,6 +1000,11 @@ class JuraController : public TransportSink {
       number("stage_current", v[window + pair] == 0xFF ? NAN : v[window + pair] * factor);
       number("stage_target", v[window + pair + 1] == 0xFF ? NAN : v[window + pair + 1] * factor);
       text("stage_unit", unit);
+      // Quantities describe this dispensing stage, not the whole drink.
+      const unsigned current = v[window + pair], target = v[window + pair + 1];
+      if ((state == 0x3C || state == 0x37 || state == 0x32 || state == 0x34 || state == 0x41) &&
+          current != 0xFF && target != 0xFF && target > 0 && current <= target)
+        number("stage_progress", 100.0f * current / target);
     }
     if (brew_pending_ && !brew_started_) {
       if (code == requested_code_) {
@@ -1173,6 +1188,7 @@ class JuraController : public TransportSink {
       operation_finished_{false};
   bool alerts_invalidated_{false}, model_mismatch_{false};
   bool accept_short_status_{false};
+  bool read_saved_recipes_{true};
   bool probe_pending_{false};
   bool brew_pending_{false}, brew_sent_{false}, brew_started_{false}, refresh_after_finish_{false};
   uint32_t now_{0}, boot_{0}, startup_delay_{8000}, session_started_{0}, session_failed_at_{0};

@@ -67,6 +67,7 @@ above disables those legacy interpretations by preference; this is optional.
 | `uart_id` | ESPHome UART selection | Set explicitly when more than one bus exists |
 | `allow_brew` | `false` | Exposes native recipe controls/Brew and allows API brewing |
 | `allow_power_off` | `false` | Exposes Turn Off (`AN:02`) |
+| `read_saved_recipes` | `true` | Read machine recipes for native controls and API brews. Set `false` to use profile defaults plus explicit overrides without automatic `@TM:41` reads; the manual espresso probe remains available. |
 | `raw_extras` | `true` | EF533 raw diagnostics and inherited, unverified raw labels |
 | `startup_delay` | `8s` | Delay before starting the AT handshake |
 | `handshake_response` | `auto` | Response selected by challenge byte length, or an explicit hex override |

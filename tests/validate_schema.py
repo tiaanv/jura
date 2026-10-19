@@ -11,6 +11,9 @@ import yaml
 base = yaml.safe_load((root / "examples/e8-local.yaml").read_text())
 base["external_components"][0]["source"]["path"] = str(root / "components")
 variants = [("esp32-c3-idf", base, True)]
+no_reads = copy.deepcopy(base)
+no_reads["jura_native"]["read_saved_recipes"] = False
+variants.append(("native-saved-reads-disabled", no_reads, True))
 short_status = copy.deepcopy(base)
 short_status["jura_native"]["accept_short_status"] = True
 variants.append(("native-five-byte-ef533-status", short_status, True))
@@ -63,6 +66,7 @@ cool["uart"] = [cool["uart"], {"id": "cool_uart", "rx_pin": "GPIO5", "baud_rate"
 cool["jura_coolcontrol"] = {"uart_id": "cool_uart"}
 variants.append(("separate-cool-control", cool, True))
 for name, section, key, value in [
+    ("bad-saved-reads", "jura_native", "read_saved_recipes", "disabled"),
     ("bad-baud", "uart", "baud_rate", 19200),
     ("bad-response", "jura_native", "handshake_response", "81G"),
     ("bad-profile", "jura_native", "profile_hint", "EF999999"),

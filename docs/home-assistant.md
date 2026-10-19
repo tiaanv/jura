@@ -186,3 +186,36 @@ counters or add them to overlapping AT counts. See [diagnostics](diagnostics.md#
 [examples/ha-actions.yaml](../examples/ha-actions.yaml) contains the three action
 payloads above. Run only one document/action at a time and wait for the machine
 to finish and become ready before the next brew.
+
+## Dispensing-stage progress
+
+`Jura Stage Progress` (`stage_progress`) is a separate 0–100% sensor derived
+from the current and target quantities of the active dispensing stage. It covers
+coffee/water, bypass, milk and foam dispensing states; it is not whole-drink
+progress and may restart for another stage. The existing `Jura Progress`
+(`progress`) retains its machine-reported overall percentage and finish signal.
+
+A card should prefer a valid overall percentage; when it is unavailable, it may
+use Stage Progress labelled with the current stage, e.g. **Dispensing coffee ·
+50%**. Stage Current, Stage Target and Stage Unit still describe the quantities.
+A stage reaching 100% does not imply the drink has finished.
+
+Missing/sentinel quantities, zero targets and current quantities above target
+publish an unknown stage percentage. Non-dispensing stages, completion, idle,
+progress timeout and disconnection clear it. Native sensors appear after a
+firmware update; no new API action or parameter is required. The card must be
+updated separately to display this fallback.
+
+## Legacy raw coffee-rinse counter
+
+The EF533 raw extra formerly called **Brew Movements Performed** is now
+**Legacy Coffee Rinse Count (unverified)**. Its registration/configuration key
+`brew_movements` and raw word 11 are retained for compatibility. The internal registration key remains stable, but HA entity naming/registry
+behaviour can vary after a display-name change. Check existing history and
+automations after upgrading; a customised HA name may need a manual rename.
+
+EF533M V01.18 observations in [issue #31](https://github.com/tiaanv/jura/issues/31)
+show that this value matches the profile-backed coffee-rinse count and changes
+with rinses rather than brewing. This is evidence for that firmware, not a
+verified interpretation across every EF533 variant. Prefer the profile-backed
+maintenance counter when available. The legacy `jura` component is unchanged.

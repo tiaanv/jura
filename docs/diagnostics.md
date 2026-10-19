@@ -100,7 +100,9 @@ counter while falling back to profile defaults; inspect the accompanying status.
 `raw_extras: true` retains EF533 `RT:0000` raw values, Raw Counter 1–16 and Changed
 Counters. Raw counter entities are disabled by default in HA. It also retains
 older semantic entity names for compatibility, including Single/Double Espresso
-Made, Grounds Level, Brew Movements and Brews Since Cleaning/Descaling.
+Made, Grounds Level, Legacy Coffee Rinse Count (unverified), and Brews Since
+Cleaning/Descaling. The coffee-rinse label replaces Brew Movements without
+changing its `brew_movements` key; see [counter evidence](home-assistant.md#legacy-raw-coffee-rinse-counter).
 
 **Every inherited semantic interpretation is suspect.** Observing a value change
 alongside espresso production establishes correlation, not an exact meaning.
