@@ -85,6 +85,8 @@ schema = {
     cv.Optional("startup_delay", default="8s"): cv.positive_time_period_milliseconds,
     cv.Optional("handshake_response", default="auto"): response,
     cv.Optional("profile_hint", default="auto"): profile_hint,
+    # Treat TF alert bits beyond a short (older-firmware) frame as not reported.
+    cv.Optional("accept_short_status", default=False): cv.boolean,
 }
 for key, name in TEXT.items():
     default = {CONF_NAME: name}
@@ -118,6 +120,7 @@ async def to_code(config):
     cg.add(var.set_startup_delay(config["startup_delay"].total_milliseconds))
     cg.add(var.set_handshake_response("" if config["handshake_response"] == "AUTO" else config["handshake_response"]))
     cg.add(var.set_profile_hint("" if config["profile_hint"] == "AUTO" else config["profile_hint"]))
+    cg.add(var.set_accept_short_status(config["accept_short_status"]))
     for key in TEXT:
         entity = await text_sensor.new_text_sensor(config[key])
         cg.add(var.register_text(cg.std_string(key), entity))

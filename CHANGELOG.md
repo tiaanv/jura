@@ -11,6 +11,10 @@
 
 ## Unreleased
 
+- New opt-in `accept_short_status` option for firmware that sends a shorter TF
+  frame than its profile's alert table (E8 EF533M V01.18: 5 bytes vs EF533 bits
+  0–47). Missing bits count as not reported instead of leaving Status `unknown`
+  and rejecting every brew; present blocking alerts still block. Default unchanged.
 - `handshake_response: auto` now answers the E8 EF1092M V01.07 challenge
   `01C041B628` with `8120000000`, verified on hardware; no override needed.
 
