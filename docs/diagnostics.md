@@ -62,7 +62,7 @@ with defaults); a valid profile hint can finalise earlier after eight seconds.
 This waiting is nonblocking and services the watchdog.
 
 Check Detected Jura Model, Jura Profile, Jura Session and Jura Challenge.
-`handshake_response: auto` handles the three known challenges; other challenges
+`handshake_response: auto` handles the four known challenges; other challenges
 need their own correctly sized captured response. If the discovered model no
 longer matches the finalised native metadata, restart after resolving the hint/
 identification issue. Repeated reset is not a substitute for inspecting the cause.

@@ -751,7 +751,9 @@ class JuraController : public TransportSink {
       // Select known accessory reply formats by byte length, not challenge contents.
       // Keep explicit overrides authoritative; unsupported lengths require one.
       if (response.empty()) {
-        if (challenge.size() == 6)
+        if (challenge.size() == 2)
+          response = "81";
+        else if (challenge.size() == 6)
           response = "818000";
         else if (challenge.size() == 10)
           response = "8120000000";
