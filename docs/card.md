@@ -71,7 +71,7 @@ external-component configuration and UART setup are unaffected.
 3. Add a dashboard resource of type **JavaScript module**:
 
    ```text
-   /local/jura-native-card.js?v=2.0.9
+   /local/jura-native-card.js?v=2.1.2
    ```
 
 4. Refresh the browser and add the card YAML.
@@ -114,9 +114,17 @@ or trailing underscore. For example, `sensor.kitchen_jura_jura_status` uses
 | `entity_prefix` | `jura_e8` | Prefix used to construct the machine entity IDs. |
 | `coolcontrol` | Enabled | Set `false` to hide the cooler, hose and milk reading; otherwise configure `level` and `temperature`. |
 | `entities` | Generated mappings | Overrides for individual logical entity keys. |
+| `recipes` | None | Custom recipe tiles; see [custom recipe configuration](card-recipes.md). |
+| `hold_to_brew` | `false` | Enable 1.5-second tile holds to prepare and brew; short taps still select. |
 
 There is currently no graphical configuration editor or automatic device picker.
 Use YAML. Explicit `coolcontrol: false` is recommended if there is no cooler.
+
+### Custom recipes and hold-to-brew
+
+Personal recipes appear above standard drinks and can override only selected
+parameters. Optionally enable a 1.5-second hold to prepare and brew either kind
+of tile. See **[configuration, examples and gesture behaviour](card-recipes.md)**.
 
 ### Renamed entities
 
@@ -161,6 +169,9 @@ map in this release. Arbitrarily renamed counters may show unavailable.
 
 ## Using the card
 
+The steps below describe ordinary taps. With `hold_to_brew: true`, a completed
+1.5-second hold prepares and brews automatically; see [hold-to-brew](card-recipes.md#hold-to-brew).
+
 1. Place a suitable cup and check water, beans and the milk supply where needed.
 2. Select a graphical drink tile or expand **More drinks**. Selection loads that
    drink's machine-saved recipe; selecting a tile never starts brewing.
@@ -193,6 +204,10 @@ alerts, so the expected stale-alert notice is suppressed while other alert
 messages remain visible. Outside an active operation, stale warnings are shown.
 **Offline** means disconnected; it does not prove the machine is in
 standby. Raw product/stage/TF/TV readings remain in **Diagnostics**.
+
+The tray reading shows **Full** with an amber icon when emptying is requested,
+**Missing** when removed, and **Present** otherwise. Missing takes priority;
+stale or unavailable tray readings show a dash.
 
 ## Troubleshooting
 

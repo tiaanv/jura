@@ -14,3 +14,6 @@ and Segoe UI or DejaVu Sans fonts. They do not contain Wi-Fi or API credentials.
 The `card/` directory contains live, owner-authorised E8 dashboard captures.
 Images are cropped to the Jura card only, excluding unrelated dashboard content.
 See [card documentation](../card.md) for capture context.
+
+`card/custom-recipes-hold.jpg` is a live card-only E8 capture from 19 October
+2026 with owner-authorised personal recipe names and the hold gesture enabled.

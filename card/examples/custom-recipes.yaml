@@ -1,0 +1,15 @@
+type: custom:jura-native-card
+name: Jura E8
+entity_prefix: jura_e8
+coolcontrol: false
+hold_to_brew: true
+recipes:
+  - name: Milky White
+    base_drink: "1 Flat White"
+    overrides:
+      milk_seconds: 30
+  - name: Kids White
+    base_drink: "1 Flat White"
+    overrides:
+      water_ml: 60
+      milk_seconds: 22
