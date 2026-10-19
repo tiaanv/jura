@@ -23,9 +23,10 @@ and queue tests without changing either component's firmware.
 | Saved espresso water read | Screen change 45 → 60 → 45 ml followed by valid `@TM:41,02` responses |
 | Physical saved-default API brewing | Still needs acceptance testing after the 0.3 update |
 | Physical E8 EF1092M V01.07 | AT handshake with challenge `01C041B628` → `8120000000`, saved Flat White read, full Flat White brew with TV stages/progress, TF alerts and AT counters (ESP32-C3 / ESP-IDF, 0.3.2) |
+| Physical E8 EF533M V01.18 | AT handshake with 1-byte challenge `01` → `81`, TF alerts, AT product/maintenance counters and TV coffee stages/progress (classic ESP32 / Arduino, ESPHome 2026.9.1, 0.3.3). `@TM:41` saved-recipe reads time out on this firmware |
 | Dev AN:01 diagnostic | Host-tested blocked-TF dispatch, offline/busy/duplicate rejection, replies, cancellation and no retry; generated YAML checked with the C3 IDF compiler; physical effect unverified |
 | Other models/parameters | Not established by their presence in the database |
-| Arduino/ESP8266 firmware and RAM usage | No complete target build/memory measurement established |
+| Arduino/ESP8266 firmware and RAM usage | Classic ESP32 (`esp32dev`) Arduino: complete build, OTA flash and run on the EF533M V01.18 above — RAM 59,776 B (33.1%), flash 1,128,455 B (61.5%) with `raw_extras: true`. ESP8266 and C3 Arduino not established |
 | New Cool Control receiver | Host-tested parsing/stale expiry; no fresh physical validation |
 
 The compiler syntax check is not a complete firmware link or flash test. The

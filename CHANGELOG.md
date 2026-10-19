@@ -11,6 +11,9 @@
 
 ## Unreleased
 
+- `handshake_response: auto` now answers a 1-byte challenge with `81`
+  (byte 0 = challenge[0] | 0x80, same length), as sent by the E8 EF533M V01.18
+  (`@T2:01` → `@t2:81` → `@T3:…EF533M V01.18`), verified on hardware.
 - `handshake_response: auto` now answers the E8 EF1092M V01.07 challenge
   `01C041B628` with `8120000000`, verified on hardware; no override needed.
 

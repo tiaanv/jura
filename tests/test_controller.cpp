@@ -281,16 +281,19 @@ static void test_ef1092_handshake() {
   assert(m.count("@t2:8120000000") == 1);
 }
 static void test_length_based_handshake() {
-  for (const auto &challenge : {"01C000", "01FFFF", "aBcDeF", "010001B228", "01C041B628", "aBcDeF1234"}) {
+  for (const auto &challenge : {"01", "aB", "01C000", "01FFFF", "aBcDeF", "010001B228", "01C041B628",
+                                "aBcDeF1234"}) {
     Machine m;
     m.challenge = challenge;
     m.begin();
     m.tick(16000);
     assert(m.dev.ready());
-    const std::string response = m.challenge.size() == 6 ? "818000" : "8120000000";
+    const std::string response = m.challenge.size() == 2   ? "81"
+                                 : m.challenge.size() == 6 ? "818000"
+                                                           : "8120000000";
     assert(m.count("@t2:" + response) == 1);
   }
-  for (const auto &challenge : {"", "01", "0102", "01020304", "010203040506", "01FFF", "01GG00",
+  for (const auto &challenge : {"", "0", "0G", "0102", "01020304", "010203040506", "01FFF", "01GG00",
                                "010001B22G"}) {
     Machine m;
     m.challenge = challenge;
@@ -308,6 +311,13 @@ static void test_length_based_handshake() {
     m.tick(16000);
     assert(m.dev.ready() && m.count("@t2:" + response) == 1);
   }
+  Machine v0118;  // Captured E8 EF533M V01.18: @T2:01 -> @t2:81 -> @T3:3B35EF533M V01.18.
+  v0118.model = "EF533M V01.18";
+  v0118.challenge = "01";
+  v0118.begin();
+  v0118.tick(16000);
+  assert(v0118.dev.ready() && v0118.dev.texts["profile"] == "EF533");
+  assert(v0118.count("@t2:81") == 1);
   Machine mismatch;
   mismatch.begin(true, "818000");  // Three-byte override cannot answer a five-byte challenge.
   mismatch.tick(8000);
