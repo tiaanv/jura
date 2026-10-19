@@ -1,5 +1,13 @@
 # Card changelog
 
+## 2.1.3
+
+- Recognise plain and alternate stale-alert labels during brewing.
+- Suppress expected stale notices through the finishing handoff while awaiting
+  fresh TF status. Physical alerts remain visible; unresolved stale status
+  outside active/finishing operations still shows its warning.
+
+
 ## 2.1.2
 
 - Optional `hold_to_brew: true`: a 1.5-second hold fills a bar, prepares the

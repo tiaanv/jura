@@ -71,7 +71,7 @@ external-component configuration and UART setup are unaffected.
 3. Add a dashboard resource of type **JavaScript module**:
 
    ```text
-   /local/jura-native-card.js?v=2.1.2
+   /local/jura-native-card.js?v=2.1.3
    ```
 
 4. Refresh the browser and add the card YAML.
@@ -201,7 +201,8 @@ the Milk System**. Ambiguous alerts say **Check the machine display**. Offline
 hides cached alerts and dims the machine while preserving independent cooler
 readings. During active operations the machine sends TV progress instead of TF
 alerts, so the expected stale-alert notice is suppressed while other alert
-messages remain visible. Outside an active operation, stale warnings are shown.
+messages remain visible. During the finishing handoff the stale notice also stays hidden while fresh TF
+status is awaited. Outside active/finishing states, stale warnings are shown.
 **Offline** means disconnected; it does not prove the machine is in
 standby. Raw product/stage/TF/TV readings remain in **Diagnostics**.
 

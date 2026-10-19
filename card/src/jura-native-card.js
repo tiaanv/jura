@@ -1,4 +1,4 @@
-// Jura Native Graphical Card 2.1.2 — native ESPHome entities, no MQTT or external dependencies.
+// Jura Native Graphical Card 2.1.3 — native ESPHome entities, no MQTT or external dependencies.
 (() => {
   const GRAPHIC = /*GRAPHIC*/;
   const STYLES = /*STYLES*/;
@@ -358,8 +358,9 @@
       set('#status',statusNames[mode]||'Unknown');set('#detail',shuttingDown?'Preparing to Switch Off':!connected&&status!=='connecting'?'Machine disconnected':active?displayPhase||'Machine operation in progress':friendlyAlert(this._text('status_detail','Waiting for machine status')));
       // Active operations report TV progress instead of TF. Suppress only the
       // expected stale-status notice, preserving physical machine alert labels.
-      const visibleAlerts=active?activeAlerts.split(/[,;]/).filter(label=>! /^(unknown \(stale alerts\)|alert readings are stale)$/i.test(label.trim())).join(', '):activeAlerts;
-      const alerts=[];if(visibleAlerts&&visibleAlerts.toLowerCase()!=='none')alerts.push(friendlyAlert(visibleAlerts));if(stale&&!active&&!/stale/i.test(activeAlerts))alerts.push('Alert readings are stale');
+      const suppressStaleNotice=active||connected&&status==='finishing';
+      const visibleAlerts=suppressStaleNotice?activeAlerts.split(/[,;]/).filter(label=>!/^(?:unknown\s*\(\s*stale alerts\s*\)|alert readings are stale|stale alerts|alerts stale)$/i.test(label.trim().replace(/_/g,' '))).join(', '):activeAlerts;
+      const alerts=[];if(visibleAlerts&&visibleAlerts.toLowerCase()!=='none')alerts.push(friendlyAlert(visibleAlerts));if(stale&&!suppressStaleNotice&&!/stale/i.test(activeAlerts))alerts.push('Alert readings are stale');
       $('#alerts').hidden=!connected||!alerts.length;set('#alerts',connected?alerts.join(' · '):'');
       const freshReady=connected&&!stale&&status==='ready';
       const operation=connected&&!shuttingDown&&!freshReady&&(active||finished||/progress timeout/i.test(phase));$('#operation').hidden=!operation;
