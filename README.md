@@ -64,6 +64,8 @@ depends on the detected profile. See [card integration](docs/home-assistant.md).
 The optional **[Jura Graphical Card](docs/card.md)** adds illustrated drink
 selection, machine-saved recipes, native progress and friendly machine alerts.
 It supports a separate Cool Control and runs entirely in the HA dashboard.
+[Custom recipes and optional hold-to-brew](docs/card-recipes.md) let you prepare
+personal drinks from machine-saved bases.
 
 ![Jura Graphical Card on a live E8](docs/assets/card/ready.jpg)
 

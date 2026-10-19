@@ -11,7 +11,10 @@ python -m http.server 8767 --bind 127.0.0.1
 
 Open `http://127.0.0.1:8767/card/tests/card.html` in a browser. Every check must
 show PASS. Its Home Assistant service calls are stubbed: this page cannot brew
-a real drink. Scenario buttons let you inspect the graphical states. These are
+a real drink. Also run `card/tests/recipes.html` for recipe transactions and
+`card/tests/hold-to-brew.html` for simulated pointer gestures and one-brew checks.
+These use stubbed services too; never simulate a hold on a real HA card unless
+you intend it to brew. Scenario buttons let you inspect the graphical states. These are
 synthetic examples, not live machine screenshots.
 
 Edit `card/src/`, then rebuild and commit `dist/jura-native-card.js`. The build
@@ -29,7 +32,7 @@ header in `card/src/jura-native-card.js` aligned with `card/VERSION`.
 5. Test a clean manual install and a HACS custom-repository install; check that
    only one resource registers `custom:jura-native-card`.
 6. Create a GitHub release on the merged main commit, using a unique version
-   such as `v2.0.8`. Attach `dist/jura-native-card.js` as `jura-native-card.js`.
+   such as `v2.1.2`. Attach `dist/jura-native-card.js` as `jura-native-card.js`.
 7. Describe card and ESPHome changes separately: GitHub releases are shared by
    the repository, while component and card version files are independent.
 

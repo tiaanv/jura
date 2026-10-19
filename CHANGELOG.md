@@ -1,5 +1,14 @@
 # Change log
 
+## 0.3.3 (dev)
+
+- Auto handshake response now uses challenge byte length: 3 bytes → `818000`,
+  5 bytes → `8120000000`, without exact challenge matching.
+- Explicit manual overrides retain priority and must match the challenge length.
+- Malformed hex and unsupported auto lengths are rejected without sending a reply.
+- Added regression coverage for unfamiliar values, mixed-case hex, unsupported
+  lengths, malformed challenges, override precedence and length mismatch.
+
 ## Unreleased
 
 - `handshake_response: auto` now answers the E8 EF1092M V01.07 challenge

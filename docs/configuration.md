@@ -69,16 +69,30 @@ above disables those legacy interpretations by preference; this is optional.
 | `allow_power_off` | `false` | Exposes Turn Off (`AN:02`) |
 | `raw_extras` | `true` | EF533 raw diagnostics and inherited, unverified raw labels |
 | `startup_delay` | `8s` | Delay before starting the AT handshake |
-| `handshake_response` | `auto` | Captured challenge handling, or an explicit hex response |
+| `handshake_response` | `auto` | Response selected by challenge byte length, or an explicit hex override |
 | `profile_hint` | `auto` | Optional EF fallback if boot identification fails |
 | `update_interval` | `60s` | Counter/maintenance refresh requests; not the live progress rate |
 
-`handshake_response: auto` handles captured challenges `010001B228` and `01C000`,
-and the E8 EF1092M V01.07 challenge `01C041B628`.
-The tested EF533 challenge uses `8120000000`; the EF1092 accepts the same reply.
-An unknown challenge is reported
-in Jura Challenge and needs a captured, correctly sized override. Model support
-in the database does not establish handshake support on every firmware.
+`handshake_response: auto` selects by decoded challenge byte length, regardless
+of its contents (hex is validated first before any reply is sent):
+
+| Challenge length | Automatic response |
+| --- | --- |
+| 3 bytes / 6 hex characters | `818000` |
+| 5 bytes / 10 hex characters | `8120000000` |
+| Other lengths | No automatic response; configure a manual override |
+
+This retains the observed EF533 (`010001B228`), EF1092M V01.07 (`01C041B628`)
+and EF536 (`01C000`) combinations while allowing unfamiliar challenges of the
+same lengths. It is a length-based compatibility policy, not a discovered
+cryptographic calculation or proof of support for every model.
+
+An explicit hex `handshake_response`, such as `"8120000000"`, takes precedence
+over auto and may support other challenge lengths. It must contain valid hex
+and have the same byte length as the challenge. Malformed challenges, odd-length
+hex and mismatched responses are rejected. Jura Challenge reports the received
+value. Model support in the database does not establish handshake compatibility
+or full feature support on every firmware.
 
 A hint such as `profile_hint: EF533` can finalise entity discovery if the machine
 cannot identify itself at boot. Use the actual EF code, not simply `E8`.

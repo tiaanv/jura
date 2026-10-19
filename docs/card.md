@@ -71,7 +71,7 @@ external-component configuration and UART setup are unaffected.
 3. Add a dashboard resource of type **JavaScript module**:
 
    ```text
-   /local/jura-native-card.js?v=2.0.9
+   /local/jura-native-card.js?v=2.1.4
    ```
 
 4. Refresh the browser and add the card YAML.
@@ -114,9 +114,17 @@ or trailing underscore. For example, `sensor.kitchen_jura_jura_status` uses
 | `entity_prefix` | `jura_e8` | Prefix used to construct the machine entity IDs. |
 | `coolcontrol` | Enabled | Set `false` to hide the cooler, hose and milk reading; otherwise configure `level` and `temperature`. |
 | `entities` | Generated mappings | Overrides for individual logical entity keys. |
+| `recipes` | None | Custom recipe tiles; see [custom recipe configuration](card-recipes.md). |
+| `hold_to_brew` | `false` | Enable 1.5-second tile holds to prepare and brew; short taps still select. |
 
 There is currently no graphical configuration editor or automatic device picker.
 Use YAML. Explicit `coolcontrol: false` is recommended if there is no cooler.
+
+### Custom recipes and hold-to-brew
+
+Personal recipes appear above standard drinks and can override only selected
+parameters. Optionally enable a 1.5-second hold to prepare and brew either kind
+of tile. See **[configuration, examples and gesture behaviour](card-recipes.md)**.
 
 ### Renamed entities
 
@@ -161,6 +169,9 @@ map in this release. Arbitrarily renamed counters may show unavailable.
 
 ## Using the card
 
+The steps below describe ordinary taps. With `hold_to_brew: true`, a completed
+1.5-second hold prepares and brews automatically; see [hold-to-brew](card-recipes.md#hold-to-brew).
+
 1. Place a suitable cup and check water, beans and the milk supply where needed.
 2. Select a graphical drink tile or expand **More drinks**. Selection loads that
    drink's machine-saved recipe; selecting a tile never starts brewing.
@@ -180,8 +191,9 @@ same observed operation's preceding coffee stage establishes its purpose.
 
 Stage quantity and overall progress are separate: `60 / 80 ml` is one stage,
 while `40%` is the native overall percentage. Milk/foam quantities are seconds,
-not millilitres. Unknown progress is shown as unavailable, never estimated from
-elapsed time. Some machines do not report a terminal frame for every rinse;
+not millilitres. When no percentage is supplied (normal during heating or rinsing), the
+percentage and progress bar are hidden; the operation message remains visible.
+Progress is never estimated from elapsed time. Some machines do not report a terminal frame for every rinse;
 fresh Ready status hides retained operation panels. Fresh shutdown status clears
 retained coffee-rinse visuals once the explicit rinse flag clears.
 
@@ -190,9 +202,19 @@ the Milk System**. Ambiguous alerts say **Check the machine display**. Offline
 hides cached alerts and dims the machine while preserving independent cooler
 readings. During active operations the machine sends TV progress instead of TF
 alerts, so the expected stale-alert notice is suppressed while other alert
-messages remain visible. Outside an active operation, stale warnings are shown.
+messages remain visible. During the finishing handoff the stale notice also stays hidden while fresh TF
+status is awaited. Outside active/finishing states, stale warnings are shown.
 **Offline** means disconnected; it does not prove the machine is in
 standby. Raw product/stage/TF/TV readings remain in **Diagnostics**.
+
+The tray reading shows **Full** with an amber icon when emptying is requested,
+**Missing** when removed, and **Present** otherwise. Missing takes priority;
+stale or unavailable tray readings show a dash.
+
+Unknown stage codes such as `State 0x9A` are retained in Diagnostics. The main
+card uses the known operation context, such as **Rinsing the Milk System**,
+without assigning an unverified meaning to the substage. With no known specific
+operation, it shows **Machine Operation in Progress**.
 
 ## Troubleshooting
 
@@ -202,7 +224,7 @@ standby. Raw product/stage/TF/TV readings remain in **Diagnostics**.
 | Card says Offline while device is online | Actual `connected` entity ID and configured prefix; inspect raw States first. |
 | Brew disabled | Machine readiness, fresh alerts, `allow_brew`, selected-recipe loading, pending edits or uncertain command. |
 | Setting missing | Selected drink's supported bounds/options and entity availability; different profiles differ. |
-| Progress unavailable | The machine did not supply a usable native percentage; check Diagnostics rather than assuming a fault. |
+| No percentage during a stage | Normal when the machine supplies none, such as heating or rinsing. The percentage area is hidden; native data remains in Diagnostics. |
 | Duplicate/old visuals after upgrade | Remove old manual resource if using HACS; refresh every open browser/device. |
 | Cooler appears without a cooler | Set `coolcontrol: false`. |
 | Unknown alert or stage | Unrecognised text is retained; check the machine display and report profile plus raw state, without credentials. |

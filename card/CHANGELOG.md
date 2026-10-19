@@ -1,5 +1,45 @@
 # Card changelog
 
+## 2.1.4
+
+- Hide the percentage and progress bar when no native progress is supplied;
+  heating and rinse stages no longer show an error-like unavailable message.
+- Show known operation context instead of unmapped hexadecimal TV stage codes.
+  Raw stage text/code remains in Diagnostics; no unverified substage is inferred.
+
+
+## 2.1.3
+
+- Recognise plain and alternate stale-alert labels during brewing.
+- Suppress expected stale notices through the finishing handoff while awaiting
+  fresh TF status. Physical alerts remain visible; unresolved stale status
+  outside active/finishing operations still shows its warning.
+
+
+## 2.1.2
+
+- Optional `hold_to_brew: true`: a 1.5-second hold fills a bar, prepares the
+  saved recipe, applies custom overrides and requests one brew after confirmation.
+- Short taps still select; early release, leaving the tile, scroll, blur and
+  touch cancellation cancel an unfinished hold. Default is off.
+- Readiness, failed-load and duplicate-command checks remain enforced. The owner
+  confirmed the hold flow on the reference E8.
+- Reset tile rendering cache when configuration changes.
+
+## 2.1.1
+
+- Tray reading shows Full with an amber icon when emptying is requested. Missing
+  takes priority; stale readings do not claim fullness.
+
+## 2.1.0
+
+- Optional YAML recipes appear in My Recipes above standard drinks.
+- Custom name, exact base drink and partial overrides using component API names.
+- Always reload the saved base, including between recipes sharing a base.
+- Validate all overrides before writing, then await each setting confirmation.
+- Custom name on the selected recipe and Brew button; manual adjustment allowed.
+- Failed loads, unsupported values and unconfirmed writes keep Brew disabled.
+
 ## 2.0.9
 
 - Suppress the expected TF stale-status banner during active TV-reported
