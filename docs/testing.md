@@ -35,6 +35,9 @@ control path or model has been exercised on hardware.
 
 ## Regression coverage
 
+- Opt-in five-byte EF533 status: default rejection, ready/heating and present
+  blocking alerts, rejection of two-to-four-byte frames and five-byte EF545
+  frames, and preservation of full-frame sixth-byte blocking alerts.
 - Cipher and encoded framing, all-byte/key round trips, escaping, timeouts and rollover.
 - Legacy non-blocking queue behaviour, including actual header execution with fake UART/time.
 - Current-product cleanup after rinse progress silence, recognised finish, fresh TF,
