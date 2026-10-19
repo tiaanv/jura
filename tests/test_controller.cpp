@@ -231,6 +231,63 @@ static void test_startup_and_statistics() {
   m.inject("@TF:000400000000");
   assert(m.dev.texts["status"] == "ready");
 }
+// EF533M V01.18 sends a 1-byte challenge and a 5-byte TF frame, so the EF533
+// profile's blocking bits 40 (close tab) / 47 (SwitchOff Delay) are absent.
+static void test_short_tf_frame() {
+  for (bool accept : {false, true}) {
+    Machine m;
+    m.model = "EF533M V01.18";
+    m.challenge = "01";
+    m.tf = "0004000060";
+    m.dev.set_accept_short_status(accept);
+    m.begin(true, "81");
+    m.tick(16000);
+    assert(m.dev.ready() && m.dev.texts["profile"] == "EF533");
+    assert(m.count("@t2:81") == 1);
+    assert(m.dev.texts["active_alerts"] == "decalc alert, cleaning alert");
+    assert(m.dev.bins["alert_40"] == -1 && m.dev.bins["alert_47"] == -1);
+    if (!accept) {
+      assert(m.dev.texts["status"] == "unknown");
+      assert(m.dev.texts["status_detail"] == "Incomplete machine status");
+      assert(!m.dev.brew_named("Espresso"));
+      continue;
+    }
+    assert(m.dev.texts["status"] == "ready");
+    m.inject("@TF:8004000060");  // insert tray (bit 0, blocking) still blocks
+    assert(m.dev.texts["status"] == "blocked");
+    assert(!m.dev.brew_named("Espresso"));
+    m.inject("@TF:0004000060");
+    assert(m.dev.texts["status"] == "ready");
+    m.inject("@TF:0008000060");  // heating up, coffee ready not yet set
+    assert(m.dev.texts["status"] == "heating");
+    assert(!m.dev.brew_named("Espresso"));
+    // Even valid framed hex with coffee-ready set must not bypass the guard
+    // when it is shorter than the observed five-byte EF533 format.
+    for (const char *short_tf : {"0004", "000400", "00040000"}) {
+      m.inject(std::string("@TF:") + short_tf);
+      assert(m.dev.texts["status"] == "unknown");
+      assert(m.dev.texts["status_detail"] == "Incomplete machine status");
+      assert(!m.dev.brew_named("Espresso"));
+    }
+    // A full frame still honours blocking bits in the sixth byte.
+    m.inject("@TF:000400006001");  // bit 47: SwitchOff Delay active
+    assert(m.dev.texts["status"] == "blocked");
+    assert(!m.dev.brew_named("Espresso"));
+    m.inject("@TF:0004000060");
+    assert(m.dev.brew_named("Espresso"));
+  }
+  // Five bytes on another profile must not receive the EF533 exception.
+  Machine other;
+  other.model = "EF545M V02.09";
+  other.tf = "0004000000";
+  other.dev.set_accept_short_status(true);
+  other.begin();
+  other.tick(16000);
+  assert(other.dev.ready() && other.dev.texts["profile"] == "EF545");
+  assert(other.dev.texts["status"] == "unknown");
+  assert(other.dev.texts["status_detail"] == "Incomplete machine status");
+  assert(!other.dev.brew_named("Espresso"));
+}
 static void test_brew() {
   Machine m;
   m.begin();
@@ -874,6 +931,7 @@ int main() {
   test_profiles();
   test_cipher();
   test_startup_and_statistics();
+  test_short_tf_frame();
   test_ef1092_handshake();
   test_length_based_handshake();
   test_brew();

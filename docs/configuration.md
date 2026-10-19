@@ -71,6 +71,7 @@ above disables those legacy interpretations by preference; this is optional.
 | `startup_delay` | `8s` | Delay before starting the AT handshake |
 | `handshake_response` | `auto` | Response selected by challenge byte length, or an explicit hex override |
 | `profile_hint` | `auto` | Optional EF fallback if boot identification fails |
+| `accept_short_status` | `false` | Accept the five-byte EF533 TF format with its sixth byte absent; shorter frames and other profiles retain normal completeness checks. See [diagnostics](diagnostics.md#tf-and-tv-freshness) |
 | `update_interval` | `60s` | Counter/maintenance refresh requests; not the live progress rate |
 
 `handshake_response: auto` selects by decoded challenge byte length, regardless

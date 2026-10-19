@@ -69,6 +69,19 @@ identification issue. Repeated reset is not a substitute for inspecting the caus
 
 ## TF and TV freshness
 
+Some older firmware sends a shorter TF frame than its profile's alert table.
+The E8 EF533M V01.18 sends 5 bytes (`@TF:0004000060`), while the EF533 profile
+defines alert bits 0–47, including the blocking bits 40 (close tab) and 47
+(SwitchOff Delay active). By default a blocking bit outside the frame makes the
+status incomplete: Jura Status stays `unknown` with *Incomplete machine status*
+and brewing is rejected, even when coffee ready (bit 13) is set. With
+`accept_short_status: true`, only the five-byte EF533 format may omit its sixth
+byte. The bits that are present (insert tray, fill water, coffee ready …) still
+drive status and readiness, and the missing alerts' entities stay unknown.
+Shorter frames and all other profiles retain normal completeness checks; this
+option does not permit arbitrary short status frames. Only enable it when Jura
+TF Raw is consistently five bytes on your EF533 machine.
+
 TF supplies alerts/status and may stop while TV progress is active. Valid TV
 keeps the session alive. After 60 seconds without TF, alerts become stale and
 individual alert states are invalidated even if TV remains live. Reads pause

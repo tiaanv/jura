@@ -29,6 +29,7 @@ class JuraController : public TransportSink {
     response_override_ = response;
     profile_hint_ = hint;
   }
+  void set_accept_short_status(bool v) { accept_short_status_ = v; }
   void begin(uint32_t now) {
     now_ = boot_ = now;
     identify_pending_ = true;
@@ -482,6 +483,13 @@ class JuraController : public TransportSink {
     trace("Saved recipe " + selection()->name + ": " + summary);
   }
   bool flag_(unsigned bit) const { return bit / 8 < tf_.size() && (tf_[bit / 8] & (0x80u >> (bit % 8))); }
+  // Only the observed five-byte EF533 format may omit the sixth alert byte.
+  // Shorter frames and other profiles retain the incomplete-status guard.
+  // Missing alert entities stay unknown even when this exception is enabled.
+  bool tf_missing_(unsigned bit) const {
+    const bool accepted_short = accept_short_status_ && profiles_.ef == "EF533" && tf_.size() == 5;
+    return bit / 8 >= tf_.size() && !accepted_short;
+  }
   bool blocked_() const {
     for (const auto &a : profiles_.alerts)
       if (a.blocking && flag_(a.bit)) return true;
@@ -492,7 +500,7 @@ class JuraController : public TransportSink {
         awaiting_tf_ || uint32_t(now_ - last_tf_) >= 60000 || blocked_())
       return false;
     for (const auto &a : profiles_.alerts)
-      if (a.blocking && a.bit / 8 >= tf_.size()) return false;
+      if (a.blocking && tf_missing_(a.bit)) return false;
     for (const auto &a : profiles_.alerts)
       if (Profiles::lower(a.name) == "coffee ready") return flag_(a.bit);
     return false;  // No positive readiness signal: don't guess.
@@ -650,7 +658,7 @@ class JuraController : public TransportSink {
       return;
     }
     for (const auto &a : profiles_.alerts) {
-      if (a.blocking && a.bit / 8 >= tf_.size()) {
+      if (a.blocking && tf_missing_(a.bit)) {
         text("status", "unknown");
         text("status_detail", "Incomplete machine status");
         return;
@@ -852,7 +860,7 @@ class JuraController : public TransportSink {
     // actively arriving TV progress even if an incidental TF frame also arrives.
     bool complete_status = tf_.size() >= 2;
     for (const auto &a : profiles_.alerts)
-      if (a.blocking && a.bit / 8 >= tf_.size()) complete_status = false;
+      if (a.blocking && tf_missing_(a.bit)) complete_status = false;
     if (!busy_() && complete_status) clear_operation_("Idle", "None", 0);
     if (api_recipe_pending_ && !ready_for_brew_())
       cancel_api_recipe_("Machine reported not ready during settings read");
@@ -1164,6 +1172,7 @@ class JuraController : public TransportSink {
   bool tf_valid_{false}, tf_requested_{false}, awaiting_tf_{false}, operation_seen_{false},
       operation_finished_{false};
   bool alerts_invalidated_{false}, model_mismatch_{false};
+  bool accept_short_status_{false};
   bool probe_pending_{false};
   bool brew_pending_{false}, brew_sent_{false}, brew_started_{false}, refresh_after_finish_{false};
   uint32_t now_{0}, boot_{0}, startup_delay_{8000}, session_started_{0}, session_failed_at_{0};

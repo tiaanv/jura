@@ -11,6 +11,9 @@ import yaml
 base = yaml.safe_load((root / "examples/e8-local.yaml").read_text())
 base["external_components"][0]["source"]["path"] = str(root / "components")
 variants = [("esp32-c3-idf", base, True)]
+short_status = copy.deepcopy(base)
+short_status["jura_native"]["accept_short_status"] = True
+variants.append(("native-five-byte-ef533-status", short_status, True))
 an01 = copy.deepcopy(base)
 an01["button"] = yaml.safe_load((root / "examples/an01-test.yaml").read_text())["button"]
 variants.append(("native-an01-c3-idf", an01, True))
@@ -63,6 +66,7 @@ for name, section, key, value in [
     ("bad-baud", "uart", "baud_rate", 19200),
     ("bad-response", "jura_native", "handshake_response", "81G"),
     ("bad-profile", "jura_native", "profile_hint", "EF999999"),
+    ("bad-short-status", "jura_native", "accept_short_status", "five-bytes"),
 ]:
     bad = copy.deepcopy(base)
     bad[section][key] = value

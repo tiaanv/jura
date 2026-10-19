@@ -14,6 +14,11 @@
 - `handshake_response: auto` now answers a 1-byte challenge with `81`
   (byte 0 = challenge[0] | 0x80, same length), as sent by the E8 EF533M V01.18
   (`@T2:01` → `@t2:81` → `@T3:…EF533M V01.18`), verified on hardware.
+- New opt-in `accept_short_status` option for the observed five-byte EF533 TF
+  format (E8 EF533M V01.18). The absent sixth byte no longer prevents readiness;
+  its alert entities remain unknown and present blocking alerts still block.
+  Shorter frames and other profiles retain normal completeness checks. Default
+  unchanged; regression tests cover the restricted exception.
 - `handshake_response: auto` now answers the E8 EF1092M V01.07 challenge
   `01C041B628` with `8120000000`, verified on hardware; no override needed.
 
