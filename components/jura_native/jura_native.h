@@ -37,6 +37,10 @@ class JuraNative;
 class CoolcontrolOverrideSwitch : public switch_::Switch {
  public:
   void set_parent(JuraController *parent) { parent_ = parent; }
+  void restore_state() {
+    if (get_initial_state_with_restore_mode().value_or(false)) turn_on();
+    else turn_off();
+  }
  protected:
   void write_state(bool value) override {
     parent_->set_coolcontrol_override(value);
@@ -128,8 +132,7 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
   float get_setup_priority() const override { return setup_priority::DATA; }
   bool can_proceed() override { return discovery_ready(); }
   void setup() override {
-    set_coolcontrol_override(false);
-    if (cooler_override_switch_) cooler_override_switch_->publish_state(false);
+    if (cooler_override_switch_) cooler_override_switch_->restore_state();
     begin(millis());
     if (cooler_raw_ && cooler_counter_ && cooler_online_)
       ESP_LOGD("jura_native", "Cool Control bridge enabled: reporting=%s, timeout=%u ms, coalesce=%u ms",

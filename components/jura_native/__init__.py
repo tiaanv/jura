@@ -87,8 +87,9 @@ def validate_coolcontrol(config):
 COOLCONTROL_SCHEMA = cv.All(cv.Schema({
     cv.Optional("override_switch", default={CONF_NAME: "Jura Cool Control Override"}):
         switch.switch_schema(CoolcontrolOverrideSwitch).extend({
-            cv.Optional("restore_mode", default="ALWAYS_OFF"):
-                cv.enum({"ALWAYS_OFF": switch.RESTORE_MODES["ALWAYS_OFF"]}, upper=True),
+            cv.Optional("restore_mode", default="RESTORE_DEFAULT_OFF"):
+                cv.enum({key: switch.RESTORE_MODES[key] for key in
+                         ("RESTORE_DEFAULT_OFF", "ALWAYS_OFF")}, upper=True),
         }),
     cv.Optional("reporting", default="auto"): cv.one_of("auto", "negotiated", "legacy", lower=True),
     cv.Required("raw_message"): cv.use_id(text_sensor.TextSensor),

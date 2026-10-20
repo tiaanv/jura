@@ -344,13 +344,15 @@ this switch is on, so confirm milk is available before making a milk drink.
 
 Turning it off sends the actual latest status, or `@me1` if no fresh source is
 available. Source freshness continues to be monitored while the override is on.
-The switch always starts OFF after a device reboot; it does not restore ON.
-It remains enabled across an ordinary machine-session reconnect until switched
-off or the ESP reboots. DEBUG logs show `Cool Control override ON` / `OFF`,
+The switch restores its saved ON/OFF state after a device reboot. On first boot,
+with no saved state, it defaults OFF. It also remains enabled across an ordinary
+machine-session reconnect until switched off. Persistence uses ESPHome switch
+preferences and its configured flash-write interval. DEBUG logs show `Cool Control override ON` / `OFF`,
 and bridge diagnostics identify the forced healthy state.
 
 The optional `coolcontrol.override_switch` entity configuration can customize
-its name or ID. Its only supported `restore_mode` is `ALWAYS_OFF`.
+its name or ID. Its default `restore_mode` is `RESTORE_DEFAULT_OFF`;
+`ALWAYS_OFF` is also available if you explicitly prefer resetting it at boot.
 
 The bridge preserves mo/mn/me/me1 without assigning unverified physical meanings.
 Fallback mode strips telemetry and sends only bare statuses. An HM enabling

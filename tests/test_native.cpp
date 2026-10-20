@@ -43,7 +43,16 @@ int main() {
   override.turn_on(); assert(override.state && logging.coolcontrol_override());
   override.turn_off(); assert(!override.state && !logging.coolcontrol_override());
   override.turn_on(); logging.setup();
+  assert(override.state && logging.coolcontrol_override());
+  override.turn_off(); logging.setup();
   assert(!override.state && !logging.coolcontrol_override());
+  CoolerLogProbe restored;
+  CoolcontrolOverrideSwitch restored_override;
+  restored_override.saved_state = true;
+  restored.set_coolcontrol(&imported_raw, &imported_counter, &imported_online, 15000, 250);
+  restored.set_coolcontrol_override_switch(&restored_override);
+  restored.setup();
+  assert(restored_override.state && restored.coolcontrol_override());
   logging.log_inputs(0); assert(logging.availability() == 0);
   imported_raw.publish_state("@mo:321E"); imported_counter.publish_state(1); imported_online.publish_state(true);
   logging.log_inputs(1); assert(logging.availability() == 7 && logging.logged_counter() == 1);

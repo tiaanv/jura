@@ -85,7 +85,7 @@ class CoolcontrolBridge {
   }
   void reset_session() {
     announced_ = false;
-    requested_ = false;
+    requested_ = override_;
     hm_seen_ = extended_ = false;
     reporting_ = legacy_;
     sent_ = false;
