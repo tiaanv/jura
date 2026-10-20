@@ -162,3 +162,56 @@ The reference configuration is ESPHome 2026.9.1 on ESP32-C3 / ESP-IDF. C3 Arduin
 and ESP8266 configurations validate, and the ESP8266 flash-reader path has host
 coverage. Full Arduino/ESP8266 builds and final memory usage are not established.
 See [testing](testing.md) for the precise validation boundary.
+
+
+## Cool Control status and older coolers
+
+The receiver accepts bare `@mo`, `@mn`, `@me`, `@me1` lines and extended
+`@mo:XXYY` / `@mn:XXYY` lines, terminated by CRLF. `XX` is interpreted as
+milk level (0-100%), and `YY` as temperature in tenths of a degree Celsius;
+`FF` marks an unknown measurement. These retain the earlier observed field order
+and scale. The dongle firmware relays these bytes without interpreting them.
+
+Optional `status` (text sensor) exposes `mo`, `mn`, `me`, `me1`, or `unknown`.
+These are protocol labels: we have not established the physical distinction
+between `mn` and `mo`, so no empty/full meaning is invented.
+Optional `online` (binary sensor) means recognized serial messages are arriving.
+A received `me1` therefore leaves serial online true while clearing readings;
+it is distinct from our own communication timeout.
+
+`communication_timeout` and `measurement_timeout` independently default to `10s`.
+Bare messages keep communication fresh without refreshing old measurements.
+`me` and `me1` invalidate both measurements immediately; communication expiry
+also clears published measurements and reports status `unknown`. Older coolers
+that only send bare messages have usable status/online entities with unavailable
+measurement sensors. The default publication interval remains `2s`; accepted
+frames also publish immediately.
+
+Reception remains passive unless `startup_probe` is configured. Some older
+coolers reportedly begin reporting only after receiving text. This is optional
+compatibility behavior, not a verified Jura wake-up command. A blank CRLF is the
+default probe; if it does not work, configure the text known to work with your
+cooler. Text is sent exactly as configured, without automatic line endings.
+Enabling it requires an actual UART TX pin as well as RX, at 9600 baud, 8N1.
+
+```yaml
+jura_coolcontrol:
+  uart_id: cool_uart
+  status:
+    name: "Cooler Status"
+  online:
+    name: "Cooler Online"
+  communication_timeout: 10s
+  measurement_timeout: 10s
+  startup_probe:
+    text: "\r\n"
+    delay: 1s
+    retry_interval: 2s
+    max_attempts: 3
+```
+
+Probing defaults to one attempt, permits at most five, and stops permanently for
+that boot after any recognized status, including bare older-cooler messages.
+It does not restart automatically when a previously reporting cooler goes silent.
+See the Cool Control examples for the existing RX wiring; choose TX for your
+hardware and avoid sharing that UART with serial logging.

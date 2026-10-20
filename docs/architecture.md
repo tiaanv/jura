@@ -57,5 +57,6 @@ write or automatic brew retry exists. A matching TV product confirms start;
 ## Cool Control
 
 `components/jura_coolcontrol` is a separate passive UART receiver, retaining the
-old observed ASCII offsets with bounded reception and stale-state expiry. It
+observed level/temperature field order and scale, with validated status frames,
+independent communication/measurement expiry and optional bounded startup probing. It
 is not part of the Jura machine's TF/TV protocol path.

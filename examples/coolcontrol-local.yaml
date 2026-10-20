@@ -30,6 +30,19 @@ jura_coolcontrol:
     name: "Jura Coolcontrol Level"
   temperature:
     name: "Jura Coolcontrol Temperature"
+  status:
+    name: "Jura Coolcontrol Status"
+  online:
+    name: "Jura Coolcontrol Online"
+  communication_timeout: 10s
+  measurement_timeout: 10s
+  # Optional for older coolers that stay silent until receiving serial text.
+  # Also configure uart.tx_pin using your actual TX wiring before enabling.
+  # startup_probe:
+  #   text: "\r\n"
+  #   delay: 1s
+  #   retry_interval: 2s
+  #   max_attempts: 3
 
 # For GitHub installation use your repository source and
 # components: [jura_coolcontrol] instead of the local source above.

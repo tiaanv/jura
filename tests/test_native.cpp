@@ -114,7 +114,7 @@ int main() {
   esphome::sensor::Sensor level, temperature;
   cooler.set_level_sensor(&level);
   cooler.set_temperature_sensor(&temperature);
-  const std::string frame = "abcd321E\r\n";
+  const std::string frame = "@mo:321E\r\n";
   for (unsigned char c : frame) cooler.incoming.push_back(c);
   cooler.loop();
   cooler.update();

@@ -1,61 +1,127 @@
 #pragma once
 #include <cmath>
-#include <cstdlib>
 #include <string>
 
+#include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/core/component.h"
 #include "esphome/core/hal.h"
 
 namespace esphome {
 namespace jura_coolcontrol {
-// Passive receiver; retains the original component's observed ASCII offsets.
+// Status names deliberately preserve the protocol: mn/me physical meanings are unconfirmed.
 class JuraCoolcontrol : public PollingComponent, public uart::UARTDevice {
  public:
   void set_level_sensor(sensor::Sensor *s) { level_ = s; }
   void set_temperature_sensor(sensor::Sensor *s) { temperature_ = s; }
+  void set_status_sensor(text_sensor::TextSensor *s) { status_sensor_ = s; }
+  void set_online_sensor(binary_sensor::BinarySensor *s) { online_sensor_ = s; }
+  void set_communication_timeout(uint32_t ms) { communication_timeout_ = ms; }
+  void set_measurement_timeout(uint32_t ms) { measurement_timeout_ = ms; }
+  void set_startup_probe(const std::string &text, uint32_t delay, uint32_t interval, uint8_t attempts) {
+    probe_text_ = text;
+    probe_delay_ = delay;
+    probe_interval_ = interval;
+    probe_max_attempts_ = attempts;
+  }
+  void setup() override {
+    started_ = millis();
+    publish_();
+  }
   void loop() override {
     uint8_t value;
     for (size_t n = 0; n < 128 && available(); ++n) {
       if (!read_byte(&value)) break;
-      if (!line_.empty() && uint32_t(millis() - last_byte_) > 500) line_.clear();
-      last_byte_ = millis();
+      const uint32_t now = millis();
+      if ((!line_.empty() || discarding_) && uint32_t(now - last_byte_) > 500) {
+        line_.clear();
+        discarding_ = false;
+      }
+      last_byte_ = now;
+      if (discarding_) {
+        if (value == '\n') discarding_ = false;
+        continue;
+      }
       if (line_.size() >= 128) {
         line_.clear();
+        discarding_ = value != '\n';
         continue;
       }
       line_ += static_cast<char>(value);
       if (line_.size() < 2 || line_.compare(line_.size() - 2, 2, "\r\n") != 0) continue;
-      if (line_.size() >= 10 && is_hex_(line_.substr(4, 4))) {
-        const unsigned level = unsigned(std::strtoul(line_.substr(4, 2).c_str(), nullptr, 16));
-        const unsigned temp = unsigned(std::strtoul(line_.substr(6, 2).c_str(), nullptr, 16));
-        if (level <= 100) {
-          last_level_ = float(level);
-          last_temperature_ = temp == 255 ? NAN : temp / 10.0f;
-          last_frame_ = millis();
-          seen_ = true;
-        }
-      }
+      handle_frame_();
       line_.clear();
     }
+    // Receive first: even a bare status from an older cooler cancels startup retries.
+    const uint32_t now = millis();
+    if (!seen_status_ && probe_attempts_ < probe_max_attempts_ &&
+        (probe_attempts_ == 0 ? uint32_t(now - started_) >= probe_delay_
+                              : uint32_t(now - last_probe_) >= probe_interval_)) {
+      write_array(reinterpret_cast<const uint8_t *>(probe_text_.data()), probe_text_.size());
+      last_probe_ = now;
+      ++probe_attempts_;
+    }
   }
-  void update() override {
-    const bool fresh = seen_ && uint32_t(millis() - last_frame_) < 10000;
+  void update() override { publish_(); }
+
+ private:
+  static int hex_(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+  }
+  void handle_frame_() {
+    const bool normal = line_.compare(0, 3, "@mo") == 0 || line_.compare(0, 3, "@mn") == 0;
+    const bool extended = normal && line_.size() == 10 && line_[3] == ':';
+    const bool bare = (normal || line_.compare(0, 3, "@me") == 0) && line_.size() == 5;
+    const bool unavailable = line_ == "@me1\r\n";
+    if (!bare && !extended && !unavailable) return;
+    int level = -1, temp = -1;
+    if (extended) {
+      for (size_t i = 4; i < 8; ++i) if (hex_(line_[i]) < 0) return;
+      level = hex_(line_[4]) * 16 + hex_(line_[5]);
+      temp = hex_(line_[6]) * 16 + hex_(line_[7]);
+      // FF denotes unavailable telemetry; reject impossible levels without refreshing state.
+      if (level > 100 && level != 255) return;
+    }
+    if (seen_status_ && uint32_t(millis() - last_status_) >= communication_timeout_) seen_measurement_ = false;
+    seen_status_ = true;
+    last_status_ = millis();
+    status_ = unavailable ? "me1" : line_.substr(1, 2);
+    if (status_ == "me" || status_ == "me1") {
+      seen_measurement_ = false;
+      last_level_ = last_temperature_ = NAN;
+    } else if (extended) {
+      last_level_ = level == 255 ? NAN : float(level);
+      last_temperature_ = temp == 255 ? NAN : temp / 10.0f;
+      last_measurement_ = millis();
+      seen_measurement_ = true;
+    }
+    publish_();
+  }
+  void publish_() {
+    const uint32_t now = millis();
+    // Online means recognized serial traffic, even when the reported status is me1.
+    const bool online = seen_status_ && uint32_t(now - last_status_) < communication_timeout_;
+    if (!online) seen_measurement_ = false;
+    const bool fresh = online && seen_measurement_ && uint32_t(now - last_measurement_) < measurement_timeout_;
+    if (online_sensor_) online_sensor_->publish_state(online);
+    if (status_sensor_) status_sensor_->publish_state(online ? status_ : "unknown");
     if (level_) level_->publish_state(fresh ? last_level_ : NAN);
     if (temperature_) temperature_->publish_state(fresh ? last_temperature_ : NAN);
   }
-
- private:
-  static bool is_hex_(const std::string &s) {
-    for (char c : s)
-      if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) return false;
-    return true;
-  }
   sensor::Sensor *level_{nullptr}, *temperature_{nullptr};
-  std::string line_;
-  uint32_t last_byte_{0}, last_frame_{0};
-  bool seen_{false};
+  text_sensor::TextSensor *status_sensor_{nullptr};
+  binary_sensor::BinarySensor *online_sensor_{nullptr};
+  std::string line_, status_{"unknown"}, probe_text_;
+  uint32_t last_byte_{0}, last_status_{0}, last_measurement_{0};
+  uint32_t communication_timeout_{10000}, measurement_timeout_{10000};
+  uint32_t started_{0}, last_probe_{0}, probe_delay_{1000}, probe_interval_{2000};
+  uint8_t probe_attempts_{0}, probe_max_attempts_{0};
+  bool seen_status_{false}, seen_measurement_{false}, discarding_{false};
   float last_level_{NAN}, last_temperature_{NAN};
 };
 }  // namespace jura_coolcontrol

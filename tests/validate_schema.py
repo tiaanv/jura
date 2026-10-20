@@ -62,6 +62,22 @@ cool["external_components"][0]["components"].append("jura_coolcontrol")
 cool["uart"] = [cool["uart"], {"id": "cool_uart", "rx_pin": "GPIO5", "baud_rate": 9600}]
 cool["jura_coolcontrol"] = {"uart_id": "cool_uart"}
 variants.append(("separate-cool-control", cool, True))
+probe = copy.deepcopy(cool)
+probe["uart"][1]["tx_pin"] = "GPIO6"
+probe["jura_coolcontrol"].update({
+    "status": {"name": "Cooler Status"}, "online": {"name": "Cooler Online"},
+    "communication_timeout": "20s", "measurement_timeout": "10s",
+    "startup_probe": {"text": "hello\r\n", "delay": "1s", "retry_interval": "2s", "max_attempts": 3},
+})
+variants.append(("cool-control-startup-probe", probe, True))
+no_tx = copy.deepcopy(probe)
+del no_tx["uart"][1]["tx_pin"]
+variants.append(("cool-control-probe-needs-tx", no_tx, False))
+for key, value in [("text", ""), ("max_attempts", 0), ("max_attempts", 6), ("retry_interval", "0s")]:
+    invalid = copy.deepcopy(probe)
+    invalid["jura_coolcontrol"]["startup_probe"][key] = value
+    variants.append(("cool-control-invalid-" + key + str(value), invalid, False))
+
 for name, section, key, value in [
     ("bad-baud", "uart", "baud_rate", 19200),
     ("bad-response", "jura_native", "handshake_response", "81G"),
