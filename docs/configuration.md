@@ -335,7 +335,9 @@ physical machine interoperability and the appropriate input timeout for each
 cooler's reporting interval still need hardware testing. DEBUG logs now show bridge configuration, the imported raw/counter/online values,
 missing inputs, selected reporting policy and stale-counter withdrawal. Counter-only
 input logs are limited to once per five seconds; raw/online/availability changes
-are logged immediately. Look for, for example:
+are logged immediately. Unchanged inputs, including missing or offline states,
+are repeated every 15 seconds together with the bridge reporting/freshness state,
+so attaching the log client after boot does not hide the diagnostic. Look for, for example:
 
 ```text
 Cool Control bridge enabled: reporting=auto, timeout=15000 ms, coalesce=250 ms

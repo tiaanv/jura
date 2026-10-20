@@ -185,7 +185,8 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
                                   counter_valid != cooler_logged_counter_valid_;
     const bool counter_changed = counter != cooler_logged_counter_ &&
                                  !(std::isnan(counter) && std::isnan(cooler_logged_counter_));
-    if (!important_change && !(counter_changed && uint32_t(now - cooler_inputs_logged_at_) >= 5000)) return;
+    const bool periodic = uint32_t(now - cooler_inputs_logged_at_) >= 15000;
+    if (!important_change && !periodic && !(counter_changed && uint32_t(now - cooler_inputs_logged_at_) >= 5000)) return;
     const char *state = availability != 7 ? "waiting for imported entity states"
                         : !online ? "source offline"
                         : !CoolcontrolBridge::valid(raw) ? "rejected: invalid raw message"
@@ -195,6 +196,8 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
     ESP_LOGD("jura_native", "Cool Control HA inputs: raw='%s', counter=%s, online=%s; %s",
              raw.substr(0, 32).c_str(), counter_text.c_str(),
              (availability & 4) ? (online ? "ON" : "OFF") : "<missing>", state);
+    ESP_LOGD("jura_native", "Cool Control bridge state: %s; %s",
+             cooler_.reporting_description().c_str(), cooler_.input_description().c_str());
     cooler_inputs_logged_ = true;
     cooler_logged_availability_ = availability;
     cooler_logged_raw_ = raw;

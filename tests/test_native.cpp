@@ -28,6 +28,7 @@ struct CoolerLogProbe : public JuraNative {
   float logged_counter() const { return cooler_logged_counter_; }
   uint8_t availability() const { return cooler_logged_availability_; }
   bool logged_online() const { return cooler_logged_online_; }
+  uint32_t logged_at() const { return cooler_inputs_logged_at_; }
 };
 int main() {
   CoolerLogProbe logging;
@@ -41,6 +42,9 @@ int main() {
   imported_counter.publish_state(2); logging.log_inputs(1000); assert(logging.logged_counter() == 1);
   logging.log_inputs(5001); assert(logging.logged_counter() == 2);
   imported_online.publish_state(false); logging.log_inputs(5002); assert(!logging.logged_online());
+  imported_online.invalidate_state(); logging.log_inputs(5003); assert(logging.availability() == 3);
+  logging.log_inputs(20002); assert(logging.logged_at() == 5003);
+  logging.log_inputs(20003); assert(logging.logged_at() == 20003 && logging.availability() == 3);
 
   test_now = 0;
   JuraNative device;
