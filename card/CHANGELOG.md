@@ -1,5 +1,26 @@
 # Card changelog
 
+## 2.1.6 — milk cooler alerts
+
+- Disable milk and foam drink tiles, custom recipes and Brew when Jura reports
+  no milk, a milk sensor error or no signal. Coffee and hot water remain available.
+- Recheck milk alerts before selection and hold-to-brew requests.
+- Highlight the cooler in amber for empty/no signal and red for a fault, with
+  a warning badge and a short status label. Clear the highlight on recovery.
+- Retain measured milk percentage, temperature and level graphic during alerts.
+- Preserve the stage-progress fallback introduced in 2.1.5.
+
+## 2.1.5 — dirthvader stage progress support
+
+- Map optional Jura Stage Progress, including explicit entity overrides.
+- Prefer valid overall progress; otherwise show stage percentage labelled with
+  the current phase, including progressbar accessibility text.
+- Preserve zero; hide missing/invalid percentages and avoid retaining stage
+  percentages on disconnect, timeout, idle or finish.
+- Stage 100% does not finish the drink or clear the Brew lock.
+- Older firmware without the stage-progress entity remains supported.
+
+
 ## 2.1.4
 
 - Hide the percentage and progress bar when no native progress is supplied;

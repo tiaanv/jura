@@ -1,10 +1,14 @@
-// Jura Native Graphical Card 2.1.4 — native ESPHome entities, no MQTT or external dependencies.
+// Jura Native Graphical Card 2.1.6 — native ESPHome entities, no MQTT or external dependencies.
 (() => {
   const GRAPHIC = /*GRAPHIC*/;
   const STYLES = /*STYLES*/;
   const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const known = value => value !== null && value !== undefined && !['','unknown','unavailable','not available'].includes(String(value).trim().toLowerCase());
   const numeric = value => known(value) && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+  const percentage = value => {
+    if(!['number','string'].includes(typeof value)||String(value).trim()==='')return null;
+    const n=Number(value);return Number.isFinite(n)&&n>=0&&n<=100?n:null;
+  };
   const terminalUncertain = value => /uncertain|unconfirmed|no start confirmation|connection lost/i.test(value || '');
   const pendingCommand = value => /^(queued|reading saved|sent[; ]|awaiting start|accepted[; ]|machine active|started$)/i.test(value || '');
   const pretty = name => String(name || '').replace(/^1\s+/, '').replace(/^Hotwater Portion\(normal\)$/i,'Hot water').replace(/^Milk Portion$/i,'Milk').replace(/^2 Espressi$/,'Double espresso').replace(/^2 Ristretti$/,'Double ristretto').replace(/^2 Coffee$/,'Double coffee');
@@ -26,8 +30,8 @@
   "heating up": "Heating Up",
   "coffee ready": "Ready",
   "no milk (milk sensor)": "Milk Container Empty",
-  "error milk (milk sensor)": "Milk Sensor Error",
-  "no signal (milk sensor)": "Milk Sensor Not Responding",
+  "error milk (milk sensor)": "Milk Cooler Error — Check the Milk Cooler",
+  "no signal (milk sensor)": "Milk Cooler Not Responding — Check Its Connection",
   "please wait": "Please Wait",
   "coffee rinsing": "Rinsing the Coffee System",
   "ventilation closed": "Ventilation Alert — Check the machine display",
@@ -131,7 +135,7 @@
       this._recipeRun=null;this._customRecipe=null;this._recipeError='';
       this._config={entity_prefix:'jura_e8',name:'Jura E8',...config};
       const p=this._config.entity_prefix,sensor=suffix=>`sensor.${p}_${suffix}`,binary=suffix=>`binary_sensor.${p}_${suffix}`;
-      const textKeys=['status','status_detail','active_alerts','current_product','progress_state','stage_unit','command_result','requested_product','recipe_source','recipe_status','saved_recipe_raw','command_recipe_source','command_recipe_status','command_recipe_raw','session','profile','tf_raw','tv_raw','progress','stage_current','stage_target','product_code','stage_code','total_products','uart_timeouts','uart_framing_errors'];
+      const textKeys=['status','status_detail','active_alerts','current_product','progress_state','stage_unit','command_result','requested_product','recipe_source','recipe_status','saved_recipe_raw','command_recipe_source','command_recipe_status','command_recipe_raw','session','profile','tf_raw','tv_raw','progress','stage_progress','stage_current','stage_target','product_code','stage_code','total_products','uart_timeouts','uart_framing_errors'];
       this._entities=Object.fromEntries(textKeys.map(k=>[k,sensor(`jura_${k}`)]));
       for(const k of ['connected','brew_active','alerts_stale','recipe_loading','recipe_modified'])this._entities[k]=binary(`jura_${k}`);
       for(const k of ['tray_status','water_tank_status','grounds_level','changed_counters'])this._entities[k]=sensor(k);
@@ -171,7 +175,7 @@
        <section class="drink-section" aria-label="Drink selection"><div class="section-label">CHOOSE A DRINK<span>${this._config.hold_to_brew?'Tap or hold to brew':'Select, then brew'}</span></div><div id="drink-tiles" class="drink-tiles"></div><details id="more-drinks"><summary>More drinks<span id="more-count"></span></summary><div id="extra-tiles" class="drink-tiles"></div></details></section>
        <section id="recipe" class="recipe" aria-label="Selected drink recipe"><div class="recipe-heading"><strong id="selected-name">Select a drink</strong><span id="recipe-source" class="source-chip"></span></div><div id="recipe-summary"></div><div id="recipe-message" class="recipe-message"></div><details id="adjust"><summary>Adjust this drink<span id="modified"></span></summary><div class="recipe-controls">${choiceControls.map(([key,,,label])=>`<label data-control="${key}" hidden>${label}<select data-input="${key}" aria-label="${label}"></select></label>`).join('')}${numberControls.map(([key,,,label,unit])=>`<label data-control="${key}" hidden>${label} <span class="unit">${unit}</span><input type="number" data-input="${key}" aria-label="${label}" inputmode="numeric"><span class="bounds" data-bounds="${key}"></span></label>`).join('')}</div><button id="reset" class="text-button" type="button">Reset to saved recipe</button></details><button id="brew" class="brew-button" type="button" disabled><ha-icon icon="mdi:coffee-maker"></ha-icon><span>Brew</span></button><div id="brew-reason" class="brew-reason"></div><div id="command" class="command" role="status" hidden></div><button id="acknowledge" class="text-button" type="button" hidden>I checked the machine</button><div id="error" class="error" role="alert" hidden></div></section>
        <details id="maintenance"><summary><span><ha-icon icon="mdi:wrench-outline"></ha-icon>Maintenance & totals</span><span id="total"></span></summary><div class="maintenance-meters">${maintenance.slice(0,3).map(([key,label])=>`<button class="maintenance-meter" data-info="${key}_maintenance"><span>${label}</span><strong data-number="${key}_maintenance" data-unit="%">—</strong><div class="meter-track"><div data-meter="${key}_maintenance"></div></div></button>`).join('')}</div><div class="detail-rows">${maintenance.map(([key,label])=>`<button data-info="${key}_count" class="detail-row"><span>${label} count</span><strong data-number="${key}_count">—</strong></button>`).join('')}</div><div id="all-counters" class="detail-rows"></div><button id="refresh" class="text-button">Refresh readings</button></details>
-       <details id="diagnostics"><summary><span><ha-icon icon="mdi:pulse"></ha-icon>Diagnostics</span></summary>${['detected_model','profile','session','current_product','progress_state','stage_code','requested_product','command_result','command_recipe_source','command_recipe_status','recipe_status','saved_recipe_raw','command_recipe_raw','tf_raw','tv_raw','uart_timeouts','uart_framing_errors','grounds_level','changed_counters'].map(key=>`<button class="diagnostic-row" data-info="${key}"><span>${key.replaceAll('_',' ')}</span><code data-diagnostic="${key}">—</code></button>`).join('')}<div class="diagnostic-note">Legacy grounds and raw counters are unverified. They are not used for drink totals or readiness.</div></details>
+       <details id="diagnostics"><summary><span><ha-icon icon="mdi:pulse"></ha-icon>Diagnostics</span></summary>${['detected_model','profile','session','current_product','progress_state','stage_code','stage_progress','requested_product','command_result','command_recipe_source','command_recipe_status','recipe_status','saved_recipe_raw','command_recipe_raw','tf_raw','tv_raw','uart_timeouts','uart_framing_errors','grounds_level','changed_counters'].map(key=>`<button class="diagnostic-row" data-info="${key}"><span>${key.replaceAll('_',' ')}</span><code data-diagnostic="${key}">—</code></button>`).join('')}<div class="diagnostic-note">Legacy grounds and raw counters are unverified. They are not used for drink totals or readiness.</div></details>
       </ha-card>`;
       this._root=this.shadowRoot;this._card=this._root.querySelector('ha-card');
       this._root.addEventListener('click',event=>{const node=event.target.closest('[data-info]');if(node)this._info(node.dataset.info);});
@@ -233,6 +237,7 @@
     }
     async _holdAndBrew(kind,value){
       if(this._holdBrewPending||this._brewReason())return;
+      if(this._milkReason(kind==='recipe'?this._recipes[value]?.base_drink:value))return;
       const job={};this._holdJob=job;this._holdBrewPending=true;this._writeError='';this._update(true);
       const valid=()=>this._holdJob===job&&this.isConnected&&this._state('connected')==='on'&&this._state('status')==='ready'&&this._state('alerts_stale')==='off'&&!pendingCommand(this._state('command_result'));
       try{
@@ -251,7 +256,7 @@
       finally{if(this._holdJob===job){this._holdJob=null;this._holdBrewPending=false;this._update(true);}}
     }
     async _selectDrink(name,fromRecipe=false){
-      if(!this._options().includes(name)||this._selection||this._brewLock||this._state('connected')!=='on'||this._state('status')!=='ready'||pendingCommand(this._state('command_result')))return;
+      if(this._milkReason(name)||!this._options().includes(name)||this._selection||this._brewLock||this._state('connected')!=='on'||this._state('status')!=='ready'||pendingCommand(this._state('command_result')))return;
       if(this._recipeRun&&!fromRecipe)return;
       if(!fromRecipe){this._customRecipe=null;this._recipeError='';}
       if(name===this._state('drink')){if(this._state('recipe_modified')==='on'||this._editUnconfirmed)await this._reset();else this._update(true);return;}
@@ -280,6 +285,7 @@
       if(this._recipeRun||this._selection||this._edits.size||this._brewLock||this._state('connected')!=='on'||this._state('status')!=='ready'||pendingCommand(this._state('command_result')))return;
       const recipe=this._recipes[index];if(!recipe)return;
       this._customRecipe={...recipe,index};this._recipeError='';this._writeError='';
+      if(this._milkReason(recipe.base_drink))return;
       if(!this._options().includes(recipe.base_drink)){this._recipeError=`Base drink "${recipe.base_drink}" is unavailable. Use the component's exact drink label.`;this._update(true);return;}
       const run={};this._recipeRun=run;this._editUnconfirmed=false;this._update(true);
       try{
@@ -317,11 +323,20 @@
       if(!ok){this._edits.delete(key);this._editUnconfirmed=true;this._update(true);return;}
       this._later(()=>{if(this._edits.get(key)===expected){this._edits.delete(key);this._editUnconfirmed=true;this._writeError='Setting change unconfirmed. Reset the recipe before brewing.';this._update(true);}},10000);
     }
+    _milkReason(name){
+      // Use the Jura's own alerts, rather than inferring readiness from cooler telemetry.
+      if(!/flat white|cappuccino|latte|milk|foam/i.test(name||''))return '';
+      const labels=this._text('active_alerts','').split(/[,;]/).map(s=>s.trim().toLowerCase().replace(/_/g,' '));
+      for(const label of ['no milk (milk sensor)','error milk (milk sensor)','no signal (milk sensor)'])
+        if(labels.includes(label))return friendlyAlert(label);
+      return '';
+    }
     _brewReason(){
       if(this._state('connected')!=='on')return 'Machine disconnected';
       if(this._state('brew_active')==='on')return 'Machine operation in progress';
       if(this._state('status')!=='ready')return friendlyAlert(this._text('status_detail','Waiting for the machine to be ready'));
       if(this._state('alerts_stale')!=='off')return 'Waiting for fresh machine alerts';
+      if(this._milkReason(this._state('drink')))return this._milkReason(this._state('drink'));
       if(this._recipeRun)return 'Preparing your custom recipe…';
       if(this._recipeError)return 'Custom recipe not ready — reset or choose a recipe';
       if(this._selection||this._state('recipe_loading')!=='off')return 'Loading the saved recipe…';
@@ -376,9 +391,14 @@
       const freshReady=connected&&!stale&&status==='ready';
       const operation=connected&&!shuttingDown&&!freshReady&&(active||finished||/progress timeout/i.test(phase));$('#operation').hidden=!operation;
       set('#actual-product',pretty(this._text('current_product','Machine operation')));set('#phase',displayPhase||'Waiting for progress');
-      const overall=numeric(this._state('progress'));const percent=overall!==null&&overall<=100?overall:null;
-      $('#overall').hidden=percent===null;set('#overall',percent===null?'':`${this._format(percent)}%`);
-      $('#progress-track').hidden=percent===null;$('#progress-track').setAttribute('aria-valuenow',percent===null?'0':String(percent));$('#progress-fill').style.width=`${percent||0}%`;
+      const overall=connected?percentage(this._state('progress')):null;
+      const stageProgress=active&&!/progress timeout|^idle$|^finished$/i.test(phase)?percentage(this._state('stage_progress')):null;
+      const useStage=overall===null&&stageProgress!==null,percent=overall??stageProgress;
+      const percentText=percent===null?'':useStage?`${displayPhase||'Current stage'} — ${this._format(percent)}%`:`${this._format(percent)}%`;
+      $('#overall').hidden=percent===null;set('#overall',percentText);
+      $('#progress-track').hidden=percent===null;$('#progress-track').setAttribute('aria-valuenow',percent===null?'0':String(percent));
+      $('#progress-track').setAttribute('aria-label',useStage?`${displayPhase||'Current stage'} stage progress`:'Overall drink progress');
+      $('#progress-track').setAttribute('aria-valuetext',percentText);$('#progress-fill').style.width=`${percent??0}%`;
       const current=numeric(this._state('stage_current')),target=numeric(this._state('stage_target')),unit=this._text('stage_unit','');
       set('#stage',(current!==null||target!==null)&&['ml','s','level'].includes(unit)?`${this._format(current)} / ${this._format(target)} ${unit}`:'');
       const screen=shuttingDown?'Switching Off':connected?(active?(/grind/i.test(phase)?'Grinding':/brewing/i.test(displayPhase)?'Brewing':phase==='Dispensing milk foam'?'Adding Foam':phase==='Dispensing milk'?'Adding Milk':/heating/i.test(phase)?'Heating':phase==='Milk pause'?'Settling Milk':phase==='Dispensing water'?'Hot Water':/rinsing the milk/i.test(displayPhase)?'Milk Rinse':/rinsing the coffee/i.test(displayPhase)?'Coffee Rinse':displayPhase.slice(0,16)):statusNames[status]||'Unknown'):'Offline';
@@ -389,16 +409,23 @@
       reading('tray_status',trayFresh?(trayMissing?'Missing':trayFull?'Full':this._text('tray_status')):'—',trayFresh&&(trayMissing||trayFull));
       reading('empty_grounds',!connected||stale||!['on','off'].includes(this._state('empty_grounds'))?'—':this._state('insert_coffee_bin')==='on'?'Missing':this._state('empty_grounds')==='on'?'Empty bin':'OK',this._state('empty_grounds')==='on'||this._state('insert_coffee_bin')==='on');
       reading('no_beans',!connected||stale||!['on','off'].includes(this._state('no_beans'))?'—':this._state('no_beans')==='on'?'Refill':'OK',this._state('no_beans')==='on');
-      if(this._cooler)reading('milk_level',`${this._format(this._state('milk_level'))}% · ${this._format(this._state('milk_temperature'),1)}°C`);
+      const milkReason=connected&&!stale?this._milkReason('Milk'):'';
+      const milkState=!milkReason?'ok':milkReason==='Milk Container Empty'?'empty':milkReason.startsWith('Milk Cooler Error')?'fault':'no-signal';
+      this._card.dataset.milkState=milkState;
+      $('#jura-cooler-warning').setAttribute('display',milkReason?'inline':'none');
+      set('#jura-cooler-label',milkState==='empty'?'MILK EMPTY':milkState==='fault'?'COOLER FAULT':milkState==='no-signal'?'NO SIGNAL':'COOL CONTROL');
+      $('#jura-cooler-title').textContent=milkReason||'Cool Control';
+      if(this._cooler)reading('milk_level',`${this._format(this._state('milk_level'))}% · ${this._format(this._state('milk_temperature'),1)}°C`,!!milkReason);
+      const milkReading=$('[data-reading=milk_level]');if(milkReading)milkReading.closest('button').title=milkReason;
       const level=numeric(this._state('milk_level')),height=level===null?0:43*Math.min(100,level)/100;$('#jura-milk-fill').setAttribute('height',height);$('#jura-milk-fill').setAttribute('y',231-height);
       this._card.classList.toggle('tank-alert',connected&&!stale&&this._state('fill_water')==='on');this._card.classList.toggle('tray-alert',connected&&!stale&&(this._state('insert_tray')==='on'||this._state('empty_tray')==='on'));this._card.classList.toggle('beans-alert',connected&&!stale&&this._state('no_beans')==='on');
       this._renderTiles();const selected=this._state('drink');
       if(this._customRecipe&&!this._recipeRun&&!this._selection&&!this._recipeError&&(selected!==this._customRecipe.base_drink||this._state('recipe_modified')==='off'&&Object.entries(this._customRecipe.overrides).some(([field,value])=>String(this._state(recipeKeys[field]))!==String(value)))){this._customRecipe=null;this._recipeError='';}
       if(this._hold&&(active||!connected||stale||status!=='ready'))this._cancelHold();
       const controlsBlocked=!!this._holdBrewPending||!!this._recipeRun||shuttingDown||!connected||status!=='ready'||this._brewLock||pendingCommand(this._state('command_result'));
-      this._root.querySelectorAll('[data-drink]').forEach(button=>{button.setAttribute('aria-pressed',String(!this._customRecipe&&button.dataset.drink===selected));button.disabled=controlsBlocked||!!this._selection||this._edits.size>0;});
+      this._root.querySelectorAll('[data-drink]').forEach(button=>{button.setAttribute('aria-pressed',String(!this._customRecipe&&button.dataset.drink===selected));const milkReason=this._milkReason(button.dataset.drink);button.disabled=controlsBlocked||!!this._selection||this._edits.size>0||!!milkReason;button.title=milkReason;});
       $('#my-recipes').hidden=!this._recipes.length;
-      this._root.querySelectorAll('[data-recipe]').forEach(button=>{button.setAttribute('aria-pressed',String(Number(button.dataset.recipe)===this._customRecipe?.index));button.disabled=controlsBlocked||!!this._selection||this._edits.size>0;});
+      this._root.querySelectorAll('[data-recipe]').forEach(button=>{button.setAttribute('aria-pressed',String(Number(button.dataset.recipe)===this._customRecipe?.index));const milkReason=this._milkReason(this._recipes[Number(button.dataset.recipe)]?.base_drink);button.disabled=controlsBlocked||!!this._selection||this._edits.size>0||!!milkReason;button.title=milkReason;});
       this._root.querySelectorAll('[data-count]').forEach(el=>{const state=this._hass.states[this._countEntity(el.dataset.count)]?.state;el.textContent=`${this._format(state)}${el.tagName==='SMALL'?' made':''}`;});
       set('#selected-name',this._customRecipe?.name||(known(selected)?pretty(selected):'Select a drink'));const loading=!!this._recipeRun||!!this._selection||this._state('recipe_loading')==='on';const source=this._text('recipe_source','Unknown');
       set('#recipe-source',loading?'Loading…':source==='Machine'?(this._customRecipe?'Custom recipe':'Machine saved'):source==='Profile defaults'?'Profile defaults':'Source unknown');$('#recipe-source').dataset.fallback=String(source==='Profile defaults'&&!loading);
