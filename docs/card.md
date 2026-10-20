@@ -71,7 +71,7 @@ external-component configuration and UART setup are unaffected.
 3. Add a dashboard resource of type **JavaScript module**:
 
    ```text
-   /local/jura-native-card.js?v=2.1.6
+   /local/jura-native-card.js?v=2.1.7
    ```
 
 4. Refresh the browser and add the card YAML.
@@ -285,3 +285,27 @@ Jura alerts, rather than a guessed threshold on the independent level sensor.
 milk drink blocking from the machine's alerts. Older components without these
 milk alerts retain their existing behaviour; the component remains responsible
 for validating every brew request.
+
+### Manual milk cooler override
+
+When the native component exposes **Jura Cool Control Override**, the card shows
+an **Ignore milk cooler fault** switch below the readings and above My Recipes
+when a fresh milk alert is present. While enabled, the row stays visible and
+reads **Milk cooler override is on**, even if the alert clears, so you can turn
+it off again.
+
+The default entity is `switch.<prefix>_jura_cool_control_override`. For a custom
+entity ID, set `entities.coolcontrol_override` in the card YAML. No extra card
+configuration is needed for the standard entity name. Components without the
+switch keep the existing card behaviour.
+
+Turning it on bypasses milk-specific blocking only after the component confirms
+the switch is on. Real milk readings and reported cooler fault graphics remain
+visible. Other machine readiness checks still apply. The control is disabled
+while the machine is disconnected or operating, the switch is unavailable, or
+a change is awaiting confirmation. An unconfirmed request shows an error and
+is never retried automatically.
+
+Check that milk is available before brewing with this override. The component
+forces healthy cooler status and bypasses milk checks while it is on; the switch
+can persist across device restarts. See the [component override documentation](configuration.md#manual-cooler-override).

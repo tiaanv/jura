@@ -1,4 +1,4 @@
-// Jura Native Graphical Card 2.1.6 — native ESPHome entities, no MQTT or external dependencies.
+// Jura Native Graphical Card 2.1.7 — native ESPHome entities, no MQTT or external dependencies.
 (() => {
   const GRAPHIC = /*GRAPHIC*/;
   const STYLES = /*STYLES*/;
@@ -148,6 +148,7 @@
       for(const [key]of maintenance){this._entities[`${key}_count`]=sensor(`${key}_count`);this._entities[`${key}_maintenance`]=sensor(`${key}_maintenance`);}
       this._cooler=config.coolcontrol!==false;
       if(this._cooler){this._entities.milk_level=config.coolcontrol?.level||'sensor.jura_coolcontrol_jura_coolcontrol_level';this._entities.milk_temperature=config.coolcontrol?.temperature||'sensor.jura_coolcontrol_jura_coolcontrol_temperature';}
+      this._entities.coolcontrol_override=`switch.${p}_jura_cool_control_override`;
       Object.assign(this._entities,config.entities||{});
       this._signature=null;this._tileSignature=null;this._build();this._update();
     }
@@ -171,6 +172,7 @@
        <div class="machine-stage">${GRAPHIC}</div>
        <section id="operation" class="operation" hidden aria-label="Observed machine operation"><div class="operation-heading"><strong id="actual-product"></strong><span id="overall"></span></div><div class="phase-row"><span id="phase"></span><span id="stage"></span></div><div id="progress-track" class="progress-track" role="progressbar" aria-label="Overall drink progress" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div></section>
        <div class="readings">${this._reading('water_tank_status','water-check','Water')}${this._reading('tray_status','tray','Tray')}${this._reading('empty_grounds','hockey-puck','Grounds')}${this._reading('no_beans','seed-outline','Beans')}${this._cooler?this._reading('milk_level','water-percent','Milk'):''}</div>
+       <section id="cooler-override" class="cooler-override" hidden><div><strong id="cooler-override-label">Ignore milk cooler fault</strong><p id="cooler-override-help"></p></div><button id="cooler-override-toggle" type="button" role="switch" aria-label="Ignore milk cooler fault" aria-checked="false"><span></span></button></section>
        <section id="my-recipes" class="drink-section" hidden aria-label="My Recipes"><div class="section-label">MY RECIPES<span>${this._config.hold_to_brew?'Tap or hold to brew':'Select, then brew'}</span></div><div id="recipe-tiles" class="drink-tiles">${this._recipes.map((recipe,index)=>`<button class="drink-tile" data-recipe="${index}" aria-label="Select ${escapeHTML(recipe.name)}" aria-pressed="false">${cup(recipe.base_drink)}<span>${escapeHTML(recipe.name)}</span><small>Based on ${escapeHTML(pretty(recipe.base_drink))}</small></button>`).join('')}</div></section>
        <section class="drink-section" aria-label="Drink selection"><div class="section-label">CHOOSE A DRINK<span>${this._config.hold_to_brew?'Tap or hold to brew':'Select, then brew'}</span></div><div id="drink-tiles" class="drink-tiles"></div><details id="more-drinks"><summary>More drinks<span id="more-count"></span></summary><div id="extra-tiles" class="drink-tiles"></div></details></section>
        <section id="recipe" class="recipe" aria-label="Selected drink recipe"><div class="recipe-heading"><strong id="selected-name">Select a drink</strong><span id="recipe-source" class="source-chip"></span></div><div id="recipe-summary"></div><div id="recipe-message" class="recipe-message"></div><details id="adjust"><summary>Adjust this drink<span id="modified"></span></summary><div class="recipe-controls">${choiceControls.map(([key,,,label])=>`<label data-control="${key}" hidden>${label}<select data-input="${key}" aria-label="${label}"></select></label>`).join('')}${numberControls.map(([key,,,label,unit])=>`<label data-control="${key}" hidden>${label} <span class="unit">${unit}</span><input type="number" data-input="${key}" aria-label="${label}" inputmode="numeric"><span class="bounds" data-bounds="${key}"></span></label>`).join('')}</div><button id="reset" class="text-button" type="button">Reset to saved recipe</button></details><button id="brew" class="brew-button" type="button" disabled><ha-icon icon="mdi:coffee-maker"></ha-icon><span>Brew</span></button><div id="brew-reason" class="brew-reason"></div><div id="command" class="command" role="status" hidden></div><button id="acknowledge" class="text-button" type="button" hidden>I checked the machine</button><div id="error" class="error" role="alert" hidden></div></section>
@@ -180,6 +182,7 @@
       this._root=this.shadowRoot;this._card=this._root.querySelector('ha-card');
       this._root.addEventListener('click',event=>{const node=event.target.closest('[data-info]');if(node)this._info(node.dataset.info);});
       this._root.querySelectorAll('[data-recipe]').forEach(button=>this._bindDrinkButton(button,'recipe',Number(button.dataset.recipe)));
+      this._root.querySelector('#cooler-override-toggle').addEventListener('click',()=>this._toggleCoolerOverride());
       this._root.querySelector('#brew').addEventListener('click',()=>this._brew());
       this._root.querySelector('#reset').addEventListener('click',()=>this._reset());
       this._root.querySelector('#refresh').addEventListener('click',()=>this._service('button','press','refresh'));
@@ -323,7 +326,16 @@
       if(!ok){this._edits.delete(key);this._editUnconfirmed=true;this._update(true);return;}
       this._later(()=>{if(this._edits.get(key)===expected){this._edits.delete(key);this._editUnconfirmed=true;this._writeError='Setting change unconfirmed. Reset the recipe before brewing.';this._update(true);}},10000);
     }
-    _milkReason(name){
+    async _toggleCoolerOverride(){
+      const state=this._state('coolcontrol_override');
+      if(this._overridePending||!['on','off'].includes(state)||this._state('connected')!=='on'||this._state('brew_active')==='on')return;
+      const target=state==='on'?'off':'on';this._overridePending=target;this._writeError='';this._update(true);
+      if(!await this._service('switch',target==='on'?'turn_on':'turn_off','coolcontrol_override')){this._overridePending=null;this._update(true);return;}
+      this._later(()=>{if(this._overridePending===target){this._overridePending=null;this._writeError='Milk cooler override change not confirmed. Check the switch state.';this._update(true);}},10000);
+    }
+    _milkReason(name,includeOverridden=false){
+      if(!includeOverridden&&this._state('coolcontrol_override')==='on')return '';
+
       // Use the Jura's own alerts, rather than inferring readiness from cooler telemetry.
       if(!/flat white|cappuccino|latte|milk|foam/i.test(name||''))return '';
       const labels=this._text('active_alerts','').split(/[,;]/).map(s=>s.trim().toLowerCase().replace(/_/g,' '));
@@ -409,9 +421,18 @@
       reading('tray_status',trayFresh?(trayMissing?'Missing':trayFull?'Full':this._text('tray_status')):'—',trayFresh&&(trayMissing||trayFull));
       reading('empty_grounds',!connected||stale||!['on','off'].includes(this._state('empty_grounds'))?'—':this._state('insert_coffee_bin')==='on'?'Missing':this._state('empty_grounds')==='on'?'Empty bin':'OK',this._state('empty_grounds')==='on'||this._state('insert_coffee_bin')==='on');
       reading('no_beans',!connected||stale||!['on','off'].includes(this._state('no_beans'))?'—':this._state('no_beans')==='on'?'Refill':'OK',this._state('no_beans')==='on');
-      const milkReason=connected&&!stale?this._milkReason('Milk'):'';
+      const milkReason=connected&&!stale?this._milkReason('Milk',true):'';
       const milkState=!milkReason?'ok':milkReason==='Milk Container Empty'?'empty':milkReason.startsWith('Milk Cooler Error')?'fault':'no-signal';
       this._card.dataset.milkState=milkState;
+      const overrideState=this._state('coolcontrol_override'),overrideOn=overrideState==='on';
+      if(this._overridePending===overrideState)this._overridePending=null;
+      $('#cooler-override').hidden=!this._entity('coolcontrol_override')||!(overrideOn||milkReason);
+      $('#cooler-override').classList.toggle('enabled',overrideOn);
+      set('#cooler-override-label',overrideOn?'Milk cooler override is on':'Ignore milk cooler fault');
+      set('#cooler-override-help',this._overridePending?'Waiting for the machine to confirm...':!['on','off'].includes(overrideState)?'Override switch unavailable.':overrideOn?'Milk cooler protection is bypassed. Check the milk supply before brewing.':'Allow milk drinks despite the cooler fault. Check the milk supply first.');
+      $('#cooler-override-toggle').setAttribute('aria-checked',String(overrideOn));
+      $('#cooler-override-toggle').disabled=!!this._overridePending||!['on','off'].includes(overrideState)||!connected||active;
+
       $('#jura-cooler-warning').setAttribute('display',milkReason?'inline':'none');
       set('#jura-cooler-label',milkState==='empty'?'MILK EMPTY':milkState==='fault'?'COOLER FAULT':milkState==='no-signal'?'NO SIGNAL':'COOL CONTROL');
       $('#jura-cooler-title').textContent=milkReason||'Cool Control';

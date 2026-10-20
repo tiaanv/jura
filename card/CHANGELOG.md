@@ -1,5 +1,15 @@
 # Card changelog
 
+## 2.1.7 — milk cooler override
+
+- Add a conditional native Cool Control Override switch below the readings.
+- Show the control during milk alerts and keep it visible while override is on,
+  even after the fault clears.
+- Use confirmed switch state to bypass milk-specific card blocking while retaining
+  real milk readings, cooler warnings and other readiness checks.
+- Disable the control while unavailable, disconnected, operating or awaiting
+  confirmation. Older components without the switch remain supported.
+
 ## 2.1.6 — milk cooler alerts
 
 - Disable milk and foam drink tiles, custom recipes and Brew when Jura reports
