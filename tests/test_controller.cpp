@@ -889,6 +889,47 @@ static void test_an01_diagnostic() {
   assert(race.dev.texts["command_result"].find("cancelled") != std::string::npos);
 }
 
+static void test_milk_brew_checks() {
+  for (const auto &tf : {"000600000000", "000500000000", "000480000000"}) {
+    Machine m;
+    m.begin(); m.tick(16000); m.inject(std::string("@TF:") + tf);
+    assert(!m.dev.brew_named("Milk Portion"));
+    assert(!m.dev.brew_named("Cappuccino"));
+    assert(m.dev.brew_named("Espresso")); // Milk-only alerts do not block coffee.
+    Machine selected;
+    selected.begin(); selected.tick(16000);
+    assert(selected.dev.choose("Milk Portion")); selected.tick(8000);
+    selected.inject(std::string("@TF:") + tf);
+    assert(!selected.dev.brew_selected());
+  }
+  Machine race;
+  race.begin(); race.tick(16000);
+  assert(race.dev.brew_named("Milk Portion"));
+  race.inject("@TF:000600000000"); race.tick(8000);
+  for (const auto &c : race.commands) assert(c.compare(0, 4, "@TP:") != 0);
+  Machine queued;
+  queued.begin(); queued.tick(16000);
+  assert(queued.dev.choose("Milk Portion")); queued.tick(8000);
+  assert(queued.dev.brew_selected());
+  queued.inject("@TF:000500000000"); queued.tick(2000);
+  for (const auto &c : queued.commands) assert(c.compare(0, 4, "@TP:") != 0);
+  queued.inject("@TF:000400000000");
+  assert(queued.dev.brew_selected());
+}
+static void test_milk_error_progress() {
+  for (const auto &entry : {std::make_pair("2E", "Blocked: milk cooler error"),
+                            std::make_pair("2F", "Blocked: no milk cooler signal")}) {
+    Machine m;
+    m.begin(); m.tick(16000); m.auto_tf = false;
+    m.inject("@TB"); m.inject(std::string("@TV:") + entry.first + "0A");
+    assert(m.dev.texts["progress_state"] == entry.second);
+    assert(m.dev.bins["brew_active"] == 0 && std::isnan(m.dev.nums["progress"]));
+    m.tick(21000);
+    assert(m.dev.texts["progress_state"] == entry.second);
+    m.inject("@TF:000400000000");
+    assert(m.dev.texts["progress_state"] == "Idle");
+  }
+}
 static void test_no_milk_progress() {
   Machine m;
   m.begin(); m.tick(12000);
@@ -1051,6 +1092,8 @@ static void test_coolcontrol_forwarding() {
 }
 
 int main() {
+  test_milk_brew_checks();
+  test_milk_error_progress();
   test_no_milk_progress();
   test_coolcontrol_forwarding();
   test_current_product_lifecycle();

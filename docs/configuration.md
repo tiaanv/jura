@@ -338,6 +338,23 @@ FF produces a bare status. Expired/offline input generates `@me1` once, includin
 when reporting begins without fresh data. Restoring a fresh counter resumes
 reporting. A new machine session can replay the latest still-fresh status.
 
+Unchanged notifications are suppressed after formatting for the negotiated mode.
+Counter heartbeats still establish freshness, but do not resend identical status.
+In bare mode, changes only to temperature or level do not resend `@mo`/`@mn`;
+in extended mode, changed telemetry is forwarded. An explicit HM request always
+receives a cached reply even if unchanged, subject to the existing pacing limit.
+
+Before brewing a product with milk or foam options, the native controller checks
+the profile's no-milk, milk-sensor error and no-signal alerts. These alerts reject
+milk products without blocking coffee-only products. The checks run at request
+time, during the saved-settings read and before the brew command is sent. They
+use machine TF status and also work without the Cool Control bridge configured.
+
+Progress states `2D`, `2E` and `2F` report blocked milk preparation: no milk,
+milk cooler error and no milk cooler signal respectively. Brew activity clears,
+progress remains unknown, and a fresh TF status is requested. These states do
+not count as a completed drink and do not trigger a false progress timeout.
+
 Messages use plaintext CRLF framing and the paced four-symbol Jura UART transport with no
 reply expected. This feature has protocol simulation/configuration coverage;
 physical machine interoperability and the appropriate input timeout for each

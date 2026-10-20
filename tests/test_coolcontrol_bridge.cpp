@@ -15,17 +15,19 @@ int main() {
   b.negotiate(0x80);
   assert(b.next(1250, out) && out == "@mo");
   b.snapshot("@mo:321E", 2, true, 2000); b.advance(2250);
-  assert(b.next(2250, out) && out == "@mo"); // Identical status heartbeat.
+  assert(!b.next(2250, out)); // Heartbeat refreshes freshness without duplicate wire traffic.
   b.negotiate(0xC0);
-  assert(!b.next(2251, out)); // UART traffic capped, latest state retained.
-  assert(b.next(3250, out) && out == "@mo:321E");
+  assert(b.next(2251, out) && out == "@mo:321E");
+  b.request_status();
+  assert(!b.next(2252, out)); // UART traffic capped, latest state retained.
+  assert(b.next(3251, out) && out == "@mo:321E");
   b.snapshot("@mo:321E", 3, true, 4000); // Counter arrives before raw entity.
   b.advance(4100); assert(!b.next(4100, out));
   b.snapshot("@mn:0028", 3, true, 4150);
   b.advance(4300); assert(!b.next(4300, out));
   b.advance(4400); assert(b.next(4400, out) && out == "@mn:0028");
   b.snapshot("@mn:0028", 0, true, 6000); // Counter reboot/wrap is a change too.
-  b.advance(6250); assert(b.next(6250, out) && out == "@mn:0028");
+  b.advance(6250); assert(!b.next(6250, out));
   b.snapshot("@mn:0028", 0, true, 21000); b.advance(21000);
   assert(b.next(21000, out) && out == "@me1"); // Unchanged HA state is not liveness.
   b.advance(23000); assert(!b.next(23000, out));
@@ -88,5 +90,18 @@ int main() {
   strict.advance(19250); assert(strict.take_announcement());
   strict.reset_session(); assert(strict.take_announcement());
   assert(!strict.take_announcement());
+  CoolcontrolBridge dedup;
+  dedup.configure(15000, 250); dedup.negotiate(0x80);
+  dedup.snapshot("@mo:321E", 1, true, 0); dedup.advance(250);
+  assert(dedup.next(250, out) && out == "@mo");
+  dedup.snapshot("@mo:1428", 2, true, 2000); dedup.advance(2250);
+  assert(!dedup.next(2250, out)); // Stripped telemetry changes do not change bare status.
+  dedup.request_status(); assert(dedup.next(2250, out) && out == "@mo");
+  dedup.negotiate(0xC0); assert(dedup.next(3250, out) && out == "@mo:1428");
+  dedup.snapshot("@mo:1432", 3, true, 4000); dedup.advance(4250);
+  assert(dedup.next(4250, out) && out == "@mo:1432"); // Extended telemetry change is forwarded.
+  dedup.advance(19000); assert(dedup.next(19000, out) && out == "@me1");
+  dedup.snapshot("@mo:1432", 4, true, 20000); dedup.advance(20250);
+  assert(dedup.next(20250, out) && out == "@mo:1432");
   std::cout << "PASS: cooler bridge negotiation, coalescing, freshness, expiry and input validation\n";
 }

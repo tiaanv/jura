@@ -150,7 +150,7 @@ class JuraController : public TransportSink {
         reject_("AN:01 test cancelled: connection or operation changed");
         return;
       }
-      if (r.kind == Kind::API_RECIPE && (!api_recipe_pending_ || !ready_for_brew_())) {
+      if (r.kind == Kind::API_RECIPE && (!api_recipe_pending_ || !ready_for_brew_(api_recipe_code_))) {
         cancel_api_recipe_("Machine no longer ready before settings read");
         return;
       }
@@ -161,7 +161,7 @@ class JuraController : public TransportSink {
         trace("Espresso probe: " + why);
         return;
       }
-      if (r.kind == Kind::BREW && (!ready_for_brew_() || !brew_pending_)) {
+      if (r.kind == Kind::BREW && (!ready_for_brew_(requested_code_) || !brew_pending_)) {
         brew_pending_ = false;
         text("command_result", "Rejected: machine no longer ready");
         return;
@@ -298,6 +298,8 @@ class JuraController : public TransportSink {
         !control_.empty())
       return reject_("Another command is pending");
     if (!ready_for_brew_()) return reject_("Machine not ready or status unavailable");
+    const auto milk_reason = milk_block_reason_(p->code);
+    if (!milk_reason.empty()) return reject_(milk_reason);
     // Validate explicit overrides now; omitted values are filled after the read.
     for (uint8_t attr = 0; attr < ATTRIBUTE_COUNT; ++attr) {
       if (values[attr] == -1) continue;
@@ -526,10 +528,23 @@ class JuraController : public TransportSink {
       if (a.blocking && flag_(a.bit)) return true;
     return false;
   }
-  bool ready_for_brew_() const {
+  std::string milk_block_reason_(uint8_t code) const {
+    const auto *p = profiles_.find(code);
+    if (!p || (!profiles_.option_for(*p, MILK).valid() && !profiles_.option_for(*p, FOAM).valid())) return "";
+    for (const auto &a : profiles_.alerts) {
+      const auto name = Profiles::lower(a.name);
+      if (name != "no milk (milk sensor)" && name != "error milk (milk sensor)" &&
+          name != "no signal (milk sensor)") continue;
+      if (tf_missing_(a.bit)) return "Milk sensor status unavailable";
+      if (flag_(a.bit)) return a.name;
+    }
+    return "";
+  }
+  bool ready_for_brew_(int product_code = -1) const {
     if (model_mismatch_ || !profile_ok() || session_ != Session::READY || !tf_valid_ || busy_() ||
         awaiting_tf_ || uint32_t(now_ - last_tf_) >= 60000 || blocked_())
       return false;
+    if (product_code >= 0 && !milk_block_reason_(uint8_t(product_code)).empty()) return false;
     for (const auto &a : profiles_.alerts)
       if (a.blocking && tf_missing_(a.bit)) return false;
     for (const auto &a : profiles_.alerts)
@@ -546,7 +561,7 @@ class JuraController : public TransportSink {
   }
   void resolve_api_recipe_(bool received_response) {
     if (!api_recipe_pending_) return;
-    if (!ready_for_brew_()) {
+    if (!ready_for_brew_(api_recipe_code_)) {
       cancel_api_recipe_("Machine no longer ready after settings read");
       return;
     }
@@ -579,6 +594,8 @@ class JuraController : public TransportSink {
         active_ == Kind::API_RECIPE || !control_.empty())
       return reject_("Another command is pending");
     if (!ready_for_brew_()) return reject_("Machine not ready or status unavailable");
+    const auto milk_reason = milk_block_reason_(product.code);
+    if (!milk_reason.empty()) return reject_(milk_reason);
     std::string payload, error;
     if (!profiles_.recipe(product, values, payload, error)) return reject_(error);
     brew_pending_ = true;
@@ -917,7 +934,7 @@ class JuraController : public TransportSink {
     for (const auto &a : profiles_.alerts)
       if (a.blocking && tf_missing_(a.bit)) complete_status = false;
     if (!busy_() && complete_status) clear_operation_("Idle", "None", 0);
-    if (api_recipe_pending_ && !ready_for_brew_())
+    if (api_recipe_pending_ && !ready_for_brew_(api_recipe_code_))
       cancel_api_recipe_("Machine reported not ready during settings read");
     update_status_();
     return true;
@@ -1003,22 +1020,23 @@ class JuraController : public TransportSink {
     const char *process = process_(code);
     if (!p && !process) return;
     cancel_api_recipe_("Machine progress observed during settings read");
-    // Progress state 2D indicates no milk. This is a
+    // Milk sensor progress states indicate a
     // blocked attempt, not dispensing progress or successful completion.
-    if (state == 0x2D) {
-      clear_operation_("Blocked: no milk", p ? p->name.c_str() : process, 0);
+    if (state >= 0x2D && state <= 0x2F) {
+      const std::string reason = state == 0x2D ? "no milk" : state == 0x2E ? "milk cooler error" : "no milk cooler signal";
+      const std::string result = "Blocked: " + reason;
+      clear_operation_(result.c_str(), p ? p->name.c_str() : process, 0);
       number("product_code", code);
       number("stage_code", state);
       if (brew_pending_) {
-        text("command_result", code == requested_code_ ? "Blocked: no milk"
-                                                       : "Different operation blocked: no milk");
+        text("command_result", code == requested_code_ ? result : "Different operation blocked: " + reason);
       }
       brew_pending_ = brew_sent_ = brew_started_ = false;
       if (active_ == Kind::BREW && transport_.waiting()) transport_.complete(true, now_);
       awaiting_tf_ = tf_requested_ = true;
-      trace("Milk preparation blocked: no milk; requesting fresh TF status");
+      trace("Milk preparation blocked: " + reason + "; requesting fresh TF status");
       text("status", "blocked");
-      text("status_detail", "No milk");
+      text("status_detail", reason);
       return;
     }
     operation_seen_ = true;

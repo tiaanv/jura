@@ -102,8 +102,9 @@ class CoolcontrolBridge {
     command = fresh_ ? raw_ : "@me1";
     if (command.size() == 8 && (!extended_ || (nibble_(command[4]) == 15 && nibble_(command[5]) == 15))) command.resize(3);
     pending_ = false;
-    // Send an expiry indication once, rather than inventing repeated cooler traffic.
-    if (!requested_ && !fresh_ && last_sent_ == command) return false;
+    // Compare the actual negotiated wire message, not heartbeat or stripped telemetry.
+    // Explicit machine requests must still receive an unchanged cached response.
+    if (!requested_ && last_sent_ == command) return false;
     if (requested != nullptr) *requested = requested_;
     requested_ = false;
     last_sent_ = command;
