@@ -30,6 +30,8 @@ struct Fake : public JuraController {
   std::map<std::string, float> nums;
   std::map<std::string, int> bins;
   std::vector<uint8_t> output;
+  std::vector<std::string> traces;
+  void trace(const std::string &s) override { traces.push_back(s); }
   unsigned installed = 0, recipe_updates = 0;
   void text(const std::string &k, const std::string &v) override { texts[k] = v; }
   void number(const std::string &k, float v) override { nums[k] = v; }
@@ -962,7 +964,9 @@ static void test_coolcontrol_forwarding() {
   assert(legacy.count("@mn") == 1 && legacy.count("@mn:321E") == 0);
   legacy.inject("@HM:00", false);
   legacy.dev.coolcontrol_snapshot("@mo:321E", 2, true, legacy.clock);
-  legacy.tick(1500); assert(legacy.count("@mo") == 0);
+  legacy.tick(1500); assert(legacy.count("@mo") == 1); // One requested reply despite disable.
+  legacy.dev.coolcontrol_snapshot("@mo:321E", 3, true, legacy.clock);
+  legacy.tick(1500); assert(legacy.count("@mo") == 1);
   legacy.inject("@HM:C0"); legacy.tick(1500);
   assert(legacy.count("@mo:321E") == 1);
   Machine early;
@@ -972,6 +976,26 @@ static void test_coolcontrol_forwarding() {
   early.dev.coolcontrol_snapshot("@mo:321E", 1, true, early.clock);
   early.begin(); early.tick(12000);
   assert(early.count("@mo:321E") == 1);
+  Machine polled;
+  polled.dev.configure_coolcontrol(15000, 250, "negotiated");
+  polled.dev.coolcontrol_snapshot("@mn:321E", 1, true, polled.clock);
+  polled.early_hm = "@HM"; polled.early_hm_encrypted = false;
+  polled.begin(); polled.tick(12000);
+  assert(polled.count("@mn") == 1);
+  polled.inject("@HM", false); polled.tick(1500);
+  assert(polled.count("@mn") == 2);
+  polled.inject("@HM:00", false); polled.tick(1500);
+  assert(polled.count("@mn") == 3);
+  polled.dev.coolcontrol_snapshot("@mo", 2, true, polled.clock);
+  polled.tick(1500); assert(polled.count("@mo") == 0);
+  polled.inject("@HM", true); polled.tick(1500);
+  assert(polled.count("@mo") == 1);
+  bool logged_request = false, logged_response = false;
+  for (const auto &line : polled.dev.traces) {
+    logged_request |= line == "Cool Control status request: @HM; cached response queued";
+    logged_response |= line.find("Cool Control request response: @mn (plaintext;") == 0;
+  }
+  assert(logged_request && logged_response);
   Machine three;
   three.challenge = "018000";
   three.dev.configure_coolcontrol(15000, 250);

@@ -310,10 +310,16 @@ Reporting policy is controlled by `reporting`:
 - `legacy`: allow bare status forwarding without `@HM` on any model. Use this
   only as an explicit compatibility choice for a machine you are testing.
 
-An actual encrypted `@HM:XX` always takes precedence, including an explicit
+An actual plaintext or encrypted `@HM:XX` always takes precedence, including an explicit
 disable: bit7 enables reports and bit6 permits extended telemetry. A new session
 clears that negotiation and reapplies the selected fallback policy. No `@HM`
 command is sent to the machine to manufacture its settings.
+
+Bare `@HM` requests one cached status reply without changing the reporting
+settings. `@HM:00` requests one reply and disables automatic reporting. Other
+valid `@HM:XX` settings also request a reply. Requests use the same coalescing
+and one-message-per-second limit as notifications; repeated requests can receive
+the same status again, including `@me1` when the source is unavailable or stale.
 
 The old TT214H V05.08F contains both an HM-controlled status notification path
 and a pending-text output path without that gate. The EF533 log also completed
@@ -329,7 +335,7 @@ FF produces a bare status. Expired/offline input generates `@me1` once, includin
 when reporting begins without fresh data. Restoring a fresh counter resumes
 reporting. A new machine session can replay the latest still-fresh status.
 
-Messages use the existing encrypted AT framing and paced UART transport with no
+Messages use plaintext CRLF framing and the paced four-symbol Jura UART transport with no
 reply expected. This feature has protocol simulation/configuration coverage;
 physical machine interoperability and the appropriate input timeout for each
 cooler's reporting interval still need hardware testing. DEBUG logs now show bridge configuration, the imported raw/counter/online values,
@@ -343,6 +349,9 @@ so attaching the log client after boot does not hide the diagnostic. Look for, f
 Cool Control bridge enabled: reporting=auto, timeout=15000 ms, coalesce=250 ms
 Cool Control HA inputs: raw='@mo:321E', counter=123.000000, online=ON; received valid inputs
 Cool Control bridge: legacy bare fallback (no @HM required); fresh cooler snapshot
+Sending @mo
+Cool Control status request: @HM; cached response queued
+Cool Control request response: @mo (plaintext; fresh cooler snapshot)
 Sending @mo
 ```
 

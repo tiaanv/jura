@@ -73,6 +73,7 @@ class CoolcontrolBridge {
     }
   }
   void reset_session() {
+    requested_ = false;
     hm_seen_ = extended_ = false;
     reporting_ = legacy_;
     sent_ = false;
@@ -84,15 +85,19 @@ class CoolcontrolBridge {
     reporting_ = (flags & 0x80) != 0;
     extended_ = (flags & 0x40) != 0;
     pending_ = true;
+    request_status();
   }
-  bool next(uint32_t now, std::string &command) {
-    if (!enabled_ || !reporting_ || !pending_ || coalescing_ ||
+  void request_status() { if (enabled_) requested_ = true; }
+  bool next(uint32_t now, std::string &command, bool *requested = nullptr) {
+    if (!enabled_ || (!requested_ && (!reporting_ || !pending_)) || coalescing_ ||
         (sent_ && uint32_t(now - last_send_) < 1000)) return false;
     command = fresh_ ? raw_ : "@me1";
     if (command.size() == 8 && (!extended_ || (nibble_(command[4]) == 15 && nibble_(command[5]) == 15))) command.resize(3);
     pending_ = false;
     // Send an expiry indication once, rather than inventing repeated cooler traffic.
-    if (!fresh_ && last_sent_ == command) return false;
+    if (!requested_ && !fresh_ && last_sent_ == command) return false;
+    if (requested != nullptr) *requested = requested_;
+    requested_ = false;
     last_sent_ = command;
     sent_ = true;
     last_send_ = now;
@@ -107,6 +112,7 @@ class CoolcontrolBridge {
   }
   ReportingMode mode_{ReportingMode::AUTO};
   bool legacy_{false}, hm_seen_{false};
+  bool requested_{false};
   bool enabled_{false}, reporting_{false}, extended_{false}, source_online_{false};
   bool fresh_{false}, coalescing_{false}, have_counter_{false}, pending_{false}, sent_{false};
   uint32_t timeout_{15000}, coalesce_{250}, last_heartbeat_{0}, changed_at_{0}, window_started_{0}, last_send_{0};

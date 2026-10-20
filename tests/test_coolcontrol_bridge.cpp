@@ -39,7 +39,8 @@ int main() {
   b.snapshot("@me", 4, true, 30000); b.advance(30250);
   assert(b.next(30250, out) && out == "@me");
   b.negotiate(0); b.snapshot("@mo", 5, true, 32000); b.advance(32250);
-  assert(!b.next(32250, out));
+  assert(b.next(32250, out) && out == "@mo");
+  assert(!b.next(33250, out));
   b.reset_session(); b.negotiate(0xC0);
   assert(b.next(33000, out) && out == "@mo"); // Fresh snapshot survives machine reconnect.
   for (auto s : {"@mo:651E", "@mx", "@me:0000", "@mn:321G", "@mn:321E\n", "unknown"})
@@ -57,7 +58,8 @@ int main() {
   automatic.snapshot("@mo:321E", 1, true, 0); automatic.advance(250);
   assert(automatic.next(250, out) && out == "@mo");
   automatic.negotiate(0); automatic.snapshot("@mn", 2, true, 1500); automatic.advance(1750);
-  assert(!automatic.next(1750, out)); // Explicit HM disable wins over fallback.
+  assert(automatic.next(1750, out) && out == "@mn"); // HM disable still requests one reply.
+  assert(!automatic.next(2750, out));
   automatic.reset_session(); assert(automatic.next(2000, out) && out == "@mn");
   CoolcontrolBridge other;
   other.configure(15000, 250); other.set_model("EF999"); other.reset_session();
@@ -70,5 +72,13 @@ int main() {
   strict.configure(15000, 250, CoolcontrolBridge::ReportingMode::NEGOTIATED);
   strict.set_model("EF533"); strict.reset_session(); strict.snapshot("@mo", 1, true, 0);
   strict.advance(250); assert(!strict.next(250, out));
+  strict.request_status(); assert(strict.next(250, out) && out == "@mo");
+  strict.request_status(); assert(!strict.next(251, out));
+  assert(strict.next(1250, out) && out == "@mo");
+  strict.snapshot("@mn", 2, true, 1500); strict.advance(1750);
+  assert(!strict.next(2250, out)); // Bare poll did not enable automatic reporting.
+  strict.advance(17000); strict.request_status();
+  assert(strict.next(17000, out) && out == "@me1");
+  strict.request_status(); assert(strict.next(18000, out) && out == "@me1");
   std::cout << "PASS: cooler bridge negotiation, coalescing, freshness, expiry and input validation\n";
 }

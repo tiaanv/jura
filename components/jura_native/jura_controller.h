@@ -183,7 +183,9 @@ class JuraController : public TransportSink {
     }
     if (session_ != Session::READY) return;
     std::string cooler_command;
-    if (cooler_.next(now, cooler_command)) {
+    bool cooler_requested = false;
+    if (cooler_.next(now, cooler_command, &cooler_requested)) {
+      if (cooler_requested) trace("Cool Control request response: " + cooler_command + " (plaintext; " + cooler_.input_description() + ")");
       // Smart Connect sends milk status without the AT cipher envelope.
       start_(cooler_command, Kind::COOLER, false, false);
       return;
@@ -743,7 +745,7 @@ class JuraController : public TransportSink {
   }
   void received(const std::string &frame, bool encrypted) override {
     // Smart Connect dispatches HM both directly and after AT decryption.
-    if (encrypted || starts_(frame, "@HM:")) {
+    if (encrypted || frame == "@HM" || starts_(frame, "@HM:")) {
       receive_at_(frame);
       return;
     }
@@ -771,9 +773,14 @@ class JuraController : public TransportSink {
     }
     // HM may follow T3 before our final t3 acknowledgement has drained.
     if (cooler_.enabled() && session_ != Session::OFF && session_ != Session::BACKOFF &&
-        frame.size() == 6 && starts_(frame, "@HM:") && hex_(frame.substr(4))) {
-      cooler_.negotiate(uint8_t(hexval_(frame.substr(4))));
-      trace("Cool Control reporting flags: " + frame.substr(4));
+        (frame == "@HM" || (frame.size() == 6 && starts_(frame, "@HM:") && hex_(frame.substr(4))))) {
+      if (frame == "@HM") {
+        cooler_.request_status();
+      } else {
+        cooler_.negotiate(uint8_t(hexval_(frame.substr(4))));
+        trace("Cool Control reporting flags: " + frame.substr(4));
+      }
+      trace("Cool Control status request: " + frame + "; cached response queued");
       return;
     }
     if (frame == "@t0" && session_ == Session::ACK0 && active_ == Kind::H0 && transport_.waiting()) {
