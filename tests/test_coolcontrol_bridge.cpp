@@ -4,6 +4,7 @@
 using esphome::jura_native::CoolcontrolBridge;
 int main() {
   CoolcontrolBridge b;
+  b.set_override(true); assert(!b.overridden()); // No bridge means no bypass.
   assert(!b.take_announcement());
   std::string out;
   b.snapshot("@mo", 1, true, 0); b.advance(500);
@@ -103,5 +104,23 @@ int main() {
   dedup.advance(19000); assert(dedup.next(19000, out) && out == "@me1");
   dedup.snapshot("@mo:1432", 4, true, 20000); dedup.advance(20250);
   assert(dedup.next(20250, out) && out == "@mo:1432");
+  CoolcontrolBridge override;
+  override.configure(15000, 250); override.negotiate(0);
+  override.set_override(true);
+  assert(override.overridden() && override.take_announcement());
+  assert(override.next(0, out) && out == "@mo");
+  for (uint32_t t = 1000; t < 4000; t += 1000) {
+    override.snapshot("unknown", NAN, false, t); override.advance(t);
+    assert(!override.take_announcement() && !override.next(t, out));
+  }
+  override.request_status(); assert(override.next(4000, out) && out == "@mo");
+  override.snapshot("@mn:0028", 1, true, 5000); override.advance(5250);
+  override.set_override(false);
+  assert(override.next(5250, out) && out == "@mn"); // Cached source survived override.
+  override.set_override(true); override.reset_session(); override.negotiate(0xC0);
+  assert(override.take_announcement());
+  assert(override.next(6000, out) && out == "@mo"); // Never fabricate telemetry.
+  override.advance(21000); override.set_override(false);
+  assert(override.next(21000, out) && out == "@me1"); // Expiry still tracked during override.
   std::cout << "PASS: cooler bridge negotiation, coalescing, freshness, expiry and input validation\n";
 }

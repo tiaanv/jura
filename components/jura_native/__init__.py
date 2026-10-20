@@ -2,12 +2,12 @@
 import re
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import uart, sensor, text_sensor, binary_sensor, select, number, button
+from esphome.components import uart, sensor, text_sensor, binary_sensor, select, number, button, switch
 from esphome.const import CONF_ID, CONF_NAME, ENTITY_CATEGORY_DIAGNOSTIC
 from .profiles import load_profiles
 
 DEPENDENCIES = ["uart"]
-AUTO_LOAD = ["sensor", "text_sensor", "binary_sensor", "select", "number", "button"]
+AUTO_LOAD = ["sensor", "text_sensor", "binary_sensor", "select", "number", "button", "switch"]
 ns = cg.esphome_ns.namespace("jura_native")
 JuraNative = ns.class_("JuraNative", cg.PollingComponent, uart.UARTDevice)
 ProfileSensor = ns.class_("ProfileSensor", sensor.Sensor)
@@ -15,6 +15,7 @@ ProfileBinarySensor = ns.class_("ProfileBinarySensor", binary_sensor.BinarySenso
 RecipeSelect = ns.class_("RecipeSelect", select.Select)
 RecipeNumber = ns.class_("RecipeNumber", number.Number)
 CommandButton = ns.class_("CommandButton", button.Button)
+CoolcontrolOverrideSwitch = ns.class_("CoolcontrolOverrideSwitch", switch.Switch)
 
 TEXT = {
     "status": "Jura Status", "status_detail": "Jura Status Detail",
@@ -84,6 +85,11 @@ def validate_coolcontrol(config):
 
 
 COOLCONTROL_SCHEMA = cv.All(cv.Schema({
+    cv.Optional("override_switch", default={CONF_NAME: "Jura Cool Control Override"}):
+        switch.switch_schema(CoolcontrolOverrideSwitch).extend({
+            cv.Optional("restore_mode", default="ALWAYS_OFF"):
+                cv.enum({"ALWAYS_OFF": switch.RESTORE_MODES["ALWAYS_OFF"]}, upper=True),
+        }),
     cv.Optional("reporting", default="auto"): cv.one_of("auto", "negotiated", "legacy", lower=True),
     cv.Required("raw_message"): cv.use_id(text_sensor.TextSensor),
     cv.Required("message_counter"): cv.use_id(sensor.Sensor),
@@ -139,6 +145,8 @@ async def to_code(config):
     cg.add(var.set_accept_short_status(config["accept_short_status"]))
     if "coolcontrol" in config:
         cooler = config["coolcontrol"]
+        override = await switch.new_switch(cooler["override_switch"])
+        cg.add(var.set_coolcontrol_override_switch(override))
         cg.add(var.set_coolcontrol(await cg.get_variable(cooler["raw_message"]),
                                   await cg.get_variable(cooler["message_counter"]),
                                   await cg.get_variable(cooler["online"]),

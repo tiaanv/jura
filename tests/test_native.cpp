@@ -36,6 +36,14 @@ int main() {
   esphome::sensor::Sensor imported_counter;
   esphome::binary_sensor::BinarySensor imported_online;
   logging.set_coolcontrol(&imported_raw, &imported_counter, &imported_online, 15000, 250);
+  CoolcontrolOverrideSwitch override;
+  logging.set_coolcontrol_override_switch(&override);
+  logging.setup();
+  assert(!override.state && !logging.coolcontrol_override());
+  override.turn_on(); assert(override.state && logging.coolcontrol_override());
+  override.turn_off(); assert(!override.state && !logging.coolcontrol_override());
+  override.turn_on(); logging.setup();
+  assert(!override.state && !logging.coolcontrol_override());
   logging.log_inputs(0); assert(logging.availability() == 0);
   imported_raw.publish_state("@mo:321E"); imported_counter.publish_state(1); imported_online.publish_state(true);
   logging.log_inputs(1); assert(logging.availability() == 7 && logging.logged_counter() == 1);

@@ -889,6 +889,25 @@ static void test_an01_diagnostic() {
   assert(race.dev.texts["command_result"].find("cancelled") != std::string::npos);
 }
 
+static void test_cooler_override() {
+  Machine m;
+  m.dev.configure_coolcontrol(15000, 250, "negotiated");
+  m.begin(); m.tick(16000);
+  assert(m.count("@H1") == 0);
+  m.inject("@TF:000480000000");
+  assert(!m.dev.brew_named("Milk Portion"));
+  m.dev.set_coolcontrol_override(true); m.tick(2000);
+  assert(m.count("@H1") == 1 && m.count("@mo") == 1);
+  m.inject("@HM:00", false); m.tick(1500);
+  assert(m.count("@mo") == 2);
+  m.inject("@TF:800480000000"); // Override must not bypass missing tray.
+  assert(!m.dev.brew_named("Milk Portion"));
+  m.inject("@TF:000480000000");
+  assert(m.dev.brew_named("Milk Portion"));
+  m.dev.set_coolcontrol_override(false); m.tick(8000);
+  assert(m.count("@me1") == 1);
+  for (const auto &c : m.commands) assert(c.compare(0, 4, "@TP:") != 0);
+}
 static void test_milk_brew_checks() {
   for (const auto &tf : {"000600000000", "000500000000", "000480000000"}) {
     Machine m;
@@ -1092,6 +1111,7 @@ static void test_coolcontrol_forwarding() {
 }
 
 int main() {
+  test_cooler_override();
   test_milk_brew_checks();
   test_milk_error_progress();
   test_no_milk_progress();

@@ -18,16 +18,25 @@ class CoolcontrolBridge {
     coalesce_ = coalesce;
   }
   bool enabled() const { return enabled_; }
+  bool overridden() const { return override_; }
+  void set_override(bool value) {
+    if (!enabled_ || override_ == value) return;
+    override_ = value;
+    if (value) announced_ = false;
+    request_status(); // Immediately publish the effective state, including on release.
+  }
   void set_model(const std::string &ef) {
     legacy_ = mode_ == ReportingMode::LEGACY || (mode_ == ReportingMode::AUTO && ef == "EF533");
     if (!hm_seen_) reporting_ = legacy_;
   }
   std::string reporting_description() const {
+    if (override_) return "manual override: forcing healthy @mo";
     if (hm_seen_) return reporting_ ? (extended_ ? "@HM enabled extended reporting" : "@HM enabled bare reporting")
                                     : "@HM disabled reporting";
     return legacy_ ? "legacy bare fallback (no @HM required)" : "waiting for @HM";
   }
   std::string input_description() const {
+    if (override_) return "manual healthy override; source freshness still monitored";
     if (!source_online_) return "source offline, missing or invalid";
     if (!fresh_) return coalescing_ ? "waiting for coherent cooler snapshot" : "counter stale; withdrawing with @me1";
     return "fresh cooler snapshot";
@@ -45,7 +54,7 @@ class CoolcontrolBridge {
         std::floor(counter) != counter) {
       if (source_online_ || fresh_) pending_ = true;
       source_online_ = fresh_ = coalescing_ = have_counter_ = false;
-      announced_ = false;
+      if (!override_) announced_ = false;
       return;
     }
     const bool heartbeat = !have_counter_ || counter != counter_;
@@ -65,7 +74,7 @@ class CoolcontrolBridge {
     if (source_online_ && uint32_t(now - last_heartbeat_) >= timeout_) {
       if (fresh_ || coalescing_) pending_ = true;
       fresh_ = coalescing_ = false;
-      announced_ = false;
+      if (!override_) announced_ = false;
     } else if (coalescing_ && (uint32_t(now - changed_at_) >= coalesce_ ||
                                 uint64_t(uint32_t(now - window_started_)) >= uint64_t(coalesce_) * 2)) {
       raw_ = candidate_;
@@ -92,14 +101,14 @@ class CoolcontrolBridge {
   }
   void request_status() { if (enabled_) requested_ = true; }
   bool take_announcement() {
-    if (!enabled_ || announced_ || !source_online_ || !fresh_ || coalescing_) return false;
+    if (!enabled_ || announced_ || (!override_ && (!source_online_ || !fresh_ || coalescing_))) return false;
     announced_ = true;
     return true;
   }
   bool next(uint32_t now, std::string &command, bool *requested = nullptr) {
-    if (!enabled_ || (!requested_ && (!reporting_ || !pending_)) || coalescing_ ||
+    if (!enabled_ || (!requested_ && (!reporting_ || !pending_)) || (!override_ && coalescing_) ||
         (sent_ && uint32_t(now - last_send_) < 1000)) return false;
-    command = fresh_ ? raw_ : "@me1";
+    command = override_ ? "@mo" : fresh_ ? raw_ : "@me1";
     if (command.size() == 8 && (!extended_ || (nibble_(command[4]) == 15 && nibble_(command[5]) == 15))) command.resize(3);
     pending_ = false;
     // Compare the actual negotiated wire message, not heartbeat or stripped telemetry.
@@ -123,6 +132,7 @@ class CoolcontrolBridge {
   bool legacy_{false}, hm_seen_{false};
   bool requested_{false};
   bool announced_{false};
+  bool override_{false};
   bool enabled_{false}, reporting_{false}, extended_{false}, source_online_{false};
   bool fresh_{false}, coalescing_{false}, have_counter_{false}, pending_{false}, sent_{false};
   uint32_t timeout_{15000}, coalesce_{250}, last_heartbeat_{0}, changed_at_{0}, window_started_{0}, last_send_{0};

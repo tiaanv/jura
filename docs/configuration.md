@@ -331,6 +331,27 @@ negotiation. Hardware testing on EF533M V02.09 confirmed that announcing `@H1`
 elicits `@HM:80`, and forwarded `@mn`/`@mo` sets and clears the machine's
 no-milk alert. Other models still require testing.
 
+### Manual cooler override
+
+When `coolcontrol` is configured, the component also creates a **Jura Cool Control
+Override** switch. No extra YAML is required. Turn it on to announce cooler
+availability and send healthy bare `@mo`, even if the source is missing, stale,
+offline or reporting empty. It also bypasses the milk-specific brew checks;
+tray, water, connection and other machine checks still apply. The override does
+not invent temperature or level measurements, and the real imported data stays
+unchanged. The machine will not receive empty/offline cooler protection while
+this switch is on, so confirm milk is available before making a milk drink.
+
+Turning it off sends the actual latest status, or `@me1` if no fresh source is
+available. Source freshness continues to be monitored while the override is on.
+The switch always starts OFF after a device reboot; it does not restore ON.
+It remains enabled across an ordinary machine-session reconnect until switched
+off or the ESP reboots. DEBUG logs show `Cool Control override ON` / `OFF`,
+and bridge diagnostics identify the forced healthy state.
+
+The optional `coolcontrol.override_switch` entity configuration can customize
+its name or ID. Its only supported `restore_mode` is `ALWAYS_OFF`.
+
 The bridge preserves mo/mn/me/me1 without assigning unverified physical meanings.
 Fallback mode strips telemetry and sends only bare statuses. An HM enabling
 extended reporting allows unchanged telemetry, except a first telemetry byte of

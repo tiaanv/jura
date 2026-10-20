@@ -7,6 +7,7 @@
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/switch/switch.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/core/component.h"
@@ -33,6 +34,16 @@ class ProfileEntity : public Base {
 using ProfileSensor = ProfileEntity<sensor::Sensor>;
 using ProfileBinarySensor = ProfileEntity<binary_sensor::BinarySensor>;
 class JuraNative;
+class CoolcontrolOverrideSwitch : public switch_::Switch {
+ public:
+  void set_parent(JuraController *parent) { parent_ = parent; }
+ protected:
+  void write_state(bool value) override {
+    parent_->set_coolcontrol_override(value);
+    publish_state(parent_->coolcontrol_override());
+  }
+  JuraController *parent_{nullptr};
+};
 class RecipeSelect : public select::Select {
  public:
   void set_parent(JuraNative *parent, int role) {
@@ -96,6 +107,10 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
     configure_coolcontrol(timeout, coalesce, reporting);
     cooler_reporting_ = reporting;
   }
+  void set_coolcontrol_override_switch(CoolcontrolOverrideSwitch *value) {
+    cooler_override_switch_ = value;
+    value->set_parent(this);
+  }
   void register_sensor(const std::string &key, sensor::Sensor *s) { sensors_[key] = s; }
   void register_text(const std::string &key, text_sensor::TextSensor *s) { texts_[key] = s; }
   void register_binary(const std::string &key, binary_sensor::BinarySensor *s) { binaries_[key] = s; }
@@ -113,6 +128,8 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
   float get_setup_priority() const override { return setup_priority::DATA; }
   bool can_proceed() override { return discovery_ready(); }
   void setup() override {
+    set_coolcontrol_override(false);
+    if (cooler_override_switch_) cooler_override_switch_->publish_state(false);
     begin(millis());
     if (cooler_raw_ && cooler_counter_ && cooler_online_)
       ESP_LOGD("jura_native", "Cool Control bridge enabled: reporting=%s, timeout=%u ms, coalesce=%u ms",
@@ -171,6 +188,7 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
   }
 
  protected:
+  CoolcontrolOverrideSwitch *cooler_override_switch_{nullptr};
   void log_coolcontrol_inputs_(uint32_t now) {
     const uint8_t availability = (cooler_raw_->has_state() ? 1 : 0) |
                                  (cooler_counter_->has_state() ? 2 : 0) |

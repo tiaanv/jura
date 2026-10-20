@@ -38,6 +38,14 @@ class JuraController : public TransportSink {
   void coolcontrol_snapshot(const std::string &raw, float counter, bool online, uint32_t now) {
     cooler_.snapshot(raw, counter, online, now);
   }
+  void set_coolcontrol_override(bool value) {
+    const bool previous = cooler_.overridden();
+    cooler_.set_override(value);
+    if (previous == cooler_.overridden()) return;
+    trace(cooler_.overridden() ? "Cool Control override ON: forcing healthy @mo; milk alerts bypassed for brew checks"
+                              : "Cool Control override OFF: using actual cooler status");
+  }
+  bool coolcontrol_override() const { return cooler_.overridden(); }
   void set_accept_short_status(bool v) { accept_short_status_ = v; }
   void begin(uint32_t now) {
     now_ = boot_ = now;
@@ -183,7 +191,8 @@ class JuraController : public TransportSink {
     }
     if (session_ != Session::READY) return;
     if (cooler_.take_announcement()) {
-      trace("Cool Control announcement: @H1 (plaintext; fresh cooler available in this machine session)");
+      trace(cooler_.overridden() ? "Cool Control announcement: @H1 (plaintext; manual healthy override)"
+                                : "Cool Control announcement: @H1 (plaintext; fresh cooler available in this machine session)");
       start_("@H1", Kind::COOLER, false, false);
       return;
     }
@@ -529,6 +538,7 @@ class JuraController : public TransportSink {
     return false;
   }
   std::string milk_block_reason_(uint8_t code) const {
+    if (cooler_.overridden()) return "";
     const auto *p = profiles_.find(code);
     if (!p || (!profiles_.option_for(*p, MILK).valid() && !profiles_.option_for(*p, FOAM).valid())) return "";
     for (const auto &a : profiles_.alerts) {
