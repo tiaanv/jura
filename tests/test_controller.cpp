@@ -56,6 +56,7 @@ struct Machine {
   std::vector<std::string> commands;
   std::string probe_reply = "@tm:41,0200040A00000200010000000000000000F4";
   std::string an01_reply, early_hm;
+  bool early_hm_encrypted = true;
   std::map<std::string, std::string> recipe_replies;
   void inject(const std::string &s, bool at = true) {
     for (auto raw : encode(at ? cipher::build_frame(s + "\r\n", 0xA0) : s + "\r\n")) dev.input(raw, clock);
@@ -91,6 +92,8 @@ struct Machine {
         command = outgoing.substr(0, outgoing.size() - 2);
       outgoing.clear();
       commands.push_back(command);
+      // Assert framing at the wire boundary, before decoded commands hide it.
+      if (command.compare(0, 2, "@m") == 0) assert(!at);
       if (command == "TY:" && answer_type)
         inject("ty:" + model, false);
       else if (command == "AN:02")
@@ -107,7 +110,7 @@ struct Machine {
           inject("@T2:" + challenge);
         } else if (command.compare(0, 4, "@t2:") == 0) {
           inject("@T3:3BA4" + model);
-          if (!early_hm.empty()) inject(early_hm);
+          if (!early_hm.empty()) inject(early_hm, early_hm_encrypted);
         } else if (command == "@TF:" && auto_tf)
           inject("@TF:" + tf);
         else if (command.compare(0, 7, "@TR:32,") == 0)
@@ -940,13 +943,15 @@ static void test_coolcontrol_forwarding() {
   m.dev.coolcontrol_snapshot("@mn:321E", 1, true, m.clock);
   m.tick(500);
   assert(m.count("@mn") == 0 && m.count("@mn:321E") == 0);
-  m.inject("@HM:80");
+  m.inject("@HM:80", false);
   m.tick(1500);
   assert(m.count("@mn") == 1 && !m.dev.waiting());
   m.inject("@HM:C0"); m.tick(1500);
   assert(m.count("@mn:321E") == 1);
   m.dev.coolcontrol_snapshot("@mo:321E", 2, true, m.clock); m.tick(1500);
   assert(m.count("@mo:321E") == 1);
+  m.dev.coolcontrol_snapshot("@me", 3, true, m.clock); m.tick(1500);
+  assert(m.count("@me") == 1);
   m.tick(15000);
   assert(m.count("@me1") == 1 && m.dev.ready());
   m.tick(2000); assert(m.count("@me1") == 1);
@@ -955,13 +960,14 @@ static void test_coolcontrol_forwarding() {
   legacy.dev.coolcontrol_snapshot("@mn:321E", 1, true, legacy.clock);
   legacy.begin(); legacy.tick(12000);
   assert(legacy.count("@mn") == 1 && legacy.count("@mn:321E") == 0);
-  legacy.inject("@HM:00");
+  legacy.inject("@HM:00", false);
   legacy.dev.coolcontrol_snapshot("@mo:321E", 2, true, legacy.clock);
   legacy.tick(1500); assert(legacy.count("@mo") == 0);
   legacy.inject("@HM:C0"); legacy.tick(1500);
   assert(legacy.count("@mo:321E") == 1);
   Machine early;
   early.early_hm = "@HM:C0";
+  early.early_hm_encrypted = false;
   early.dev.configure_coolcontrol(15000, 250);
   early.dev.coolcontrol_snapshot("@mo:321E", 1, true, early.clock);
   early.begin(); early.tick(12000);

@@ -184,7 +184,8 @@ class JuraController : public TransportSink {
     if (session_ != Session::READY) return;
     std::string cooler_command;
     if (cooler_.next(now, cooler_command)) {
-      start_(cooler_command, Kind::COOLER, true, false);
+      // Smart Connect sends milk status without the AT cipher envelope.
+      start_(cooler_command, Kind::COOLER, false, false);
       return;
     }
     // TF is replaced by TV during a product. Don't query or restart a live TV session.
@@ -741,7 +742,8 @@ class JuraController : public TransportSink {
     }
   }
   void received(const std::string &frame, bool encrypted) override {
-    if (encrypted) {
+    // Smart Connect dispatches HM both directly and after AT decryption.
+    if (encrypted || starts_(frame, "@HM:")) {
       receive_at_(frame);
       return;
     }
