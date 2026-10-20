@@ -1003,6 +1003,24 @@ class JuraController : public TransportSink {
     const char *process = process_(code);
     if (!p && !process) return;
     cancel_api_recipe_("Machine progress observed during settings read");
+    // J.O.E. EF533 PROGRESS_STATE_INTAKE: 2D = No milk. This is a
+    // blocked attempt, not dispensing progress or successful completion.
+    if (state == 0x2D) {
+      clear_operation_("Blocked: no milk", p ? p->name.c_str() : process, 0);
+      number("product_code", code);
+      number("stage_code", state);
+      if (brew_pending_) {
+        text("command_result", code == requested_code_ ? "Blocked: no milk"
+                                                       : "Different operation blocked: no milk");
+      }
+      brew_pending_ = brew_sent_ = brew_started_ = false;
+      if (active_ == Kind::BREW && transport_.waiting()) transport_.complete(true, now_);
+      awaiting_tf_ = tf_requested_ = true;
+      trace("Milk preparation blocked: no milk; requesting fresh TF status");
+      text("status", "blocked");
+      text("status_detail", "No milk");
+      return;
+    }
     operation_seen_ = true;
     operation_finished_ = state == 0x3E;
     last_tv_ = now_;

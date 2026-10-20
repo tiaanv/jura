@@ -889,6 +889,33 @@ static void test_an01_diagnostic() {
   assert(race.dev.texts["command_result"].find("cancelled") != std::string::npos);
 }
 
+static void test_no_milk_progress() {
+  Machine m;
+  m.begin(); m.tick(12000);
+  m.auto_tf = false;
+  m.inject("@TB"); m.inject("@TV:2D0A");
+  assert(m.dev.texts["progress_state"] == "Blocked: no milk");
+  assert(m.dev.texts["current_product"] == "Milk Portion");
+  assert(m.dev.texts["status"] == "blocked");
+  assert(m.dev.bins["brew_active"] == 0);
+  assert(m.dev.nums["stage_code"] == 0x2D);
+  assert(std::isnan(m.dev.nums["progress"]));
+  auto queries = m.count("@TF:");
+  m.tick(21000);
+  assert(m.count("@TF:") > queries);
+  assert(m.dev.texts["progress_state"] == "Blocked: no milk");
+  assert(m.dev.bins["brew_active"] == 0);
+  m.inject("@TF:000600000000"); // No milk + ready (TF bits are MSB first).
+  assert(m.dev.texts["active_alerts"].find("no milk (milk sensor)") != std::string::npos);
+  m.inject("@TF:000400000000");
+  assert(m.dev.texts["progress_state"] == "Idle");
+  assert(m.dev.texts["status"] == "ready");
+  m.inject("@TB"); m.inject("@TV:320AFFFFFFFF0014FFFFFFFFFF1100FF");
+  assert(m.dev.bins["brew_active"] == 1);
+  assert(m.dev.texts["progress_state"] == "Dispensing milk");
+  m.inject("@TV:3E0A");
+  assert(m.dev.bins["brew_active"] == 0 && m.dev.nums["progress"] == 100);
+}
 static void test_current_product_lifecycle() {
   Machine m;
   m.begin();
@@ -1024,6 +1051,7 @@ static void test_coolcontrol_forwarding() {
 }
 
 int main() {
+  test_no_milk_progress();
   test_coolcontrol_forwarding();
   test_current_product_lifecycle();
   test_an01_diagnostic();
