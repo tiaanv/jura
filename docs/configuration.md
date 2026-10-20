@@ -170,7 +170,7 @@ The receiver accepts bare `@mo`, `@mn`, `@me`, `@me1` lines and extended
 `@mo:XXYY` / `@mn:XXYY` lines, terminated by CRLF. `XX` is interpreted as
 milk level (0-100%), and `YY` as temperature in tenths of a degree Celsius;
 `FF` marks an unknown measurement. These retain the earlier observed field order
-and scale. The dongle firmware relays these bytes without interpreting them.
+and scale. The bridge forwards these bytes unchanged when extended reporting is enabled.
 
 Optional `status` (text sensor) exposes `mo`, `mn`, `me`, `me1`, or `unknown`.
 These are protocol labels: we have not established the physical distinction
@@ -295,8 +295,8 @@ Raw and counter import states must both be available. Entity updates do not
 interrupt an active UART transaction and at most one cooler status is sent per
 second; control commands retain priority and repeated pending states coalesce.
 
-With `handshake_response: auto`, bridge-enabled sessions use the recovered
-dongle T2 rule for supported challenge lengths: first byte OR 0x80; second byte
+With `handshake_response: auto`, bridge-enabled sessions use the protocol's
+T2 response rule for supported challenge lengths: first byte OR 0x80; second byte
 preserves challenge bit7 and sets cooler capability 0x20; remaining bytes zero.
 For example, a three-byte challenge starting `0180` receives `81A000`.
 Explicit handshake overrides remain authoritative; users supplying one must
@@ -326,12 +326,10 @@ machine session, before forwarding status. A cooler returning after an offline
 or stale period is announced again. This announcement does not depend on HM
 reporting permission, and missing or stale input does not trigger it.
 
-The old TT214H V05.08F contains both an HM-controlled status notification path
-and a pending-text output path without that gate. The EF533 log also completed
-T2/T3 without sending HM. These observations justify removing our universal gate;
-they do not prove the EF533 controller's internal requirements. The EF533 fallback
-is a compatibility policy to test on hardware, not a claim of captured successful
-machine acceptance. See [the static/replay evidence](coolcontrol-smartconnect-evidence.txt).
+The EF533 fallback is a compatibility policy for sending bare status before
+negotiation. Hardware testing on EF533M V02.09 confirmed that announcing `@H1`
+elicits `@HM:80`, and forwarded `@mn`/`@mo` sets and clears the machine's
+no-milk alert. Other models still require testing.
 
 The bridge preserves mo/mn/me/me1 without assigning unverified physical meanings.
 Fallback mode strips telemetry and sends only bare statuses. An HM enabling

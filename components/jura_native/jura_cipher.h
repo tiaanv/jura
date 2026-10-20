@@ -1,5 +1,5 @@
 #pragma once
-// JURA service-port @-protocol cipher (dongle<->machine), recovered 2026-09-17.
+// JURA service-port @-protocol cipher (accessory<->machine).
 // Same nibble-permutation family as the BT/WiFi ciphers; self-inverse.
 // Portable: no ESPHome/Arduino dependency.
 // Copyright (c) 2026 harryzz. MIT; see LICENSE.harryzz.
@@ -9,7 +9,7 @@
 namespace jura_protocol {
 namespace atproto {
 
-// Machine-recovered S-boxes (see research/sniff/CIPHER-BROKEN.md).
+// Substitution tables for the service-port protocol.
 static const uint8_t N1[16] = {8, 14, 12, 4, 3, 13, 10, 11, 0, 15, 6, 7, 2, 5, 1, 9};
 static const uint8_t N2[16] = {4, 11, 13, 10, 0, 7, 15, 5, 9, 8, 3, 1, 14, 2, 12, 6};
 

@@ -191,7 +191,7 @@ class JuraController : public TransportSink {
     bool cooler_requested = false;
     if (cooler_.next(now, cooler_command, &cooler_requested)) {
       if (cooler_requested) trace("Cool Control request response: " + cooler_command + " (plaintext; " + cooler_.input_description() + ")");
-      // Smart Connect sends milk status without the AT cipher envelope.
+      // Milk status uses plaintext framing without the AT cipher envelope.
       start_(cooler_command, Kind::COOLER, false, false);
       return;
     }
@@ -749,7 +749,7 @@ class JuraController : public TransportSink {
     }
   }
   void received(const std::string &frame, bool encrypted) override {
-    // Smart Connect dispatches HM both directly and after AT decryption.
+    // Accept HM requests with plaintext or encrypted framing.
     if (encrypted || frame == "@HM" || starts_(frame, "@HM:")) {
       receive_at_(frame);
       return;
@@ -814,7 +814,7 @@ class JuraController : public TransportSink {
       }
       if (cooler_.enabled() && response_override_.empty() && !response.empty() &&
           hex_(challenge) && challenge.size() % 2 == 0) {
-        // Recovered dongle rule: acknowledge byte0, retain byte1 bit7 and advertise cooler bit5.
+        // Acknowledge byte0, retain byte1 bit7 and advertise cooler capability in bit5.
         response = hexbyte_(uint8_t(hexval_(challenge.substr(0, 2))) | 0x80);
         if (challenge.size() >= 4) {
           response += hexbyte_((uint8_t(hexval_(challenge.substr(2, 2))) & 0x80) | 0x20);
@@ -1003,7 +1003,7 @@ class JuraController : public TransportSink {
     const char *process = process_(code);
     if (!p && !process) return;
     cancel_api_recipe_("Machine progress observed during settings read");
-    // J.O.E. EF533 PROGRESS_STATE_INTAKE: 2D = No milk. This is a
+    // Progress state 2D indicates no milk. This is a
     // blocked attempt, not dispensing progress or successful completion.
     if (state == 0x2D) {
       clear_operation_("Blocked: no milk", p ? p->name.c_str() : process, 0);
@@ -1175,7 +1175,7 @@ class JuraController : public TransportSink {
       number("total_products", counters_[0] == 0xFFFF ? NAN : float(counters_[0]));
       for (const auto &p : profiles_.products) {
         unsigned slot = p.code;
-        // The J.O.E. app has this EF545-only remap; preserve own-code fallback.
+        // EF545 uses alternate counter slots; preserve the product-code fallback.
         if (profiles_.ef == "EF545" && (p.code == 0x31 || p.code == 0x36)) {
           const unsigned alt = p.code == 0x31 ? 0x12 : 0x13;
           if (counters_[alt] != 0xFFFF) slot = alt;

@@ -35,7 +35,7 @@ int main() {
   assert(!b.next(25000, out));
   assert(b.next(25250, out) && out == "@me1");
   b.snapshot("@mo:FF28", 2, true, 26000); b.advance(26250);
-  assert(b.next(26250, out) && out == "@mo"); // Firmware suppresses unknown first byte.
+  assert(b.next(26250, out) && out == "@mo"); // Unknown level uses bare status.
   b.snapshot("@mo\r\n@TP:02", 3, true, 28000); b.advance(28000);
   assert(b.next(28000, out) && out == "@me1");
   b.snapshot("@me", 4, true, 30000); b.advance(30250);
