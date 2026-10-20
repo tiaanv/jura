@@ -9,6 +9,7 @@
 #include "jura_profiles.h"
 #include "jura_progress.h"
 #include "jura_transport.h"
+#include "jura_coolcontrol_bridge.h"
 
 namespace esphome {
 namespace jura_native {
@@ -28,6 +29,10 @@ class JuraController : public TransportSink {
     startup_delay_ = startup;
     response_override_ = response;
     profile_hint_ = hint;
+  }
+  void configure_coolcontrol(uint32_t timeout, uint32_t coalesce) { cooler_.configure(timeout, coalesce); }
+  void coolcontrol_snapshot(const std::string &raw, float counter, bool online, uint32_t now) {
+    cooler_.snapshot(raw, counter, online, now);
   }
   void set_accept_short_status(bool v) { accept_short_status_ = v; }
   void begin(uint32_t now) {
@@ -60,6 +65,7 @@ class JuraController : public TransportSink {
   void advance(uint32_t now) {
     now_ = now;
     transport_.tick(now);
+    cooler_.advance(now);
     const uint32_t boot_elapsed = uint32_t(now - boot_);
     // TY is optional: some machines reveal their model only in the AT T3 reply.
     // Keep API discovery gated while that first handshake can identify the profile.
@@ -165,6 +171,11 @@ class JuraController : public TransportSink {
       return;
     }
     if (session_ != Session::READY) return;
+    std::string cooler_command;
+    if (cooler_.next(now, cooler_command)) {
+      start_(cooler_command, Kind::COOLER, true, false);
+      return;
+    }
     // TF is replaced by TV during a product. Don't query or restart a live TV session.
     if (!busy_() && (tf_requested_ || uint32_t(now - last_tf_query_) >= 30000)) {
       tf_requested_ = false;
@@ -390,7 +401,8 @@ class JuraController : public TransportSink {
     TEST_AN01,
     RECIPE_PROBE,
     SAVED_RECIPE,
-    API_RECIPE
+    API_RECIPE,
+    COOLER
   };
   struct Request {
     std::string command;
@@ -601,6 +613,7 @@ class JuraController : public TransportSink {
     refresh();
   }
   void start_session_() {
+    cooler_.reset_session();
     session_ = Session::ACK0;
     session_started_ = now_;
     handshake_command_ = "@T0";
@@ -742,6 +755,13 @@ class JuraController : public TransportSink {
       last_activity_ = now_;
       binary("connected", 1);
     }
+    // HM may follow T3 before our final t3 acknowledgement has drained.
+    if (cooler_.enabled() && session_ != Session::OFF && session_ != Session::BACKOFF &&
+        frame.size() == 6 && starts_(frame, "@HM:") && hex_(frame.substr(4))) {
+      cooler_.negotiate(uint8_t(hexval_(frame.substr(4))));
+      trace("Cool Control reporting flags: " + frame.substr(4));
+      return;
+    }
     if (frame == "@t0" && session_ == Session::ACK0 && active_ == Kind::H0 && transport_.waiting()) {
       transport_.complete(true, now_);
       session_ = Session::ACK1;
@@ -765,6 +785,15 @@ class JuraController : public TransportSink {
           response = "818000";
         else if (challenge.size() == 10)
           response = "8120000000";
+      }
+      if (cooler_.enabled() && response_override_.empty() && !response.empty() &&
+          hex_(challenge) && challenge.size() % 2 == 0) {
+        // Recovered dongle rule: acknowledge byte0, retain byte1 bit7 and advertise cooler bit5.
+        response = hexbyte_(uint8_t(hexval_(challenge.substr(0, 2))) | 0x80);
+        if (challenge.size() >= 4) {
+          response += hexbyte_((uint8_t(hexval_(challenge.substr(2, 2))) & 0x80) | 0x20);
+          response.append(challenge.size() - 4, '0');
+        }
       }
       if (!hex_(challenge) || challenge.size() % 2 || !hex_(response) ||
           response.size() != challenge.size()) {
@@ -1151,6 +1180,7 @@ class JuraController : public TransportSink {
 
   Profiles profiles_;
   JuraTransport transport_;
+  CoolcontrolBridge cooler_;
   Session session_{Session::OFF};
   Kind active_{Kind::NONE}, handshake_kind_{Kind::H0};
   std::string active_command_, handshake_command_, detected_, response_override_, profile_hint_, phase_;

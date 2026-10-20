@@ -77,8 +77,23 @@ def profile_hint(value):
     return value
 
 
+def validate_coolcontrol(config):
+    if config["coalesce_delay"].total_milliseconds >= config["timeout"].total_milliseconds:
+        raise cv.Invalid("coolcontrol coalesce_delay must be shorter than timeout")
+    return config
+
+
+COOLCONTROL_SCHEMA = cv.All(cv.Schema({
+    cv.Required("raw_message"): cv.use_id(text_sensor.TextSensor),
+    cv.Required("message_counter"): cv.use_id(sensor.Sensor),
+    cv.Required("online"): cv.use_id(binary_sensor.BinarySensor),
+    cv.Optional("timeout", default="15s"): cv.All(cv.positive_not_null_time_period, cv.positive_time_period_milliseconds),
+    cv.Optional("coalesce_delay", default="250ms"): cv.positive_time_period_milliseconds,
+}), validate_coolcontrol)
+
 schema = {
     cv.GenerateID(): cv.declare_id(JuraNative),
+    cv.Optional("coolcontrol"): COOLCONTROL_SCHEMA,
     cv.Optional("allow_brew", default=False): cv.boolean,
     cv.Optional("allow_power_off", default=False): cv.boolean,
     cv.Optional("raw_extras", default=True): cv.boolean,
@@ -121,6 +136,13 @@ async def to_code(config):
     cg.add(var.set_handshake_response("" if config["handshake_response"] == "AUTO" else config["handshake_response"]))
     cg.add(var.set_profile_hint("" if config["profile_hint"] == "AUTO" else config["profile_hint"]))
     cg.add(var.set_accept_short_status(config["accept_short_status"]))
+    if "coolcontrol" in config:
+        cooler = config["coolcontrol"]
+        cg.add(var.set_coolcontrol(await cg.get_variable(cooler["raw_message"]),
+                                  await cg.get_variable(cooler["message_counter"]),
+                                  await cg.get_variable(cooler["online"]),
+                                  cooler["timeout"].total_milliseconds,
+                                  cooler["coalesce_delay"].total_milliseconds))
     for key in TEXT:
         entity = await text_sensor.new_text_sensor(config[key])
         cg.add(var.register_text(cg.std_string(key), entity))

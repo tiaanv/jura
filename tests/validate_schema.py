@@ -11,6 +11,16 @@ import yaml
 base = yaml.safe_load((root / "examples/e8-local.yaml").read_text())
 base["external_components"][0]["source"]["path"] = str(root / "components")
 variants = [("esp32-c3-idf", base, True)]
+bridge = yaml.safe_load((root / "examples/e8-coolcontrol-ha.yaml").read_text())
+bridge["external_components"][0]["source"] = {"type": "local", "path": str(root / "components")}
+variants.append(("native-coolcontrol-homeassistant", bridge, True))
+missing_bridge_sensor = copy.deepcopy(bridge)
+del missing_bridge_sensor["jura_native"]["coolcontrol"]["message_counter"]
+variants.append(("native-coolcontrol-missing-counter", missing_bridge_sensor, False))
+bad_coalesce = copy.deepcopy(bridge)
+bad_coalesce["jura_native"]["coolcontrol"]["coalesce_delay"] = "15s"
+variants.append(("native-coolcontrol-invalid-coalesce", bad_coalesce, False))
+
 short_status = copy.deepcopy(base)
 short_status["jura_native"]["accept_short_status"] = True
 variants.append(("native-five-byte-ef533-status", short_status, True))

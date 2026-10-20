@@ -55,7 +55,7 @@ struct Machine {
   bool answer_type = true, answer_at = true, answer_brew = true, reject_brew = false, auto_tf = true;
   std::vector<std::string> commands;
   std::string probe_reply = "@tm:41,0200040A00000200010000000000000000F4";
-  std::string an01_reply;
+  std::string an01_reply, early_hm;
   std::map<std::string, std::string> recipe_replies;
   void inject(const std::string &s, bool at = true) {
     for (auto raw : encode(at ? cipher::build_frame(s + "\r\n", 0xA0) : s + "\r\n")) dev.input(raw, clock);
@@ -105,9 +105,10 @@ struct Machine {
         else if (command == "@T1") {
           inject("@t1");
           inject("@T2:" + challenge);
-        } else if (command.compare(0, 4, "@t2:") == 0)
+        } else if (command.compare(0, 4, "@t2:") == 0) {
           inject("@T3:3BA4" + model);
-        else if (command == "@TF:" && auto_tf)
+          if (!early_hm.empty()) inject(early_hm);
+        } else if (command == "@TF:" && auto_tf)
           inject("@TF:" + tf);
         else if (command.compare(0, 7, "@TR:32,") == 0)
           inject("@tr:32," + command.substr(7, 2) + ",0001000200030004");
@@ -925,7 +926,49 @@ static void test_current_product_lifecycle() {
   assert(m.dev.ready() && m.dev.texts["current_product"] == "None");
 }
 
+static void test_coolcontrol_forwarding() {
+  Machine disabled;
+  disabled.begin(); disabled.tick(12000);
+  disabled.dev.coolcontrol_snapshot("@mo:321E", 1, true, disabled.clock);
+  disabled.inject("@HM:C0"); disabled.tick(1500);
+  assert(disabled.count("@mo:321E") == 0 && disabled.count("@me1") == 0);
+  Machine m;
+  m.dev.configure_coolcontrol(15000, 250);
+  m.begin();
+  m.tick(12000);
+  assert(m.dev.ready() && m.count("@t2:8120000000") == 1);
+  m.dev.coolcontrol_snapshot("@mn:321E", 1, true, m.clock);
+  m.tick(500);
+  assert(m.count("@mn") == 0 && m.count("@mn:321E") == 0);
+  m.inject("@HM:80");
+  m.tick(1500);
+  assert(m.count("@mn") == 1 && !m.dev.waiting());
+  m.inject("@HM:C0"); m.tick(1500);
+  assert(m.count("@mn:321E") == 1);
+  m.dev.coolcontrol_snapshot("@mo:321E", 2, true, m.clock); m.tick(1500);
+  assert(m.count("@mo:321E") == 1);
+  m.tick(15000);
+  assert(m.count("@me1") == 1 && m.dev.ready());
+  m.tick(2000); assert(m.count("@me1") == 1);
+  Machine early;
+  early.early_hm = "@HM:C0";
+  early.dev.configure_coolcontrol(15000, 250);
+  early.dev.coolcontrol_snapshot("@mo:321E", 1, true, early.clock);
+  early.begin(); early.tick(12000);
+  assert(early.count("@mo:321E") == 1);
+  Machine three;
+  three.challenge = "018000";
+  three.dev.configure_coolcontrol(15000, 250);
+  three.begin(); three.tick(12000);
+  assert(three.count("@t2:81A000") == 1);
+  Machine manual;
+  manual.dev.configure_coolcontrol(15000, 250);
+  manual.begin(true, "8180000000"); manual.tick(12000);
+  assert(manual.count("@t2:8180000000") == 1);
+}
+
 int main() {
+  test_coolcontrol_forwarding();
   test_current_product_lifecycle();
   test_an01_diagnostic();
   test_profiles();

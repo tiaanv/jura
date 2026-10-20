@@ -86,6 +86,13 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
   void set_startup_delay(uint32_t v) { startup_delay_ = v; }
   void set_handshake_response(const std::string &v) { response_override_ = v; }
   void set_profile_hint(const std::string &v) { profile_hint_ = v; }
+  void set_coolcontrol(text_sensor::TextSensor *raw, sensor::Sensor *counter, binary_sensor::BinarySensor *online,
+                       uint32_t timeout, uint32_t coalesce) {
+    cooler_raw_ = raw;
+    cooler_counter_ = counter;
+    cooler_online_ = online;
+    configure_coolcontrol(timeout, coalesce);
+  }
   void register_sensor(const std::string &key, sensor::Sensor *s) { sensors_[key] = s; }
   void register_text(const std::string &key, text_sensor::TextSensor *s) { texts_[key] = s; }
   void register_binary(const std::string &key, binary_sensor::BinarySensor *s) { binaries_[key] = s; }
@@ -108,6 +115,10 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
     for (size_t i = 0; i < 128 && available(); ++i) {
       if (!read_byte(&raw)) break;
       input(raw, millis());
+    }
+    if (cooler_raw_ && cooler_counter_ && cooler_online_) {
+      const bool available = cooler_raw_->has_state() && cooler_counter_->has_state() && cooler_online_->has_state();
+      coolcontrol_snapshot(cooler_raw_->state, cooler_counter_->state, available && cooler_online_->state, millis());
     }
     advance(millis());
   }
@@ -318,6 +329,9 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
       number(std::string(prefix) + "_step", opt.valid() ? float(opt.step) : NAN);
     }
   }
+  text_sensor::TextSensor *cooler_raw_{nullptr};
+  sensor::Sensor *cooler_counter_{nullptr};
+  binary_sensor::BinarySensor *cooler_online_{nullptr};
   std::map<std::string, sensor::Sensor *> sensors_;
   std::map<std::string, text_sensor::TextSensor *> texts_;
   std::map<std::string, binary_sensor::BinarySensor *> binaries_;

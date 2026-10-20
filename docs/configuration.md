@@ -252,3 +252,68 @@ At boot there is no raw message until a valid frame arrives. These entities only
 expose the receiver data; forwarding to `jura_native` is not implemented yet.
 Home Assistant/API delivery can batch updates, so this is a latest-status and
 liveness interface rather than a guaranteed lossless queue of serial messages.
+
+
+### Forwarding Cool Control status to the coffee machine
+
+The machine component's optional `coolcontrol` block references ESPHome entity
+IDs, including entities imported from Home Assistant. Without this block, the
+existing T2 replies, machine polling, controls and UART behavior are unchanged.
+There is no dependency on a cooler or Home Assistant for ordinary operation.
+See [the complete Home Assistant bridge example](../examples/e8-coolcontrol-ha.yaml).
+
+```yaml
+jura_native:
+  id: jura_coffee
+  uart_id: uart_bus
+  coolcontrol:
+    raw_message: cooler_raw
+    message_counter: cooler_counter
+    online: cooler_online
+    timeout: 15s
+    coalesce_delay: 250ms
+```
+
+The example imports your separate cooler device's raw message, counter and online
+entities with `platform: homeassistant`; replace their `entity_id` strings with
+those on your installation. Both devices must be integrated into Home Assistant.
+The machine's existing native API connection receives those states; no HA
+forwarding automation or API action is required. Keep the imported entities
+internal and do not add averaging/throttling filters to the counter.
+
+The bridge accepts only validated cooler statuses. A changing counter supplies
+liveness, including identical status repeats and counter resets/wraps. A brief
+coalescing delay allows raw-message and counter updates to arrive separately;
+this is latest-state forwarding, not guaranteed delivery of every serial frame.
+The settling window is bounded to twice `coalesce_delay`, so frequent updates
+cannot postpone forwarding indefinitely.
+Unchanged cached Home Assistant states do not keep the bridge alive. The local
+`timeout` protects against a failed network or Home Assistant as well as a silent
+cooler. A false/unavailable online state or invalid input withdraws cooler status.
+Raw and counter import states must both be available. Entity updates do not
+interrupt an active UART transaction and at most one cooler status is sent per
+second; control commands retain priority and repeated pending states coalesce.
+
+With `handshake_response: auto`, bridge-enabled sessions use the recovered
+dongle T2 rule for supported challenge lengths: first byte OR 0x80; second byte
+preserves challenge bit7 and sets cooler capability 0x20; remaining bytes zero.
+For example, a three-byte challenge starting `0180` receives `81A000`.
+Explicit handshake overrides remain authoritative; users supplying one must
+include the appropriate cooler capability themselves.
+
+The machine must enable reporting through encrypted `@HM:XX`: bit7 enables
+cooler reports and bit6 permits extended telemetry. Until that negotiation, no
+cooler status is transmitted. The bridge preserves mo/mn/me/me1 rather than
+assigning unverified physical meanings. It sends bare mo/mn when extended
+reporting is disabled or the first telemetry byte is FF. Fresh telemetry is sent
+unchanged when supported. Expired/offline input generates `@me1` once, including
+when the machine initially enables reporting without fresh cooler data. Restoring
+a fresh counter resumes reporting. A new machine session resets negotiation and
+can replay the latest still-fresh status once reporting is enabled again.
+
+Messages use the existing encrypted AT framing and paced UART transport with no
+reply expected. This feature has protocol simulation/configuration coverage;
+physical machine interoperability and the appropriate input timeout for each
+cooler's reporting interval still need hardware testing. If your machine never
+sends `@HM`, the bridge stays silent; DEBUG logs show received AT traffic and
+reporting flags. Disabling the YAML block restores the original component behavior.
