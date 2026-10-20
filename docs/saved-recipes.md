@@ -6,6 +6,30 @@ to use Brew. The optional brew_selected API action is included in the [GitHub](.
 merge it into your `api.actions` only if your card wants that action rather than
 pressing the native Jura Brew button.
 
+## Firmware without saved-settings replies
+
+For firmware such as EF533M V01.18 where automatic `@TM:41` reads time out,
+merge this setting into your existing component configuration:
+
+```yaml
+jura_native:
+  read_saved_recipes: false
+```
+
+The default is `true`, retaining existing behaviour. When disabled, startup,
+selection, Reset Recipe, `brew_drink` and `brew_custom` skip the saved-settings
+request. Controls and API brews use profile defaults plus explicit one-shot
+overrides. Recipe Loading stays off; Recipe Status and Command Recipe Status
+identify the disabled reads rather than suggesting a retry. Automatic reads
+therefore no longer generate settings-read UART timeouts. Other UART requests
+can still time out.
+
+Reset Recipe discards UI edits and restores profile defaults without reading.
+The manually pressed Read Espresso Settings diagnostic button remains available;
+it can still time out and does not initialise the controls. No recipe settings
+are written back to the machine. Machine-customised recipes are not available
+when reads are disabled. Readiness checks and duplicate/busy guards still apply.
+
 ## Normal use
 Select a drink in Jura Drink. The component schedules `@TM:41,<product code>`,
 waits for an idle connected machine/fresh status, and reads its saved settings.

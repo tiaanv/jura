@@ -56,12 +56,15 @@ int main() {
   device.register_binary("recipe_modified", &recipe_modified);
   device.set_allow_brew(true);
   device.set_allow_power_off(true);
+  ProfileSensor legacy_rinses;
+  device.register_profile_sensor("brew_movements", &legacy_rinses);
   device.setup();
   assert(!device.can_proceed());
   ticks(device, 100);
   for (auto raw : encode("ty:EF533M V02.09\r\n")) device.incoming.push_back(raw);
   ticks(device, 2);
   assert(device.can_proceed());
+  assert(legacy_rinses.name() == "Legacy Coffee Rinse Count (unverified)" && !legacy_rinses.is_internal());
   assert(espresso.name() == "Espresso Count" && !espresso.is_internal());
   assert(unrelated.is_internal() && unrelated_alert.is_internal());
   assert(tray.name() == "insert tray" && !tray.is_internal());

@@ -30,6 +30,8 @@ uart:
 jura_native:
   id: jura_coffee
   uart_id: uart_bus
+  # Set false on firmware without saved-settings replies (profile defaults instead).
+  read_saved_recipes: true
   allow_brew: true
   allow_power_off: true
   raw_extras: true

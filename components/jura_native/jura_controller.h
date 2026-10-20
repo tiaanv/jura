@@ -29,6 +29,8 @@ class JuraController : public TransportSink {
     response_override_ = response;
     profile_hint_ = hint;
   }
+  void set_read_saved_recipes(bool v) { read_saved_recipes_ = v; }
+  void set_accept_short_status(bool v) { accept_short_status_ = v; }
   void begin(uint32_t now) {
     now_ = boot_ = now;
     identify_pending_ = true;
@@ -225,8 +227,9 @@ class JuraController : public TransportSink {
     selected_ = baseline_;
     edited_mask_ = 0;
     recipe_source_ = "Profile defaults";
-    recipe_read_status_ = "Waiting to read saved recipe";
-    recipe_read_requested_ = recipe_loading_ = selection() != nullptr;
+    recipe_read_status_ = read_saved_recipes_ ? "Waiting to read saved recipe"
+                                             : "Profile defaults: saved recipe reads disabled";
+    recipe_read_requested_ = recipe_loading_ = read_saved_recipes_ && selection() != nullptr;
     text("saved_recipe_raw", "");
     publish_recipe_state_();
     recipe_changed();
@@ -273,6 +276,13 @@ class JuraController : public TransportSink {
       const auto opt = profiles_.option_for(*p, attr);
       if (values[attr] < -1 || !opt.valid() || !opt.accepts(values[attr]))
         return reject_("Unsupported override for requested drink");
+    }
+    if (!read_saved_recipes_) {
+      if (!submit_(*p, values.data())) return false;
+      text("command_recipe_source", "Profile defaults");
+      text("command_recipe_status", "Profile defaults: saved recipe reads disabled");
+      text("command_recipe_raw", "");
+      return true;
     }
     api_recipe_code_ = p->code;
     api_overrides_ = values;
@@ -482,6 +492,13 @@ class JuraController : public TransportSink {
     trace("Saved recipe " + selection()->name + ": " + summary);
   }
   bool flag_(unsigned bit) const { return bit / 8 < tf_.size() && (tf_[bit / 8] & (0x80u >> (bit % 8))); }
+  // Only the observed five-byte EF533 format may omit the sixth alert byte.
+  // Shorter frames and other profiles retain the incomplete-status guard.
+  // Missing alert entities stay unknown even when this exception is enabled.
+  bool tf_missing_(unsigned bit) const {
+    const bool accepted_short = accept_short_status_ && profiles_.ef == "EF533" && tf_.size() == 5;
+    return bit / 8 >= tf_.size() && !accepted_short;
+  }
   bool blocked_() const {
     for (const auto &a : profiles_.alerts)
       if (a.blocking && flag_(a.bit)) return true;
@@ -492,7 +509,7 @@ class JuraController : public TransportSink {
         awaiting_tf_ || uint32_t(now_ - last_tf_) >= 60000 || blocked_())
       return false;
     for (const auto &a : profiles_.alerts)
-      if (a.blocking && a.bit / 8 >= tf_.size()) return false;
+      if (a.blocking && tf_missing_(a.bit)) return false;
     for (const auto &a : profiles_.alerts)
       if (Profiles::lower(a.name) == "coffee ready") return flag_(a.bit);
     return false;  // No positive readiness signal: don't guess.
@@ -650,7 +667,7 @@ class JuraController : public TransportSink {
       return;
     }
     for (const auto &a : profiles_.alerts) {
-      if (a.blocking && a.bit / 8 >= tf_.size()) {
+      if (a.blocking && tf_missing_(a.bit)) {
         text("status", "unknown");
         text("status_detail", "Incomplete machine status");
         return;
@@ -852,7 +869,7 @@ class JuraController : public TransportSink {
     // actively arriving TV progress even if an incidental TF frame also arrives.
     bool complete_status = tf_.size() >= 2;
     for (const auto &a : profiles_.alerts)
-      if (a.blocking && a.bit / 8 >= tf_.size()) complete_status = false;
+      if (a.blocking && tf_missing_(a.bit)) complete_status = false;
     if (!busy_() && complete_status) clear_operation_("Idle", "None", 0);
     if (api_recipe_pending_ && !ready_for_brew_())
       cancel_api_recipe_("Machine reported not ready during settings read");
@@ -924,6 +941,7 @@ class JuraController : public TransportSink {
     clear_stage_();
   }
   void clear_stage_() {
+    number("stage_progress", NAN);
     number("stage_current", NAN);
     number("stage_target", NAN);
     text("stage_unit", "");
@@ -982,6 +1000,11 @@ class JuraController : public TransportSink {
       number("stage_current", v[window + pair] == 0xFF ? NAN : v[window + pair] * factor);
       number("stage_target", v[window + pair + 1] == 0xFF ? NAN : v[window + pair + 1] * factor);
       text("stage_unit", unit);
+      // Quantities describe this dispensing stage, not the whole drink.
+      const unsigned current = v[window + pair], target = v[window + pair + 1];
+      if ((state == 0x3C || state == 0x37 || state == 0x32 || state == 0x34 || state == 0x41) &&
+          current != 0xFF && target != 0xFF && target > 0 && current <= target)
+        number("stage_progress", 100.0f * current / target);
     }
     if (brew_pending_ && !brew_started_) {
       if (code == requested_code_) {
@@ -1164,6 +1187,8 @@ class JuraController : public TransportSink {
   bool tf_valid_{false}, tf_requested_{false}, awaiting_tf_{false}, operation_seen_{false},
       operation_finished_{false};
   bool alerts_invalidated_{false}, model_mismatch_{false};
+  bool accept_short_status_{false};
+  bool read_saved_recipes_{true};
   bool probe_pending_{false};
   bool brew_pending_{false}, brew_sent_{false}, brew_started_{false}, refresh_after_finish_{false};
   uint32_t now_{0}, boot_{0}, startup_delay_{8000}, session_started_{0}, session_failed_at_{0};

@@ -35,6 +35,16 @@ control path or model has been exercised on hardware.
 
 ## Regression coverage
 
+- Disabled automatic saved reads across startup, selection/reset and native/API
+  brewing; profile defaults and explicit one-shot overrides, retained UI edits,
+  duplicate protection and manual-probe availability; default enabled-read tests.
+- Separate dispensing-stage progress with old short TV frames, real overall
+  percentage precedence, invalid quantities, stage changes, finish/idle,
+  disconnect and progress timeout; runtime legacy counter label compatibility.
+
+- Opt-in five-byte EF533 status: default rejection, ready/heating and present
+  blocking alerts, rejection of two-to-four-byte frames and five-byte EF545
+  frames, and preservation of full-frame sixth-byte blocking alerts.
 - Cipher and encoded framing, all-byte/key round trips, escaping, timeouts and rollover.
 - Legacy non-blocking queue behaviour, including actual header execution with fake UART/time.
 - Current-product cleanup after rinse progress silence, recognised finish, fresh TF,

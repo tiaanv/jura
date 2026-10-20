@@ -40,6 +40,7 @@ struct Fake : public JuraController {
     output.insert(output.end(), p, p + n);
     return now_;
   }
+  void disconnect() { session_failed_("Test connection loss"); }
   bool ready() const { return session_ == Session::READY; }
   bool backoff() const { return session_ == Session::BACKOFF; }
   size_t queued_polls() const { return polls_.size(); }
@@ -230,6 +231,162 @@ static void test_startup_and_statistics() {
   assert(!m.dev.brew_named("Espresso"));
   m.inject("@TF:000400000000");
   assert(m.dev.texts["status"] == "ready");
+}
+// EF533M V01.18 sends a 1-byte challenge and a 5-byte TF frame, so the EF533
+// profile's blocking bits 40 (close tab) / 47 (SwitchOff Delay) are absent.
+static void test_short_tf_frame() {
+  for (bool accept : {false, true}) {
+    Machine m;
+    m.model = "EF533M V01.18";
+    m.challenge = "01";
+    m.tf = "0004000060";
+    m.dev.set_accept_short_status(accept);
+    m.begin(true, "81");
+    m.tick(16000);
+    assert(m.dev.ready() && m.dev.texts["profile"] == "EF533");
+    assert(m.count("@t2:81") == 1);
+    assert(m.dev.texts["active_alerts"] == "decalc alert, cleaning alert");
+    assert(m.dev.bins["alert_40"] == -1 && m.dev.bins["alert_47"] == -1);
+    if (!accept) {
+      assert(m.dev.texts["status"] == "unknown");
+      assert(m.dev.texts["status_detail"] == "Incomplete machine status");
+      assert(!m.dev.brew_named("Espresso"));
+      continue;
+    }
+    assert(m.dev.texts["status"] == "ready");
+    m.inject("@TF:8004000060");  // insert tray (bit 0, blocking) still blocks
+    assert(m.dev.texts["status"] == "blocked");
+    assert(!m.dev.brew_named("Espresso"));
+    m.inject("@TF:0004000060");
+    assert(m.dev.texts["status"] == "ready");
+    m.inject("@TF:0008000060");  // heating up, coffee ready not yet set
+    assert(m.dev.texts["status"] == "heating");
+    assert(!m.dev.brew_named("Espresso"));
+    // Even valid framed hex with coffee-ready set must not bypass the guard
+    // when it is shorter than the observed five-byte EF533 format.
+    for (const char *short_tf : {"0004", "000400", "00040000"}) {
+      m.inject(std::string("@TF:") + short_tf);
+      assert(m.dev.texts["status"] == "unknown");
+      assert(m.dev.texts["status_detail"] == "Incomplete machine status");
+      assert(!m.dev.brew_named("Espresso"));
+    }
+    // A full frame still honours blocking bits in the sixth byte.
+    m.inject("@TF:000400006001");  // bit 47: SwitchOff Delay active
+    assert(m.dev.texts["status"] == "blocked");
+    assert(!m.dev.brew_named("Espresso"));
+    m.inject("@TF:0004000060");
+    assert(m.dev.brew_named("Espresso"));
+  }
+  // Five bytes on another profile must not receive the EF533 exception.
+  Machine other;
+  other.model = "EF545M V02.09";
+  other.tf = "0004000000";
+  other.dev.set_accept_short_status(true);
+  other.begin();
+  other.tick(16000);
+  assert(other.dev.ready() && other.dev.texts["profile"] == "EF545");
+  assert(other.dev.texts["status"] == "unknown");
+  assert(other.dev.texts["status_detail"] == "Incomplete machine status");
+  assert(!other.dev.brew_named("Espresso"));
+}
+static void test_disabled_saved_recipes() {
+  Machine m;
+  m.probe_reply.clear();  // This machine does not answer saved recipe reads.
+  m.dev.set_read_saved_recipes(false);
+  m.begin();
+  m.tick(16000);
+  assert(m.dev.bins["recipe_loading"] == 0);
+  assert(m.dev.texts["recipe_source"] == "Profile defaults");
+  assert(m.dev.texts["recipe_status"] == "Profile defaults: saved recipe reads disabled");
+  assert(m.dev.selected_values()[WATER] == 45);
+  m.dev.choose("Coffee");
+  m.dev.reset_recipe();
+  m.tick(7000);
+  m.dev.choose("Espresso");
+  m.tick(7000);
+  assert(m.dev.bins["recipe_loading"] == 0);
+  assert(m.dev.set_parameter(WATER, 60));
+  assert(m.dev.brew_selected());
+  assert(m.dev.selected_values()[WATER] == 45 && m.dev.bins["recipe_modified"] == 0);
+  m.tick(1500);
+  assert(m.count("@TP:0200040C000002000100000000000000") == 1);
+  for (const auto &command : m.commands) assert(command.compare(0, 7, "@TM:41,") != 0);
+
+  for (bool custom : {false, true}) {
+    Machine api;
+    api.dev.set_read_saved_recipes(false);
+    api.begin();
+    api.tick(16000);
+    assert(api.dev.set_parameter(WATER, 80));
+    const auto ui = api.dev.selected_values();
+    if (custom)
+      assert(api.dev.brew_custom("Espresso", "", 60, -1, -1, "", -1, -1, ""));
+    else
+      assert(api.dev.brew_named("Espresso"));
+    assert(!api.dev.brew_named("Espresso"));  // Duplicate protection is unchanged.
+    assert(api.dev.texts["command_recipe_source"] == "Profile defaults");
+    assert(api.dev.texts["command_recipe_status"] == "Profile defaults: saved recipe reads disabled");
+    assert(api.dev.texts["command_recipe_raw"].empty());
+    assert(api.dev.selected_values() == ui && api.dev.bins["recipe_modified"] == 1);
+    api.tick(1500);
+    assert(api.count(custom ? "@TP:0200040C000002000100000000000000"
+                            : "@TP:02000409000002000100000000000000") == 1);
+    for (const auto &command : api.commands) assert(command.compare(0, 7, "@TM:41,") != 0);
+  }
+  Machine diagnostic;
+  diagnostic.dev.set_read_saved_recipes(false);
+  diagnostic.begin();
+  diagnostic.tick(16000);
+  assert(diagnostic.count("@TM:41,02") == 0);
+  assert(diagnostic.dev.probe_espresso_settings());
+  diagnostic.tick(2000);
+  assert(diagnostic.count("@TM:41,02") == 1);
+  assert(diagnostic.dev.texts["espresso_probe_result"].find("Valid response") == 0);
+  diagnostic.dev.reset_recipe();
+  diagnostic.tick(7000);
+  assert(diagnostic.count("@TM:41,02") == 1);
+  diagnostic.dev.disconnect();
+  diagnostic.tick(70000);
+  assert(diagnostic.dev.ready() && diagnostic.count("@TM:41,02") == 1);
+}
+static void test_dispensing_stage_progress() {
+  Machine m;
+  m.begin();
+  m.tick(16000);
+  assert(std::isnan(m.dev.nums["stage_progress"]));
+  // Actual older-firmware format: no overall percentage field.
+  m.inject("@TV:3C0304040018FFFFFFFF11FFFF00");
+  assert(std::isnan(m.dev.nums["progress"]));
+  assert(m.dev.nums["stage_progress"] == 0);
+  m.inject("@TV:3C0304040C18FFFFFFFF11FFFF00");
+  assert(m.dev.nums["stage_current"] == 60 && m.dev.nums["stage_target"] == 120);
+  assert(m.dev.nums["stage_progress"] == 50);
+  m.inject("@TV:3C0304041818FFFFFFFF11FFFF00");
+  assert(m.dev.nums["stage_progress"] == 100 && m.dev.bins["brew_active"] == 1);
+  for (const char *frame : {"@TV:3C0304040C00", "@TV:3C0304040CFF", "@TV:3C030404FF18",
+                            "@TV:3C0304041918", "@TV:3C03", "@TV:210301", "@TV:39030404"}) {
+    m.inject(frame);
+    assert(std::isnan(m.dev.nums["stage_progress"]));
+  }
+  // A real overall percentage keeps its own meaning, independently of stage %.
+  m.inject("@TV:3C0206060409FFFFFFFF22FFFF1132FF");
+  assert(m.dev.nums["progress"] == 50);
+  assert(std::abs(m.dev.nums["stage_progress"] - 100.0f * 4 / 9) < 0.01f);
+  for (const char *frame : {"@TV:370304040C18", "@TV:3203FFFFFFFF0A14",
+                            "@TV:3403FFFFFFFFFFFF0A14", "@TV:410304040C18"}) {
+    m.inject(frame);
+    assert(m.dev.nums["stage_progress"] == 50);
+  }
+  m.inject("@TV:3E03");
+  assert(m.dev.nums["progress"] == 100 && std::isnan(m.dev.nums["stage_progress"]));
+  m.inject("@TF:000400000000");
+  assert(std::isnan(m.dev.nums["stage_progress"]));
+  m.inject("@TV:3C0304040C18FFFFFFFF11FFFF00");
+  m.tick(21000);
+  assert(std::isnan(m.dev.nums["stage_progress"]));
+  m.inject("@TV:3C0304040C18FFFFFFFF11FFFF00");
+  m.dev.disconnect();
+  assert(m.dev.backoff() && std::isnan(m.dev.nums["stage_progress"]));
 }
 static void test_brew() {
   Machine m;
@@ -874,8 +1031,11 @@ int main() {
   test_profiles();
   test_cipher();
   test_startup_and_statistics();
+  test_short_tf_frame();
   test_ef1092_handshake();
   test_length_based_handshake();
+  test_disabled_saved_recipes();
+  test_dispensing_stage_progress();
   test_brew();
   test_failure_and_rejection();
   test_banks_and_progress();

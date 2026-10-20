@@ -270,7 +270,7 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
       const std::pair<const char *, const char *> names[] = {
           {"single_espresso_made", "Single Espresso Made"},
           {"double_espresso_made", "Double Espresso Made"},
-          {"brew_movements", "Brew Movements Performed"},
+          {"brew_movements", "Legacy Coffee Rinse Count (unverified)"},
           {"grounds_level", "Grounds Level"},
           {"brews_since_cleaning", "Brews Performed Since Cleaning"},
           {"brews_since_descaling", "Brews Performed Since Descaling"}};

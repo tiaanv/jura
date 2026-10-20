@@ -11,9 +11,22 @@
 
 ## Unreleased
 
+- Add `read_saved_recipes` (default true). Disabling automatic recipe reads uses
+  profile defaults plus one-shot overrides for native/API brewing, with explicit
+  source/status reporting. The manual diagnostic probe remains available.
+- Relabel the EF533 native raw extra as Legacy Coffee Rinse Count (unverified),
+  retaining its `brew_movements` registration key and raw value.
+- Add `Jura Stage Progress` for dispensing current/target quantities without
+  changing overall `Jura Progress`. Card fallback requires a separate update.
+
 - `handshake_response: auto` now answers a 1-byte challenge with `81`
   (byte 0 = challenge[0] | 0x80, same length), as sent by the E8 EF533M V01.18
   (`@T2:01` → `@t2:81` → `@T3:…EF533M V01.18`), verified on hardware.
+- New opt-in `accept_short_status` option for the observed five-byte EF533 TF
+  format (E8 EF533M V01.18). The absent sixth byte no longer prevents readiness;
+  its alert entities remain unknown and present blocking alerts still block.
+  Shorter frames and other profiles retain normal completeness checks. Default
+  unchanged; regression tests cover the restricted exception.
 - `handshake_response: auto` now answers the E8 EF1092M V01.07 challenge
   `01C041B628` with `8120000000`, verified on hardware; no override needed.
 

@@ -71,7 +71,7 @@ external-component configuration and UART setup are unaffected.
 3. Add a dashboard resource of type **JavaScript module**:
 
    ```text
-   /local/jura-native-card.js?v=2.1.4
+   /local/jura-native-card.js?v=2.1.5
    ```
 
 4. Refresh the browser and add the card YAML.
@@ -149,7 +149,7 @@ The mapping contract is in `setConfig()` in
 
 | Logical keys | Generated entity pattern |
 | --- | --- |
-| `status`, `status_detail`, `active_alerts`, `current_product`, `progress_state`, `progress`, `stage_current`, `stage_target`, `stage_unit`, `stage_code` | `sensor.<prefix>_jura_<key>` |
+| `status`, `status_detail`, `active_alerts`, `current_product`, `progress_state`, `progress`, `stage_progress`, `stage_current`, `stage_target`, `stage_unit`, `stage_code` | `sensor.<prefix>_jura_<key>` |
 | `connected`, `brew_active`, `alerts_stale`, `recipe_loading`, `recipe_modified` | `binary_sensor.<prefix>_jura_<key>` |
 | `drink` | `select.<prefix>_jura_drink` |
 | `brew`, `reset_recipe`, `refresh` | `button.<prefix>_jura_<key>` |
@@ -189,9 +189,30 @@ Coffee**, **Brewing the Coffee**, **Heating for Milk**, **Adding Milk**, and
 **Your Flat White Is Ready**. Heating uses the generic **Heating Up** unless the
 same observed operation's preceding coffee stage establishes its purpose.
 
-Stage quantity and overall progress are separate: `60 / 80 ml` is one stage,
-while `40%` is the native overall percentage. Milk/foam quantities are seconds,
-not millilitres. When no percentage is supplied (normal during heating or rinsing), the
+Stage quantities, stage percentage and overall progress are separate. The card
+prefers a valid native **overall** `progress` percentage, including zero. If that
+is unavailable, it uses the optional **Jura Stage Progress** (`stage_progress`)
+sensor and labels it with the current phase, for example **Brewing the Coffee —
+50%**. The progressbar accessibility label also identifies stage progress.
+
+`60 / 80 ml` describes one stage. Milk/foam quantities are seconds, not
+millilitres. Stage progress can reset between stages; **stage 100% does not mean
+the drink is complete**, clear a Brew lock, or enable Brew. Completion continues
+to use the observed finish/readiness states. Missing, nonfinite or out-of-range
+percentages are hidden; zero is preserved. Disconnect/timeout/idle does not reuse
+a retained stage percentage. Older firmware without this sensor still works:
+valid overall progress is shown, otherwise the percentage and bar stay hidden.
+
+The default entity ID is `sensor.<prefix>_jura_stage_progress`. Renamed sensors
+can be configured explicitly:
+
+```yaml
+entities:
+  stage_progress: sensor.my_jura_stage_progress
+```
+
+The card uses the component-provided percentage; it does not calculate a
+percentage from stage quantities or elapsed time. When no percentage is supplied (normal during heating or rinsing), the
 percentage and progress bar are hidden; the operation message remains visible.
 Progress is never estimated from elapsed time. Some machines do not report a terminal frame for every rinse;
 fresh Ready status hides retained operation panels. Fresh shutdown status clears
