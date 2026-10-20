@@ -87,11 +87,14 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
   void set_handshake_response(const std::string &v) { response_override_ = v; }
   void set_profile_hint(const std::string &v) { profile_hint_ = v; }
   void set_coolcontrol(text_sensor::TextSensor *raw, sensor::Sensor *counter, binary_sensor::BinarySensor *online,
-                       uint32_t timeout, uint32_t coalesce) {
+                       uint32_t timeout, uint32_t coalesce, const std::string &reporting = "auto") {
     cooler_raw_ = raw;
     cooler_counter_ = counter;
     cooler_online_ = online;
-    configure_coolcontrol(timeout, coalesce);
+    cooler_timeout_ = timeout;
+    cooler_coalesce_ = coalesce;
+    configure_coolcontrol(timeout, coalesce, reporting);
+    cooler_reporting_ = reporting;
   }
   void register_sensor(const std::string &key, sensor::Sensor *s) { sensors_[key] = s; }
   void register_text(const std::string &key, text_sensor::TextSensor *s) { texts_[key] = s; }
@@ -109,7 +112,12 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
   void register_button(int role, CommandButton *s) { buttons_[role] = s; }
   float get_setup_priority() const override { return setup_priority::DATA; }
   bool can_proceed() override { return discovery_ready(); }
-  void setup() override { begin(millis()); }
+  void setup() override {
+    begin(millis());
+    if (cooler_raw_ && cooler_counter_ && cooler_online_)
+      ESP_LOGD("jura_native", "Cool Control bridge enabled: reporting=%s, timeout=%u ms, coalesce=%u ms",
+               cooler_reporting_.c_str(), unsigned(cooler_timeout_), unsigned(cooler_coalesce_));
+  }
   void loop() override {
     uint8_t raw;
     for (size_t i = 0; i < 128 && available(); ++i) {
@@ -118,7 +126,9 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
     }
     if (cooler_raw_ && cooler_counter_ && cooler_online_) {
       const bool available = cooler_raw_->has_state() && cooler_counter_->has_state() && cooler_online_->has_state();
-      coolcontrol_snapshot(cooler_raw_->state, cooler_counter_->state, available && cooler_online_->state, millis());
+      const uint32_t now = millis();
+      log_coolcontrol_inputs_(now);
+      coolcontrol_snapshot(cooler_raw_->state, cooler_counter_->state, available && cooler_online_->state, now);
     }
     advance(millis());
   }
@@ -161,6 +171,38 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
   }
 
  protected:
+  void log_coolcontrol_inputs_(uint32_t now) {
+    const uint8_t availability = (cooler_raw_->has_state() ? 1 : 0) |
+                                 (cooler_counter_->has_state() ? 2 : 0) |
+                                 (cooler_online_->has_state() ? 4 : 0);
+    const std::string raw = (availability & 1) ? cooler_raw_->state : "<missing>";
+    const float counter = cooler_counter_->state;
+    const bool online = (availability & 4) && cooler_online_->state;
+    const bool counter_valid = (availability & 2) && std::isfinite(counter) && counter >= 0 &&
+                               counter <= 16777215 && std::floor(counter) == counter;
+    const bool important_change = !cooler_inputs_logged_ || availability != cooler_logged_availability_ ||
+                                  raw != cooler_logged_raw_ || online != cooler_logged_online_ ||
+                                  counter_valid != cooler_logged_counter_valid_;
+    const bool counter_changed = counter != cooler_logged_counter_ &&
+                                 !(std::isnan(counter) && std::isnan(cooler_logged_counter_));
+    if (!important_change && !(counter_changed && uint32_t(now - cooler_inputs_logged_at_) >= 5000)) return;
+    const char *state = availability != 7 ? "waiting for imported entity states"
+                        : !online ? "source offline"
+                        : !CoolcontrolBridge::valid(raw) ? "rejected: invalid raw message"
+                        : !counter_valid ? "rejected: invalid message counter"
+                        : "received valid inputs";
+    const std::string counter_text = (availability & 2) ? std::to_string(counter) : "<missing>";
+    ESP_LOGD("jura_native", "Cool Control HA inputs: raw='%s', counter=%s, online=%s; %s",
+             raw.substr(0, 32).c_str(), counter_text.c_str(),
+             (availability & 4) ? (online ? "ON" : "OFF") : "<missing>", state);
+    cooler_inputs_logged_ = true;
+    cooler_logged_availability_ = availability;
+    cooler_logged_raw_ = raw;
+    cooler_logged_online_ = online;
+    cooler_logged_counter_valid_ = counter_valid;
+    cooler_logged_counter_ = counter;
+    cooler_inputs_logged_at_ = now;
+  }
   void trace(const std::string &message) override { ESP_LOGD("jura_native", "%s", message.c_str()); }
   uint32_t write_transport(const uint8_t *data, size_t n) override {
     write_array(data, n);
@@ -329,9 +371,15 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
       number(std::string(prefix) + "_step", opt.valid() ? float(opt.step) : NAN);
     }
   }
+  std::string cooler_reporting_{"auto"};
   text_sensor::TextSensor *cooler_raw_{nullptr};
   sensor::Sensor *cooler_counter_{nullptr};
   binary_sensor::BinarySensor *cooler_online_{nullptr};
+  uint32_t cooler_timeout_{15000}, cooler_coalesce_{250}, cooler_inputs_logged_at_{0};
+  uint8_t cooler_logged_availability_{0};
+  bool cooler_inputs_logged_{false}, cooler_logged_online_{false}, cooler_logged_counter_valid_{false};
+  float cooler_logged_counter_{NAN};
+  std::string cooler_logged_raw_;
   std::map<std::string, sensor::Sensor *> sensors_;
   std::map<std::string, text_sensor::TextSensor *> texts_;
   std::map<std::string, binary_sensor::BinarySensor *> binaries_;

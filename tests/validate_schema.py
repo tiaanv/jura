@@ -14,6 +14,13 @@ variants = [("esp32-c3-idf", base, True)]
 bridge = yaml.safe_load((root / "examples/e8-coolcontrol-ha.yaml").read_text())
 bridge["external_components"][0]["source"] = {"type": "local", "path": str(root / "components")}
 variants.append(("native-coolcontrol-homeassistant", bridge, True))
+for mode in ("negotiated", "legacy"):
+    mode_config = copy.deepcopy(bridge)
+    mode_config["jura_native"]["coolcontrol"]["reporting"] = mode
+    variants.append(("native-coolcontrol-" + mode, mode_config, True))
+bad_mode = copy.deepcopy(bridge)
+bad_mode["jura_native"]["coolcontrol"]["reporting"] = "force_extended"
+variants.append(("native-coolcontrol-bad-reporting", bad_mode, False))
 missing_bridge_sensor = copy.deepcopy(bridge)
 del missing_bridge_sensor["jura_native"]["coolcontrol"]["message_counter"]
 variants.append(("native-coolcontrol-missing-counter", missing_bridge_sensor, False))

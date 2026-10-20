@@ -30,7 +30,11 @@ class JuraController : public TransportSink {
     response_override_ = response;
     profile_hint_ = hint;
   }
-  void configure_coolcontrol(uint32_t timeout, uint32_t coalesce) { cooler_.configure(timeout, coalesce); }
+  void configure_coolcontrol(uint32_t timeout, uint32_t coalesce, const std::string &reporting = "auto") {
+    cooler_.configure(timeout, coalesce, reporting == "legacy" ? CoolcontrolBridge::ReportingMode::LEGACY
+                                      : reporting == "negotiated" ? CoolcontrolBridge::ReportingMode::NEGOTIATED
+                                                                  : CoolcontrolBridge::ReportingMode::AUTO);
+  }
   void coolcontrol_snapshot(const std::string &raw, float counter, bool online, uint32_t now) {
     cooler_.snapshot(raw, counter, online, now);
   }
@@ -66,6 +70,13 @@ class JuraController : public TransportSink {
     now_ = now;
     transport_.tick(now);
     cooler_.advance(now);
+    if (cooler_.enabled()) {
+      const auto diagnostic = cooler_.reporting_description() + "; " + cooler_.input_description();
+      if (diagnostic != cooler_diagnostic_) {
+        cooler_diagnostic_ = diagnostic;
+        trace("Cool Control bridge: " + diagnostic);
+      }
+    }
     const uint32_t boot_elapsed = uint32_t(now - boot_);
     // TY is optional: some machines reveal their model only in the AT T3 reply.
     // Keep API discovery gated while that first handshake can identify the profile.
@@ -599,6 +610,7 @@ class JuraController : public TransportSink {
     }
   }
   void install_profile_() {
+    cooler_.set_model(profiles_.ef);
     discovery_done_ = true;
     profile_changed(true);
     text("profile", profiles_.ef);
@@ -1181,6 +1193,7 @@ class JuraController : public TransportSink {
   Profiles profiles_;
   JuraTransport transport_;
   CoolcontrolBridge cooler_;
+  std::string cooler_diagnostic_;
   Session session_{Session::OFF};
   Kind active_{Kind::NONE}, handshake_kind_{Kind::H0};
   std::string active_command_, handshake_command_, detected_, response_override_, profile_hint_, phase_;

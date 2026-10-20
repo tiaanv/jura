@@ -66,6 +66,6 @@ The native component can optionally bridge validated cooler snapshots from three
 ESPHome entity references (raw message, receive counter, online), including Home
 Assistant imports. It coalesces asynchronously delivered states and expires
 stalled counters locally. The bridge advertises the cooler capability in automatic
-T2 replies and waits for machine HM reporting flags, then schedules encrypted
-status frames through the existing transport without requesting replies. It is
+T2 replies and applies an optional EF533 bare fallback or machine HM reporting flags, then
+schedules encrypted status frames through the existing transport without requesting replies. It is
 disabled when the `coolcontrol` configuration is absent.

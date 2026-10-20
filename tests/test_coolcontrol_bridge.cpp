@@ -52,5 +52,23 @@ int main() {
     fast.advance(t);
   }
   assert(fast.next(500, out) && out == "@mo"); // Frequent heartbeats cannot postpone forever.
+  CoolcontrolBridge automatic;
+  automatic.configure(15000, 250); automatic.set_model("EF533"); automatic.reset_session();
+  automatic.snapshot("@mo:321E", 1, true, 0); automatic.advance(250);
+  assert(automatic.next(250, out) && out == "@mo");
+  automatic.negotiate(0); automatic.snapshot("@mn", 2, true, 1500); automatic.advance(1750);
+  assert(!automatic.next(1750, out)); // Explicit HM disable wins over fallback.
+  automatic.reset_session(); assert(automatic.next(2000, out) && out == "@mn");
+  CoolcontrolBridge other;
+  other.configure(15000, 250); other.set_model("EF999"); other.reset_session();
+  other.snapshot("@mo", 1, true, 0); other.advance(250); assert(!other.next(250, out));
+  CoolcontrolBridge forced;
+  forced.configure(15000, 250, CoolcontrolBridge::ReportingMode::LEGACY);
+  forced.reset_session(); forced.snapshot("@mo", 1, true, 0); forced.advance(250);
+  assert(forced.next(250, out) && out == "@mo");
+  CoolcontrolBridge strict;
+  strict.configure(15000, 250, CoolcontrolBridge::ReportingMode::NEGOTIATED);
+  strict.set_model("EF533"); strict.reset_session(); strict.snapshot("@mo", 1, true, 0);
+  strict.advance(250); assert(!strict.next(250, out));
   std::cout << "PASS: cooler bridge negotiation, coalescing, freshness, expiry and input validation\n";
 }

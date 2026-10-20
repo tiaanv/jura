@@ -8,12 +8,30 @@ namespace jura_native {
 // Latest-state bridge, not a FIFO: imported Home Assistant entities may arrive separately.
 class CoolcontrolBridge {
  public:
-  void configure(uint32_t timeout, uint32_t coalesce) {
+  enum class ReportingMode { AUTO, NEGOTIATED, LEGACY };
+  void configure(uint32_t timeout, uint32_t coalesce, ReportingMode mode = ReportingMode::AUTO) {
+    mode_ = mode;
+    legacy_ = mode == ReportingMode::LEGACY;
+    if (!hm_seen_) reporting_ = legacy_;
     enabled_ = true;
     timeout_ = timeout;
     coalesce_ = coalesce;
   }
   bool enabled() const { return enabled_; }
+  void set_model(const std::string &ef) {
+    legacy_ = mode_ == ReportingMode::LEGACY || (mode_ == ReportingMode::AUTO && ef == "EF533");
+    if (!hm_seen_) reporting_ = legacy_;
+  }
+  std::string reporting_description() const {
+    if (hm_seen_) return reporting_ ? (extended_ ? "@HM enabled extended reporting" : "@HM enabled bare reporting")
+                                    : "@HM disabled reporting";
+    return legacy_ ? "legacy bare fallback (no @HM required)" : "waiting for @HM";
+  }
+  std::string input_description() const {
+    if (!source_online_) return "source offline, missing or invalid";
+    if (!fresh_) return coalescing_ ? "waiting for coherent cooler snapshot" : "counter stale; withdrawing with @me1";
+    return "fresh cooler snapshot";
+  }
   static bool valid(const std::string &s) {
     if (s == "@mo" || s == "@mn" || s == "@me" || s == "@me1") return true;
     if (s.size() != 8 || (s.compare(0, 4, "@mo:") && s.compare(0, 4, "@mn:"))) return false;
@@ -55,12 +73,14 @@ class CoolcontrolBridge {
     }
   }
   void reset_session() {
-    reporting_ = extended_ = false;
+    hm_seen_ = extended_ = false;
+    reporting_ = legacy_;
     sent_ = false;
     pending_ = true;
     last_sent_.clear();
   }
   void negotiate(uint8_t flags) {
+    hm_seen_ = true;
     reporting_ = (flags & 0x80) != 0;
     extended_ = (flags & 0x40) != 0;
     pending_ = true;
@@ -85,6 +105,8 @@ class CoolcontrolBridge {
     if (c >= 'A' && c <= 'F') return c - 'A' + 10;
     return -1;
   }
+  ReportingMode mode_{ReportingMode::AUTO};
+  bool legacy_{false}, hm_seen_{false};
   bool enabled_{false}, reporting_{false}, extended_{false}, source_online_{false};
   bool fresh_{false}, coalescing_{false}, have_counter_{false}, pending_{false}, sent_{false};
   uint32_t timeout_{15000}, coalesce_{250}, last_heartbeat_{0}, changed_at_{0}, window_started_{0}, last_send_{0};

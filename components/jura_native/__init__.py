@@ -84,6 +84,7 @@ def validate_coolcontrol(config):
 
 
 COOLCONTROL_SCHEMA = cv.All(cv.Schema({
+    cv.Optional("reporting", default="auto"): cv.one_of("auto", "negotiated", "legacy", lower=True),
     cv.Required("raw_message"): cv.use_id(text_sensor.TextSensor),
     cv.Required("message_counter"): cv.use_id(sensor.Sensor),
     cv.Required("online"): cv.use_id(binary_sensor.BinarySensor),
@@ -142,7 +143,7 @@ async def to_code(config):
                                   await cg.get_variable(cooler["message_counter"]),
                                   await cg.get_variable(cooler["online"]),
                                   cooler["timeout"].total_milliseconds,
-                                  cooler["coalesce_delay"].total_milliseconds))
+                                  cooler["coalesce_delay"].total_milliseconds, cooler["reporting"]))
     for key in TEXT:
         entity = await text_sensor.new_text_sensor(config[key])
         cg.add(var.register_text(cg.std_string(key), entity))

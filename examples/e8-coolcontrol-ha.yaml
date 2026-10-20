@@ -55,6 +55,7 @@ jura_native:
   allow_power_off: false
   handshake_response: auto
   coolcontrol:
+    reporting: auto  # EF533: bare fallback without HM; other profiles wait for HM.
     raw_message: cooler_raw
     message_counter: cooler_counter
     online: cooler_online

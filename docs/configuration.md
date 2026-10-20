@@ -270,6 +270,7 @@ jura_native:
     raw_message: cooler_raw
     message_counter: cooler_counter
     online: cooler_online
+    reporting: auto
     timeout: 15s
     coalesce_delay: 250ms
 ```
@@ -301,19 +302,49 @@ For example, a three-byte challenge starting `0180` receives `81A000`.
 Explicit handshake overrides remain authoritative; users supplying one must
 include the appropriate cooler capability themselves.
 
-The machine must enable reporting through encrypted `@HM:XX`: bit7 enables
-cooler reports and bit6 permits extended telemetry. Until that negotiation, no
-cooler status is transmitted. The bridge preserves mo/mn/me/me1 rather than
-assigning unverified physical meanings. It sends bare mo/mn when extended
-reporting is disabled or the first telemetry byte is FF. Fresh telemetry is sent
-unchanged when supported. Expired/offline input generates `@me1` once, including
-when the machine initially enables reporting without fresh cooler data. Restoring
-a fresh counter resumes reporting. A new machine session resets negotiation and
-can replay the latest still-fresh status once reporting is enabled again.
+Reporting policy is controlled by `reporting`:
+
+- `auto` (default): EF533 uses a legacy bare-status fallback when no `@HM`
+  arrives. Other profiles wait for negotiation.
+- `negotiated`: require `@HM` on every model, including EF533.
+- `legacy`: allow bare status forwarding without `@HM` on any model. Use this
+  only as an explicit compatibility choice for a machine you are testing.
+
+An actual encrypted `@HM:XX` always takes precedence, including an explicit
+disable: bit7 enables reports and bit6 permits extended telemetry. A new session
+clears that negotiation and reapplies the selected fallback policy. No `@HM`
+command is sent to the machine to manufacture its settings.
+
+The old TT214H V05.08F contains both an HM-controlled status notification path
+and a pending-text output path without that gate. The EF533 log also completed
+T2/T3 without sending HM. These observations justify removing our universal gate;
+they do not prove the EF533 controller's internal requirements. The EF533 fallback
+is a compatibility policy to test on hardware, not a claim of captured successful
+machine acceptance. See [the static/replay evidence](coolcontrol-smartconnect-evidence.txt).
+
+The bridge preserves mo/mn/me/me1 without assigning unverified physical meanings.
+Fallback mode strips telemetry and sends only bare statuses. An HM enabling
+extended reporting allows unchanged telemetry, except a first telemetry byte of
+FF produces a bare status. Expired/offline input generates `@me1` once, including
+when reporting begins without fresh data. Restoring a fresh counter resumes
+reporting. A new machine session can replay the latest still-fresh status.
 
 Messages use the existing encrypted AT framing and paced UART transport with no
 reply expected. This feature has protocol simulation/configuration coverage;
 physical machine interoperability and the appropriate input timeout for each
-cooler's reporting interval still need hardware testing. If your machine never
-sends `@HM`, the bridge stays silent; DEBUG logs show received AT traffic and
-reporting flags. Disabling the YAML block restores the original component behavior.
+cooler's reporting interval still need hardware testing. DEBUG logs now show bridge configuration, the imported raw/counter/online values,
+missing inputs, selected reporting policy and stale-counter withdrawal. Counter-only
+input logs are limited to once per five seconds; raw/online/availability changes
+are logged immediately. Look for, for example:
+
+```text
+Cool Control bridge enabled: reporting=auto, timeout=15000 ms, coalesce=250 ms
+Cool Control HA inputs: raw='@mo:321E', counter=123.000000, online=ON; received valid inputs
+Cool Control bridge: legacy bare fallback (no @HM required); fresh cooler snapshot
+Sending @mo
+```
+
+A `<missing>` input means its Home Assistant state has not arrived, not that
+cooler telemetry itself lacks the optional two bytes. `Sending` confirms UART
+submission, not machine acknowledgement. Disabling the YAML block restores the
+original component behavior.

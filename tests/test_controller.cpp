@@ -933,7 +933,7 @@ static void test_coolcontrol_forwarding() {
   disabled.inject("@HM:C0"); disabled.tick(1500);
   assert(disabled.count("@mo:321E") == 0 && disabled.count("@me1") == 0);
   Machine m;
-  m.dev.configure_coolcontrol(15000, 250);
+  m.dev.configure_coolcontrol(15000, 250, "negotiated");
   m.begin();
   m.tick(12000);
   assert(m.dev.ready() && m.count("@t2:8120000000") == 1);
@@ -950,6 +950,16 @@ static void test_coolcontrol_forwarding() {
   m.tick(15000);
   assert(m.count("@me1") == 1 && m.dev.ready());
   m.tick(2000); assert(m.count("@me1") == 1);
+  Machine legacy;
+  legacy.dev.configure_coolcontrol(15000, 250);
+  legacy.dev.coolcontrol_snapshot("@mn:321E", 1, true, legacy.clock);
+  legacy.begin(); legacy.tick(12000);
+  assert(legacy.count("@mn") == 1 && legacy.count("@mn:321E") == 0);
+  legacy.inject("@HM:00");
+  legacy.dev.coolcontrol_snapshot("@mo:321E", 2, true, legacy.clock);
+  legacy.tick(1500); assert(legacy.count("@mo") == 0);
+  legacy.inject("@HM:C0"); legacy.tick(1500);
+  assert(legacy.count("@mo:321E") == 1);
   Machine early;
   early.early_hm = "@HM:C0";
   early.dev.configure_coolcontrol(15000, 250);
