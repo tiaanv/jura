@@ -17,6 +17,8 @@ class JuraCoolcontrol : public PollingComponent, public uart::UARTDevice {
   void set_level_sensor(sensor::Sensor *s) { level_ = s; }
   void set_temperature_sensor(sensor::Sensor *s) { temperature_ = s; }
   void set_status_sensor(text_sensor::TextSensor *s) { status_sensor_ = s; }
+  void set_raw_message_sensor(text_sensor::TextSensor *s) { raw_message_sensor_ = s; }
+  void set_message_counter_sensor(sensor::Sensor *s) { message_counter_sensor_ = s; }
   void set_online_sensor(binary_sensor::BinarySensor *s) { online_sensor_ = s; }
   void set_communication_timeout(uint32_t ms) { communication_timeout_ = ms; }
   void set_measurement_timeout(uint32_t ms) { measurement_timeout_ = ms; }
@@ -28,6 +30,7 @@ class JuraCoolcontrol : public PollingComponent, public uart::UARTDevice {
   }
   void setup() override {
     started_ = millis();
+    if (message_counter_sensor_) message_counter_sensor_->publish_state(0);
     publish_();
   }
   void loop() override {
@@ -101,6 +104,11 @@ class JuraCoolcontrol : public PollingComponent, public uart::UARTDevice {
       seen_measurement_ = true;
     }
     publish_();
+    // Publish the exact accepted payload before its sequence marker. Never synthesize raw frames on expiry.
+    if (raw_message_sensor_) raw_message_sensor_->publish_state(line_.substr(0, line_.size() - 2));
+    // ESPHome numeric sensors use float: wrap within its exact integer range so every frame changes state.
+    message_counter_ = (message_counter_ + 1U) & 0xFFFFFFU;
+    if (message_counter_sensor_) message_counter_sensor_->publish_state(float(message_counter_));
   }
   void publish_() {
     const uint32_t now = millis();
@@ -114,7 +122,9 @@ class JuraCoolcontrol : public PollingComponent, public uart::UARTDevice {
     if (temperature_) temperature_->publish_state(fresh ? last_temperature_ : NAN);
   }
   sensor::Sensor *level_{nullptr}, *temperature_{nullptr};
-  text_sensor::TextSensor *status_sensor_{nullptr};
+  text_sensor::TextSensor *status_sensor_{nullptr}, *raw_message_sensor_{nullptr};
+  sensor::Sensor *message_counter_sensor_{nullptr};
+  uint32_t message_counter_{0};
   binary_sensor::BinarySensor *online_sensor_{nullptr};
   std::string line_, status_{"unknown"}, probe_text_;
   uint32_t last_byte_{0}, last_status_{0}, last_measurement_{0};

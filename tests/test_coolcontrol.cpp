@@ -6,8 +6,8 @@
 using esphome::jura_coolcontrol::JuraCoolcontrol;
 struct Fixture {
   JuraCoolcontrol cooler;
-  esphome::sensor::Sensor level, temperature;
-  esphome::text_sensor::TextSensor status;
+  esphome::sensor::Sensor level, temperature, counter;
+  esphome::text_sensor::TextSensor status, raw;
   esphome::binary_sensor::BinarySensor online;
   Fixture() {
     test_now = 0;
@@ -15,6 +15,8 @@ struct Fixture {
     cooler.set_temperature_sensor(&temperature);
     cooler.set_status_sensor(&status);
     cooler.set_online_sensor(&online);
+    cooler.set_raw_message_sensor(&raw);
+    cooler.set_message_counter_sensor(&counter);
     cooler.setup();
   }
   void feed(const std::string &s) {
@@ -23,6 +25,29 @@ struct Fixture {
   }
 };
 int main() {
+  Fixture messages;
+  assert(messages.counter.state == 0 && messages.raw.state.empty());
+  messages.feed("@mo:321e\r\n");
+  assert(messages.raw.state == "@mo:321e" && messages.counter.state == 1);
+  messages.feed("@mo:321e\r\n");
+  assert(messages.raw.state == "@mo:321e" && messages.counter.state == 2);
+  messages.feed("@mn\r\n");
+  assert(messages.raw.state == "@mn" && messages.counter.state == 3);
+  messages.feed("@me\r\n");
+  assert(messages.raw.state == "@me" && messages.counter.state == 4);
+  messages.feed("@me1\r\n");
+  assert(messages.raw.state == "@me1" && messages.counter.state == 5);
+  messages.feed("noise\r\n@mn:GG00\r\n@mo:651E\r\n@me2\r\n");
+  assert(messages.raw.state == "@me1" && messages.counter.state == 5);
+  messages.cooler.update();
+  test_now = 10000; messages.cooler.update();
+  assert(!messages.online.state && messages.raw.state == "@me1" && messages.counter.state == 5);
+  messages.feed("@mn:0028\r\n");
+  assert(messages.raw.state == "@mn:0028" && messages.counter.state == 6);
+  messages.feed("@mo:32");
+  assert(messages.counter.state == 6);
+  messages.feed("1E\r\n");
+  assert(messages.raw.state == "@mo:321E" && messages.counter.state == 7);
   Fixture f;
   assert(!f.online.state && f.status.state == "unknown" && std::isnan(f.level.state));
   f.feed("@mo:321E\r\n");

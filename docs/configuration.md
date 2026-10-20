@@ -215,3 +215,40 @@ that boot after any recognized status, including bare older-cooler messages.
 It does not restart automatically when a previously reporting cooler goes silent.
 See the Cool Control examples for the existing RX wiring; choose TX for your
 hardware and avoid sharing that UART with serial logging.
+
+
+### Raw messages for a future machine bridge
+
+Enable optional `raw_message` (text sensor) and `message_counter` (numeric sensor):
+
+```yaml
+jura_coolcontrol:
+  uart_id: cool_uart
+  raw_message:
+    name: "Cooler Raw Message"
+  message_counter:
+    name: "Cooler Message Counter"
+  online:
+    name: "Cooler Online"
+```
+
+`raw_message` preserves each accepted message exactly, including hexadecimal
+letter case, with only the trailing CRLF removed; for example `@mo:321E`, `@mn`,
+`@me`, or `@me1`. Only frames accepted by the existing status/telemetry validator
+are published. Malformed input and rejected out-of-range levels are not counted.
+The raw payload is published before the counter for that frame.
+
+`message_counter` starts at zero on boot and advances once for every accepted
+frame, including identical repeats and older-cooler bare statuses. It wraps from
+16,777,215 to zero so every increment remains exactly representable by ESPHome's
+floating-point sensor. Treat it as a changing sequence marker, not a lifetime
+total; detect any change rather than requiring a higher value. Avoid filters
+that throttle, average or round this sensor if using it as a heartbeat.
+
+Polling and timeout expiry do not advance the counter or manufacture raw
+messages. The raw sensor retains the last received payload when offline; consumers
+must check `online` and use their own receive timeout before forwarding it.
+At boot there is no raw message until a valid frame arrives. These entities only
+expose the receiver data; forwarding to `jura_native` is not implemented yet.
+Home Assistant/API delivery can batch updates, so this is a latest-status and
+liveness interface rather than a guaranteed lossless queue of serial messages.

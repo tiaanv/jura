@@ -30,6 +30,10 @@ jura_coolcontrol:
     name: "Jura Coolcontrol Level"
   temperature:
     name: "Jura Coolcontrol Temperature"
+  raw_message:
+    name: "Jura Coolcontrol Raw Message"
+  message_counter:
+    name: "Jura Coolcontrol Message Counter"
   status:
     name: "Jura Coolcontrol Status"
   online:

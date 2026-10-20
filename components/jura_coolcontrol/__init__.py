@@ -18,6 +18,10 @@ CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(JuraCoolcontrol),
     cv.Optional("level", default={"name": "Milk Level"}): sensor.sensor_schema(unit_of_measurement="%", accuracy_decimals=0),
     cv.Optional("temperature", default={"name": "Milk Temperature"}): sensor.sensor_schema(unit_of_measurement="°C", accuracy_decimals=1),
+    cv.Optional("raw_message"): text_sensor.text_sensor_schema(),
+    cv.Optional("message_counter"): sensor.sensor_schema(accuracy_decimals=0, icon="mdi:counter").extend({
+        cv.Optional("force_update", default=True): cv.boolean,
+    }),
     cv.Optional("status"): text_sensor.text_sensor_schema(),
     cv.Optional("online"): binary_sensor.binary_sensor_schema(device_class="connectivity"),
     cv.Optional("communication_timeout", default="10s"): NONZERO_TIME,
@@ -39,6 +43,10 @@ async def to_code(config):
     await uart.register_uart_device(var, config)
     cg.add(var.set_level_sensor(await sensor.new_sensor(config["level"])))
     cg.add(var.set_temperature_sensor(await sensor.new_sensor(config["temperature"])))
+    if "raw_message" in config:
+        cg.add(var.set_raw_message_sensor(await text_sensor.new_text_sensor(config["raw_message"])))
+    if "message_counter" in config:
+        cg.add(var.set_message_counter_sensor(await sensor.new_sensor(config["message_counter"])))
     if "status" in config:
         cg.add(var.set_status_sensor(await text_sensor.new_text_sensor(config["status"])))
     if "online" in config:

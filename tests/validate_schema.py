@@ -66,6 +66,7 @@ probe = copy.deepcopy(cool)
 probe["uart"][1]["tx_pin"] = "GPIO6"
 probe["jura_coolcontrol"].update({
     "status": {"name": "Cooler Status"}, "online": {"name": "Cooler Online"},
+    "raw_message": {"name": "Cooler Raw Message"}, "message_counter": {"name": "Cooler Message Counter"},
     "communication_timeout": "20s", "measurement_timeout": "10s",
     "startup_probe": {"text": "hello\r\n", "delay": "1s", "retry_interval": "2s", "max_attempts": 3},
 })
