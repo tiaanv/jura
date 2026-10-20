@@ -96,6 +96,7 @@ struct Machine {
       commands.push_back(command);
       // Assert framing at the wire boundary, before decoded commands hide it.
       if (command.compare(0, 2, "@m") == 0) assert(!at);
+      if (command == "@H1") assert(!at);
       if (command == "TY:" && answer_type)
         inject("ty:" + model, false);
       else if (command == "AN:02")
@@ -937,13 +938,16 @@ static void test_coolcontrol_forwarding() {
   disabled.dev.coolcontrol_snapshot("@mo:321E", 1, true, disabled.clock);
   disabled.inject("@HM:C0"); disabled.tick(1500);
   assert(disabled.count("@mo:321E") == 0 && disabled.count("@me1") == 0);
+  assert(disabled.count("@H1") == 0);
   Machine m;
   m.dev.configure_coolcontrol(15000, 250, "negotiated");
   m.begin();
   m.tick(12000);
   assert(m.dev.ready() && m.count("@t2:8120000000") == 1);
+  assert(m.count("@H1") == 0); // No source data yet.
   m.dev.coolcontrol_snapshot("@mn:321E", 1, true, m.clock);
   m.tick(500);
+  assert(m.count("@H1") == 1); // Independent of automatic reporting permission.
   assert(m.count("@mn") == 0 && m.count("@mn:321E") == 0);
   m.inject("@HM:80", false);
   m.tick(1500);
@@ -982,8 +986,10 @@ static void test_coolcontrol_forwarding() {
   polled.early_hm = "@HM"; polled.early_hm_encrypted = false;
   polled.begin(); polled.tick(12000);
   assert(polled.count("@mn") == 1);
+  assert(polled.count("@H1") == 1);
   polled.inject("@HM", false); polled.tick(1500);
   assert(polled.count("@mn") == 2);
+  polled.dev.coolcontrol_snapshot("@mn:321E", 2, true, polled.clock);
   polled.inject("@HM:00", false); polled.tick(1500);
   assert(polled.count("@mn") == 3);
   polled.dev.coolcontrol_snapshot("@mo", 2, true, polled.clock);
@@ -996,6 +1002,16 @@ static void test_coolcontrol_forwarding() {
     logged_response |= line.find("Cool Control request response: @mn (plaintext;") == 0;
   }
   assert(logged_request && logged_response);
+  assert(polled.count("@H1") == 1); // Heartbeats and polls do not reannounce.
+  polled.dev.coolcontrol_snapshot("@mo", 3, false, polled.clock);
+  polled.tick(500);
+  polled.dev.coolcontrol_snapshot("@mo", 4, true, polled.clock);
+  polled.tick(1500);
+  assert(polled.count("@H1") == 2); // Reconnect announces even with reporting disabled.
+  bool logged_announcement = false;
+  for (const auto &line : polled.dev.traces)
+    logged_announcement |= line.find("Cool Control announcement: @H1 (plaintext;") == 0;
+  assert(logged_announcement);
   Machine three;
   three.challenge = "018000";
   three.dev.configure_coolcontrol(15000, 250);

@@ -4,11 +4,13 @@
 using esphome::jura_native::CoolcontrolBridge;
 int main() {
   CoolcontrolBridge b;
+  assert(!b.take_announcement());
   std::string out;
   b.snapshot("@mo", 1, true, 0); b.advance(500);
   assert(!b.next(500, out));
   b.configure(15000, 250);
   b.snapshot("@mo:321E", 1, true, 1000); b.advance(1250);
+  assert(b.take_announcement() && !b.take_announcement());
   assert(!b.next(1250, out)); // No reporting before machine negotiation.
   b.negotiate(0x80);
   assert(b.next(1250, out) && out == "@mo");
@@ -80,5 +82,11 @@ int main() {
   strict.advance(17000); strict.request_status();
   assert(strict.next(17000, out) && out == "@me1");
   strict.request_status(); assert(strict.next(18000, out) && out == "@me1");
+  assert(!strict.take_announcement()); // Expired data must not advertise a cooler.
+  strict.snapshot("@mo", 3, true, 19000);
+  assert(!strict.take_announcement()); // Wait for coherent input.
+  strict.advance(19250); assert(strict.take_announcement());
+  strict.reset_session(); assert(strict.take_announcement());
+  assert(!strict.take_announcement());
   std::cout << "PASS: cooler bridge negotiation, coalescing, freshness, expiry and input validation\n";
 }

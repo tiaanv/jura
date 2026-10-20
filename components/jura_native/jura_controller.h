@@ -182,6 +182,11 @@ class JuraController : public TransportSink {
       return;
     }
     if (session_ != Session::READY) return;
+    if (cooler_.take_announcement()) {
+      trace("Cool Control announcement: @H1 (plaintext; fresh cooler available in this machine session)");
+      start_("@H1", Kind::COOLER, false, false);
+      return;
+    }
     std::string cooler_command;
     bool cooler_requested = false;
     if (cooler_.next(now, cooler_command, &cooler_requested)) {

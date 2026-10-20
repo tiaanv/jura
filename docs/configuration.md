@@ -321,6 +321,11 @@ valid `@HM:XX` settings also request a reply. Requests use the same coalescing
 and one-message-per-second limit as notifications; repeated requests can receive
 the same status again, including `@me1` when the source is unavailable or stale.
 
+When fresh cooler data is available, the bridge sends plaintext `@H1` once per
+machine session, before forwarding status. A cooler returning after an offline
+or stale period is announced again. This announcement does not depend on HM
+reporting permission, and missing or stale input does not trigger it.
+
 The old TT214H V05.08F contains both an HM-controlled status notification path
 and a pending-text output path without that gate. The EF533 log also completed
 T2/T3 without sending HM. These observations justify removing our universal gate;
@@ -349,6 +354,8 @@ so attaching the log client after boot does not hide the diagnostic. Look for, f
 Cool Control bridge enabled: reporting=auto, timeout=15000 ms, coalesce=250 ms
 Cool Control HA inputs: raw='@mo:321E', counter=123.000000, online=ON; received valid inputs
 Cool Control bridge: legacy bare fallback (no @HM required); fresh cooler snapshot
+Cool Control announcement: @H1 (plaintext; fresh cooler available in this machine session)
+Sending @H1
 Sending @mo
 Cool Control status request: @HM; cached response queued
 Cool Control request response: @mo (plaintext; fresh cooler snapshot)

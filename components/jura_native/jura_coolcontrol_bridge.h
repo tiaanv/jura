@@ -45,6 +45,7 @@ class CoolcontrolBridge {
         std::floor(counter) != counter) {
       if (source_online_ || fresh_) pending_ = true;
       source_online_ = fresh_ = coalescing_ = have_counter_ = false;
+      announced_ = false;
       return;
     }
     const bool heartbeat = !have_counter_ || counter != counter_;
@@ -64,6 +65,7 @@ class CoolcontrolBridge {
     if (source_online_ && uint32_t(now - last_heartbeat_) >= timeout_) {
       if (fresh_ || coalescing_) pending_ = true;
       fresh_ = coalescing_ = false;
+      announced_ = false;
     } else if (coalescing_ && (uint32_t(now - changed_at_) >= coalesce_ ||
                                 uint64_t(uint32_t(now - window_started_)) >= uint64_t(coalesce_) * 2)) {
       raw_ = candidate_;
@@ -73,6 +75,7 @@ class CoolcontrolBridge {
     }
   }
   void reset_session() {
+    announced_ = false;
     requested_ = false;
     hm_seen_ = extended_ = false;
     reporting_ = legacy_;
@@ -88,6 +91,11 @@ class CoolcontrolBridge {
     request_status();
   }
   void request_status() { if (enabled_) requested_ = true; }
+  bool take_announcement() {
+    if (!enabled_ || announced_ || !source_online_ || !fresh_ || coalescing_) return false;
+    announced_ = true;
+    return true;
+  }
   bool next(uint32_t now, std::string &command, bool *requested = nullptr) {
     if (!enabled_ || (!requested_ && (!reporting_ || !pending_)) || coalescing_ ||
         (sent_ && uint32_t(now - last_send_) < 1000)) return false;
@@ -113,6 +121,7 @@ class CoolcontrolBridge {
   ReportingMode mode_{ReportingMode::AUTO};
   bool legacy_{false}, hm_seen_{false};
   bool requested_{false};
+  bool announced_{false};
   bool enabled_{false}, reporting_{false}, extended_{false}, source_online_{false};
   bool fresh_{false}, coalescing_{false}, have_counter_{false}, pending_{false}, sent_{false};
   uint32_t timeout_{15000}, coalesce_{250}, last_heartbeat_{0}, changed_at_{0}, window_started_{0}, last_send_{0};
