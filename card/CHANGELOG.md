@@ -1,5 +1,14 @@
 # Card changelog
 
+## 2.1.8 — configurable sections
+
+- Make My Recipes, Choose a Drink and Brew Settings collapsible.
+- Add independent expanded, collapsed and hidden YAML modes for all six sections.
+- Separate More drinks from Choose a Drink so each can be controlled independently.
+- Preserve user disclosure choices through live entity updates.
+- Keep existing default visibility, with drink sections expanded and More drinks,
+  Maintenance and Diagnostics collapsed.
+
 ## 2.1.7 — milk cooler override
 
 - Add a conditional native Cool Control Override switch below the readings.

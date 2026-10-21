@@ -71,7 +71,7 @@ external-component configuration and UART setup are unaffected.
 3. Add a dashboard resource of type **JavaScript module**:
 
    ```text
-   /local/jura-native-card.js?v=2.1.7
+   /local/jura-native-card.js?v=2.1.8
    ```
 
 4. Refresh the browser and add the card YAML.
@@ -309,3 +309,44 @@ is never retried automatically.
 Check that milk is available before brewing with this override. The component
 forces healthy cooler status and bypasses milk checks while it is on; the switch
 can persist across device restarts. See the [component override documentation](configuration.md#manual-cooler-override).
+
+## Section visibility and initial state
+
+All six sections can start expanded, collapsed, or be completely hidden:
+
+```yaml
+sections:
+  my_recipes: expanded
+  choose_a_drink: expanded
+  more_drinks: collapsed
+  brew: expanded
+  maintenance: collapsed
+  diagnostics: collapsed
+```
+
+These are the defaults, so existing card configurations need no changes.
+`brew` controls the **Brew Settings** section, including the selected recipe,
+adjustments and Brew button. `maintenance` controls **Maintenance & totals**.
+My Recipes remains hidden when no custom recipes are configured. More drinks
+remains hidden when the component offers no additional drinks.
+
+`more_drinks` is independent of `choose_a_drink`. For example, show only the
+additional drinks while keeping the main drink tiles hidden:
+
+```yaml
+sections:
+  choose_a_drink: hidden
+  more_drinks: expanded
+  diagnostics: hidden
+```
+
+Visible section headings can be clicked or activated with the keyboard to open
+or close them. Live entity updates preserve that choice. These settings define
+the initial state; rebuilding the card or reloading the dashboard reapplies the
+configured defaults. Hidden sections have no visible heading or content.
+Hiding or collapsing a section sends no commands to the machine. It does not
+cancel a drink request already in progress. To display only machine monitoring,
+set all six sections to `hidden`.
+
+Only `expanded`, `collapsed` and `hidden` are accepted. Unknown section names,
+invalid values and non-mapping `sections` settings produce a configuration error.
