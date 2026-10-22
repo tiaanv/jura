@@ -1,7 +1,7 @@
 # Jura Graphical Card
 
 Home Assistant dashboard card for this repository's `jura_native` ESPHome
-component. Current card version: **2.1.5**. Component versions remain in the
+component. Current card version: **2.1.8**. Component versions remain in the
 repository-root `VERSION`; card versions are tracked separately in `card/VERSION`.
 
 The card combines an outlined Jura machine, optional Cool Control, graphical
@@ -39,3 +39,12 @@ this card so far.
 
 MIT licensed under the repository [LICENSE](../LICENSE). The machine and drink
 artwork is inline SVG; Home Assistant supplies Material Design icons.
+
+Milk cooler alerts disable affected milk drinks and their custom recipes while
+keeping coffee and hot water available. The cooler highlights empty, fault and
+no-signal states without hiding measured milk level or temperature. See the
+[milk cooler guide](../docs/card.md#milk-cooler-alerts-and-drink-availability).
+
+Use the optional `sections` YAML mapping to set each section to `expanded`,
+`collapsed` or `hidden`, including an independent `more_drinks` section.
+See [section settings](../docs/card.md#section-visibility-and-initial-state).

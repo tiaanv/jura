@@ -14,6 +14,23 @@ variants = [("esp32-c3-idf", base, True)]
 no_reads = copy.deepcopy(base)
 no_reads["jura_native"]["read_saved_recipes"] = False
 variants.append(("native-saved-reads-disabled", no_reads, True))
+bridge = yaml.safe_load((root / "examples/e8-coolcontrol-ha.yaml").read_text())
+bridge["external_components"][0]["source"] = {"type": "local", "path": str(root / "components")}
+variants.append(("native-coolcontrol-homeassistant", bridge, True))
+for mode in ("negotiated", "legacy"):
+    mode_config = copy.deepcopy(bridge)
+    mode_config["jura_native"]["coolcontrol"]["reporting"] = mode
+    variants.append(("native-coolcontrol-" + mode, mode_config, True))
+bad_mode = copy.deepcopy(bridge)
+bad_mode["jura_native"]["coolcontrol"]["reporting"] = "force_extended"
+variants.append(("native-coolcontrol-bad-reporting", bad_mode, False))
+missing_bridge_sensor = copy.deepcopy(bridge)
+del missing_bridge_sensor["jura_native"]["coolcontrol"]["message_counter"]
+variants.append(("native-coolcontrol-missing-counter", missing_bridge_sensor, False))
+bad_coalesce = copy.deepcopy(bridge)
+bad_coalesce["jura_native"]["coolcontrol"]["coalesce_delay"] = "15s"
+variants.append(("native-coolcontrol-invalid-coalesce", bad_coalesce, False))
+
 short_status = copy.deepcopy(base)
 short_status["jura_native"]["accept_short_status"] = True
 variants.append(("native-five-byte-ef533-status", short_status, True))
@@ -65,6 +82,23 @@ cool["external_components"][0]["components"].append("jura_coolcontrol")
 cool["uart"] = [cool["uart"], {"id": "cool_uart", "rx_pin": "GPIO5", "baud_rate": 9600}]
 cool["jura_coolcontrol"] = {"uart_id": "cool_uart"}
 variants.append(("separate-cool-control", cool, True))
+probe = copy.deepcopy(cool)
+probe["uart"][1]["tx_pin"] = "GPIO6"
+probe["jura_coolcontrol"].update({
+    "status": {"name": "Cooler Status"}, "online": {"name": "Cooler Online"},
+    "raw_message": {"name": "Cooler Raw Message"}, "message_counter": {"name": "Cooler Message Counter"},
+    "communication_timeout": "20s", "measurement_timeout": "10s",
+    "startup_probe": {"text": "hello\r\n", "delay": "1s", "retry_interval": "2s", "max_attempts": 3},
+})
+variants.append(("cool-control-startup-probe", probe, True))
+no_tx = copy.deepcopy(probe)
+del no_tx["uart"][1]["tx_pin"]
+variants.append(("cool-control-probe-needs-tx", no_tx, False))
+for key, value in [("text", ""), ("max_attempts", 0), ("max_attempts", 6), ("retry_interval", "0s")]:
+    invalid = copy.deepcopy(probe)
+    invalid["jura_coolcontrol"]["startup_probe"][key] = value
+    variants.append(("cool-control-invalid-" + key + str(value), invalid, False))
+
 for name, section, key, value in [
     ("bad-saved-reads", "jura_native", "read_saved_recipes", "disabled"),
     ("bad-baud", "uart", "baud_rate", 19200),

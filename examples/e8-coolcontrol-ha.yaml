@@ -1,0 +1,63 @@
+# Coffee-machine ESPHome device. Replace the three Home Assistant entity IDs.
+# Import entities from the separate Cool Control device; no HA automation is needed.
+esphome:
+  name: jura-machine-cooler
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/tiaanv/jura
+      ref: milky
+    refresh: 0s
+    components: [jura_native]
+
+logger:
+api:
+# Add your existing API encryption and OTA settings.
+wifi:
+  ssid: "replace-with-your-network"
+  password: "replace-with-your-password"
+
+uart:
+  id: uart_bus
+  tx_pin: GPIO4
+  rx_pin: GPIO3
+  baud_rate: 9600
+  rx_buffer_size: 2048
+
+text_sensor:
+  - platform: homeassistant
+    id: cooler_raw
+    entity_id: sensor.jura_coolcontrol_raw_message
+    internal: true
+
+sensor:
+  - platform: homeassistant
+    id: cooler_counter
+    entity_id: sensor.jura_coolcontrol_message_counter
+    internal: true
+
+binary_sensor:
+  - platform: homeassistant
+    id: cooler_online
+    entity_id: binary_sensor.jura_coolcontrol_online
+    internal: true
+
+jura_native:
+  id: jura_coffee
+  uart_id: uart_bus
+  allow_brew: false
+  allow_power_off: false
+  handshake_response: auto
+  coolcontrol:
+    reporting: auto  # EF533: bare fallback without HM; other profiles wait for HM.
+    raw_message: cooler_raw
+    message_counter: cooler_counter
+    online: cooler_online
+    timeout: 15s
+    coalesce_delay: 250ms

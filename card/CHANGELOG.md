@@ -1,5 +1,34 @@
 # Card changelog
 
+## 2.1.8 — configurable sections
+
+- Make My Recipes, Choose a Drink and Brew Settings collapsible.
+- Add independent expanded, collapsed and hidden YAML modes for all six sections.
+- Separate More drinks from Choose a Drink so each can be controlled independently.
+- Preserve user disclosure choices through live entity updates.
+- Keep existing default visibility, with drink sections expanded and More drinks,
+  Maintenance and Diagnostics collapsed.
+
+## 2.1.7 — milk cooler override
+
+- Add a conditional native Cool Control Override switch below the readings.
+- Show the control during milk alerts and keep it visible while override is on,
+  even after the fault clears.
+- Use confirmed switch state to bypass milk-specific card blocking while retaining
+  real milk readings, cooler warnings and other readiness checks.
+- Disable the control while unavailable, disconnected, operating or awaiting
+  confirmation. Older components without the switch remain supported.
+
+## 2.1.6 — milk cooler alerts
+
+- Disable milk and foam drink tiles, custom recipes and Brew when Jura reports
+  no milk, a milk sensor error or no signal. Coffee and hot water remain available.
+- Recheck milk alerts before selection and hold-to-brew requests.
+- Highlight the cooler in amber for empty/no signal and red for a fault, with
+  a warning badge and a short status label. Clear the highlight on recovery.
+- Retain measured milk percentage, temperature and level graphic during alerts.
+- Preserve the stage-progress fallback introduced in 2.1.5.
+
 ## 2.1.5 — dirthvader stage progress support
 
 - Map optional Jura Stage Progress, including explicit entity overrides.

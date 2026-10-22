@@ -71,7 +71,7 @@ external-component configuration and UART setup are unaffected.
 3. Add a dashboard resource of type **JavaScript module**:
 
    ```text
-   /local/jura-native-card.js?v=2.1.5
+   /local/jura-native-card.js?v=2.1.8
    ```
 
 4. Refresh the browser and add the card YAML.
@@ -259,3 +259,94 @@ See [card contributing notes](../card/CONTRIBUTING.md). Firmware and card live i
 one repository but have separate source folders and version files. The card is
 MIT licensed with the repository. HACS distribution requires a public repository;
 HACS default-catalogue inclusion is a separate future submission.
+
+## Milk cooler alerts and drink availability
+
+The card uses the Jura native component's `active_alerts` entity to recognise
+`no milk (milk sensor)`, `error milk (milk sensor)` and `no signal (milk sensor)`.
+These alerts disable Flat White, Cappuccino, Latte Macchiato, milk/foam portions,
+and custom recipes based on those drinks. The selected milk drink's Brew button
+also shows the reason it cannot start. Hold-to-brew observes the same checks.
+Coffee-only drinks and hot water remain available when the machine is otherwise ready.
+Buttons become available again when the machine clears the milk alert.
+
+With the cooler graphic enabled, an empty container shows an amber outline,
+warning badge and **MILK EMPTY** label. A fault uses red and **COOLER FAULT**;
+a missing signal uses amber, a dashed outline and **NO SIGNAL**. The milk reading
+is highlighted too. Reported percentage, temperature and the level graphic stay
+visible; an alert never replaces their measured values with an inferred zero.
+Cached alerts do not highlight the cooler while Jura is disconnected or its
+alert report is stale. Independent cooler measurements remain visible.
+
+No additional YAML is required. The alert entity follows `entity_prefix` and can
+be overridden through `entities.active_alerts`. Milk readiness comes from the
+Jura alerts, rather than a guessed threshold on the independent level sensor.
+`coolcontrol: false` hides the cooler graphic and milk reading but still applies
+milk drink blocking from the machine's alerts. Older components without these
+milk alerts retain their existing behaviour; the component remains responsible
+for validating every brew request.
+
+### Manual milk cooler override
+
+When the native component exposes **Jura Cool Control Override**, the card shows
+an **Ignore milk cooler fault** switch below the readings and above My Recipes
+when a fresh milk alert is present. While enabled, the row stays visible and
+reads **Milk cooler override is on**, even if the alert clears, so you can turn
+it off again.
+
+The default entity is `switch.<prefix>_jura_cool_control_override`. For a custom
+entity ID, set `entities.coolcontrol_override` in the card YAML. No extra card
+configuration is needed for the standard entity name. Components without the
+switch keep the existing card behaviour.
+
+Turning it on bypasses milk-specific blocking only after the component confirms
+the switch is on. Real milk readings and reported cooler fault graphics remain
+visible. Other machine readiness checks still apply. The control is disabled
+while the machine is disconnected or operating, the switch is unavailable, or
+a change is awaiting confirmation. An unconfirmed request shows an error and
+is never retried automatically.
+
+Check that milk is available before brewing with this override. The component
+forces healthy cooler status and bypasses milk checks while it is on; the switch
+can persist across device restarts. See the [component override documentation](configuration.md#manual-cooler-override).
+
+## Section visibility and initial state
+
+All six sections can start expanded, collapsed, or be completely hidden:
+
+```yaml
+sections:
+  my_recipes: expanded
+  choose_a_drink: expanded
+  more_drinks: collapsed
+  brew: expanded
+  maintenance: collapsed
+  diagnostics: collapsed
+```
+
+These are the defaults, so existing card configurations need no changes.
+`brew` controls the **Brew Settings** section, including the selected recipe,
+adjustments and Brew button. `maintenance` controls **Maintenance & totals**.
+My Recipes remains hidden when no custom recipes are configured. More drinks
+remains hidden when the component offers no additional drinks.
+
+`more_drinks` is independent of `choose_a_drink`. For example, show only the
+additional drinks while keeping the main drink tiles hidden:
+
+```yaml
+sections:
+  choose_a_drink: hidden
+  more_drinks: expanded
+  diagnostics: hidden
+```
+
+Visible section headings can be clicked or activated with the keyboard to open
+or close them. Live entity updates preserve that choice. These settings define
+the initial state; rebuilding the card or reloading the dashboard reapplies the
+configured defaults. Hidden sections have no visible heading or content.
+Hiding or collapsing a section sends no commands to the machine. It does not
+cancel a drink request already in progress. To display only machine monitoring,
+set all six sections to `hidden`.
+
+Only `expanded`, `collapsed` and `hidden` are accepted. Unknown section names,
+invalid values and non-mapping `sections` settings produce a configuration error.

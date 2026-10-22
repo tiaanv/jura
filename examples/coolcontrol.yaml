@@ -11,7 +11,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/tiaanv/jura
-      ref: main
+      ref: milky
     refresh: 0s
     components: [jura_coolcontrol]
 
@@ -32,4 +32,21 @@ jura_coolcontrol:
     name: "Jura Coolcontrol Level"
   temperature:
     name: "Jura Coolcontrol Temperature"
+  raw_message:
+    name: "Jura Coolcontrol Raw Message"
+  message_counter:
+    name: "Jura Coolcontrol Message Counter"
+  status:
+    name: "Jura Coolcontrol Status"
+  online:
+    name: "Jura Coolcontrol Online"
+  communication_timeout: 10s
+  measurement_timeout: 10s
+  # Optional for older coolers that stay silent until receiving serial text.
+  # Also configure uart.tx_pin using your actual TX wiring before enabling.
+  # startup_probe:
+  #   text: "\r\n"
+  #   delay: 1s
+  #   retry_interval: 2s
+  #   max_attempts: 3
 

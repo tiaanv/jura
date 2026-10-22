@@ -57,5 +57,15 @@ write or automatic brew retry exists. A matching TV product confirms start;
 ## Cool Control
 
 `components/jura_coolcontrol` is a separate passive UART receiver, retaining the
-old observed ASCII offsets with bounded reception and stale-state expiry. It
+observed level/temperature field order and scale, with validated status frames,
+independent communication/measurement expiry and optional bounded startup probing. It
 is not part of the Jura machine's TF/TV protocol path.
+
+
+The native component can optionally bridge validated cooler snapshots from three
+ESPHome entity references (raw message, receive counter, online), including Home
+Assistant imports. It coalesces asynchronously delivered states and expires
+stalled counters locally. The bridge advertises the cooler capability in automatic
+T2 replies and applies an optional EF533 bare fallback or machine HM reporting flags, then
+schedules encrypted status frames through the existing transport without requesting replies. It is
+disabled when the `coolcontrol` configuration is absent.

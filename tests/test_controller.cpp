@@ -30,6 +30,8 @@ struct Fake : public JuraController {
   std::map<std::string, float> nums;
   std::map<std::string, int> bins;
   std::vector<uint8_t> output;
+  std::vector<std::string> traces;
+  void trace(const std::string &s) override { traces.push_back(s); }
   unsigned installed = 0, recipe_updates = 0;
   void text(const std::string &k, const std::string &v) override { texts[k] = v; }
   void number(const std::string &k, float v) override { nums[k] = v; }
@@ -56,7 +58,8 @@ struct Machine {
   bool answer_type = true, answer_at = true, answer_brew = true, reject_brew = false, auto_tf = true;
   std::vector<std::string> commands;
   std::string probe_reply = "@tm:41,0200040A00000200010000000000000000F4";
-  std::string an01_reply;
+  std::string an01_reply, early_hm;
+  bool early_hm_encrypted = true;
   std::map<std::string, std::string> recipe_replies;
   void inject(const std::string &s, bool at = true) {
     for (auto raw : encode(at ? cipher::build_frame(s + "\r\n", 0xA0) : s + "\r\n")) dev.input(raw, clock);
@@ -92,6 +95,9 @@ struct Machine {
         command = outgoing.substr(0, outgoing.size() - 2);
       outgoing.clear();
       commands.push_back(command);
+      // Assert framing at the wire boundary, before decoded commands hide it.
+      if (command.compare(0, 2, "@m") == 0) assert(!at);
+      if (command == "@H1") assert(!at);
       if (command == "TY:" && answer_type)
         inject("ty:" + model, false);
       else if (command == "AN:02")
@@ -106,9 +112,10 @@ struct Machine {
         else if (command == "@T1") {
           inject("@t1");
           inject("@T2:" + challenge);
-        } else if (command.compare(0, 4, "@t2:") == 0)
+        } else if (command.compare(0, 4, "@t2:") == 0) {
           inject("@T3:3BA4" + model);
-        else if (command == "@TF:" && auto_tf)
+          if (!early_hm.empty()) inject(early_hm, early_hm_encrypted);
+        } else if (command == "@TF:" && auto_tf)
           inject("@TF:" + tf);
         else if (command.compare(0, 7, "@TR:32,") == 0)
           inject("@tr:32," + command.substr(7, 2) + ",0001000200030004");
@@ -982,6 +989,93 @@ static void test_an01_diagnostic() {
   assert(race.dev.texts["command_result"].find("cancelled") != std::string::npos);
 }
 
+static void test_cooler_override() {
+  Machine m;
+  m.dev.configure_coolcontrol(15000, 250, "negotiated");
+  m.begin(); m.tick(16000);
+  assert(m.count("@H1") == 0);
+  m.inject("@TF:000480000000");
+  assert(!m.dev.brew_named("Milk Portion"));
+  m.dev.set_coolcontrol_override(true); m.tick(2000);
+  assert(m.count("@H1") == 1 && m.count("@mo") == 1);
+  m.inject("@HM:00", false); m.tick(1500);
+  assert(m.count("@mo") == 2);
+  m.inject("@TF:800480000000"); // Override must not bypass missing tray.
+  assert(!m.dev.brew_named("Milk Portion"));
+  m.inject("@TF:000480000000");
+  assert(m.dev.brew_named("Milk Portion"));
+  m.dev.set_coolcontrol_override(false); m.tick(8000);
+  assert(m.count("@me1") == 1);
+  for (const auto &c : m.commands) assert(c.compare(0, 4, "@TP:") != 0);
+}
+static void test_milk_brew_checks() {
+  for (const auto &tf : {"000600000000", "000500000000", "000480000000"}) {
+    Machine m;
+    m.begin(); m.tick(16000); m.inject(std::string("@TF:") + tf);
+    assert(!m.dev.brew_named("Milk Portion"));
+    assert(!m.dev.brew_named("Cappuccino"));
+    assert(m.dev.brew_named("Espresso")); // Milk-only alerts do not block coffee.
+    Machine selected;
+    selected.begin(); selected.tick(16000);
+    assert(selected.dev.choose("Milk Portion")); selected.tick(8000);
+    selected.inject(std::string("@TF:") + tf);
+    assert(!selected.dev.brew_selected());
+  }
+  Machine race;
+  race.begin(); race.tick(16000);
+  assert(race.dev.brew_named("Milk Portion"));
+  race.inject("@TF:000600000000"); race.tick(8000);
+  for (const auto &c : race.commands) assert(c.compare(0, 4, "@TP:") != 0);
+  Machine queued;
+  queued.begin(); queued.tick(16000);
+  assert(queued.dev.choose("Milk Portion")); queued.tick(8000);
+  assert(queued.dev.brew_selected());
+  queued.inject("@TF:000500000000"); queued.tick(2000);
+  for (const auto &c : queued.commands) assert(c.compare(0, 4, "@TP:") != 0);
+  queued.inject("@TF:000400000000");
+  assert(queued.dev.brew_selected());
+}
+static void test_milk_error_progress() {
+  for (const auto &entry : {std::make_pair("2E", "Blocked: milk cooler error"),
+                            std::make_pair("2F", "Blocked: no milk cooler signal")}) {
+    Machine m;
+    m.begin(); m.tick(16000); m.auto_tf = false;
+    m.inject("@TB"); m.inject(std::string("@TV:") + entry.first + "0A");
+    assert(m.dev.texts["progress_state"] == entry.second);
+    assert(m.dev.bins["brew_active"] == 0 && std::isnan(m.dev.nums["progress"]));
+    m.tick(21000);
+    assert(m.dev.texts["progress_state"] == entry.second);
+    m.inject("@TF:000400000000");
+    assert(m.dev.texts["progress_state"] == "Idle");
+  }
+}
+static void test_no_milk_progress() {
+  Machine m;
+  m.begin(); m.tick(12000);
+  m.auto_tf = false;
+  m.inject("@TB"); m.inject("@TV:2D0A");
+  assert(m.dev.texts["progress_state"] == "Blocked: no milk");
+  assert(m.dev.texts["current_product"] == "Milk Portion");
+  assert(m.dev.texts["status"] == "blocked");
+  assert(m.dev.bins["brew_active"] == 0);
+  assert(m.dev.nums["stage_code"] == 0x2D);
+  assert(std::isnan(m.dev.nums["progress"]));
+  auto queries = m.count("@TF:");
+  m.tick(21000);
+  assert(m.count("@TF:") > queries);
+  assert(m.dev.texts["progress_state"] == "Blocked: no milk");
+  assert(m.dev.bins["brew_active"] == 0);
+  m.inject("@TF:000600000000"); // No milk + ready (TF bits are MSB first).
+  assert(m.dev.texts["active_alerts"].find("no milk (milk sensor)") != std::string::npos);
+  m.inject("@TF:000400000000");
+  assert(m.dev.texts["progress_state"] == "Idle");
+  assert(m.dev.texts["status"] == "ready");
+  m.inject("@TB"); m.inject("@TV:320AFFFFFFFF0014FFFFFFFFFF1100FF");
+  assert(m.dev.bins["brew_active"] == 1);
+  assert(m.dev.texts["progress_state"] == "Dispensing milk");
+  m.inject("@TV:3E0A");
+  assert(m.dev.bins["brew_active"] == 0 && m.dev.nums["progress"] == 100);
+}
 static void test_current_product_lifecycle() {
   Machine m;
   m.begin();
@@ -1025,7 +1119,103 @@ static void test_current_product_lifecycle() {
   assert(m.dev.ready() && m.dev.texts["current_product"] == "None");
 }
 
+static void test_coolcontrol_forwarding() {
+  Machine disabled;
+  disabled.begin(); disabled.tick(12000);
+  disabled.dev.coolcontrol_snapshot("@mo:321E", 1, true, disabled.clock);
+  disabled.inject("@HM:C0"); disabled.tick(1500);
+  assert(disabled.count("@mo:321E") == 0 && disabled.count("@me1") == 0);
+  assert(disabled.count("@H1") == 0);
+  Machine m;
+  m.dev.configure_coolcontrol(15000, 250, "negotiated");
+  m.begin();
+  m.tick(12000);
+  assert(m.dev.ready() && m.count("@t2:8120000000") == 1);
+  assert(m.count("@H1") == 0); // No source data yet.
+  m.dev.coolcontrol_snapshot("@mn:321E", 1, true, m.clock);
+  m.tick(500);
+  assert(m.count("@H1") == 1); // Independent of automatic reporting permission.
+  assert(m.count("@mn") == 0 && m.count("@mn:321E") == 0);
+  m.inject("@HM:80", false);
+  m.tick(1500);
+  assert(m.count("@mn") == 1 && !m.dev.waiting());
+  m.inject("@HM:C0"); m.tick(1500);
+  assert(m.count("@mn:321E") == 1);
+  m.dev.coolcontrol_snapshot("@mo:321E", 2, true, m.clock); m.tick(1500);
+  assert(m.count("@mo:321E") == 1);
+  m.dev.coolcontrol_snapshot("@me", 3, true, m.clock); m.tick(1500);
+  assert(m.count("@me") == 1);
+  m.tick(15000);
+  assert(m.count("@me1") == 1 && m.dev.ready());
+  m.tick(2000); assert(m.count("@me1") == 1);
+  Machine legacy;
+  legacy.dev.configure_coolcontrol(15000, 250);
+  legacy.dev.coolcontrol_snapshot("@mn:321E", 1, true, legacy.clock);
+  legacy.begin(); legacy.tick(12000);
+  assert(legacy.count("@mn") == 1 && legacy.count("@mn:321E") == 0);
+  legacy.inject("@HM:00", false);
+  legacy.dev.coolcontrol_snapshot("@mo:321E", 2, true, legacy.clock);
+  legacy.tick(1500); assert(legacy.count("@mo") == 1); // One requested reply despite disable.
+  legacy.dev.coolcontrol_snapshot("@mo:321E", 3, true, legacy.clock);
+  legacy.tick(1500); assert(legacy.count("@mo") == 1);
+  legacy.inject("@HM:C0"); legacy.tick(1500);
+  assert(legacy.count("@mo:321E") == 1);
+  Machine early;
+  early.early_hm = "@HM:C0";
+  early.early_hm_encrypted = false;
+  early.dev.configure_coolcontrol(15000, 250);
+  early.dev.coolcontrol_snapshot("@mo:321E", 1, true, early.clock);
+  early.begin(); early.tick(12000);
+  assert(early.count("@mo:321E") == 1);
+  Machine polled;
+  polled.dev.configure_coolcontrol(15000, 250, "negotiated");
+  polled.dev.coolcontrol_snapshot("@mn:321E", 1, true, polled.clock);
+  polled.early_hm = "@HM"; polled.early_hm_encrypted = false;
+  polled.begin(); polled.tick(12000);
+  assert(polled.count("@mn") == 1);
+  assert(polled.count("@H1") == 1);
+  polled.inject("@HM", false); polled.tick(1500);
+  assert(polled.count("@mn") == 2);
+  polled.dev.coolcontrol_snapshot("@mn:321E", 2, true, polled.clock);
+  polled.inject("@HM:00", false); polled.tick(1500);
+  assert(polled.count("@mn") == 3);
+  polled.dev.coolcontrol_snapshot("@mo", 2, true, polled.clock);
+  polled.tick(1500); assert(polled.count("@mo") == 0);
+  polled.inject("@HM", true); polled.tick(1500);
+  assert(polled.count("@mo") == 1);
+  bool logged_request = false, logged_response = false;
+  for (const auto &line : polled.dev.traces) {
+    logged_request |= line == "Cool Control status request: @HM; cached response queued";
+    logged_response |= line.find("Cool Control request response: @mn (plaintext;") == 0;
+  }
+  assert(logged_request && logged_response);
+  assert(polled.count("@H1") == 1); // Heartbeats and polls do not reannounce.
+  polled.dev.coolcontrol_snapshot("@mo", 3, false, polled.clock);
+  polled.tick(500);
+  polled.dev.coolcontrol_snapshot("@mo", 4, true, polled.clock);
+  polled.tick(1500);
+  assert(polled.count("@H1") == 2); // Reconnect announces even with reporting disabled.
+  bool logged_announcement = false;
+  for (const auto &line : polled.dev.traces)
+    logged_announcement |= line.find("Cool Control announcement: @H1 (plaintext;") == 0;
+  assert(logged_announcement);
+  Machine three;
+  three.challenge = "018000";
+  three.dev.configure_coolcontrol(15000, 250);
+  three.begin(); three.tick(12000);
+  assert(three.count("@t2:81A000") == 1);
+  Machine manual;
+  manual.dev.configure_coolcontrol(15000, 250);
+  manual.begin(true, "8180000000"); manual.tick(12000);
+  assert(manual.count("@t2:8180000000") == 1);
+}
+
 int main() {
+  test_cooler_override();
+  test_milk_brew_checks();
+  test_milk_error_progress();
+  test_no_milk_progress();
+  test_coolcontrol_forwarding();
   test_current_product_lifecycle();
   test_an01_diagnostic();
   test_profiles();

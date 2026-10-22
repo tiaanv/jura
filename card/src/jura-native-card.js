@@ -1,4 +1,4 @@
-// Jura Native Graphical Card 2.1.5 — native ESPHome entities, no MQTT or external dependencies.
+// Jura Native Graphical Card 2.1.8 — native ESPHome entities, no MQTT or external dependencies.
 (() => {
   const GRAPHIC = /*GRAPHIC*/;
   const STYLES = /*STYLES*/;
@@ -30,8 +30,8 @@
   "heating up": "Heating Up",
   "coffee ready": "Ready",
   "no milk (milk sensor)": "Milk Container Empty",
-  "error milk (milk sensor)": "Milk Sensor Error",
-  "no signal (milk sensor)": "Milk Sensor Not Responding",
+  "error milk (milk sensor)": "Milk Cooler Error — Check the Milk Cooler",
+  "no signal (milk sensor)": "Milk Cooler Not Responding — Check Its Connection",
   "please wait": "Please Wait",
   "coffee rinsing": "Rinsing the Coffee System",
   "ventilation closed": "Ventilation Alert — Check the machine display",
@@ -118,6 +118,11 @@
   class JuraNativeCard extends HTMLElement {
     constructor(){ super();this.attachShadow({mode:'open'});this._timers=new Set();this._edits=new Map();this._selection=null;this._brewLock=false;this._writeError=''; }
     setConfig(config){
+      const defaults={my_recipes:'expanded',choose_a_drink:'expanded',more_drinks:'collapsed',brew:'expanded',maintenance:'collapsed',diagnostics:'collapsed'};
+      if(config.sections!==undefined&&(!config.sections||typeof config.sections!=='object'||Array.isArray(config.sections)))throw new Error('sections must be a mapping');
+      for(const [key,value]of Object.entries(config.sections||{}))if(!(key in defaults)||!['expanded','collapsed','hidden'].includes(value))throw new Error('Invalid section setting: '+key+' (use expanded, collapsed or hidden)');
+      this._sections={...defaults,...config.sections};
+
       if(config.hold_to_brew!==undefined&&typeof config.hold_to_brew!=='boolean')throw new Error('hold_to_brew must be true or false');
       this._cancelHold?.();this._holdBrewPending=false;this._holdJob=null;this._heldClicks=new WeakSet();
       if(config.recipes!==undefined&&!Array.isArray(config.recipes))throw new Error('recipes must be a list');
@@ -148,6 +153,7 @@
       for(const [key]of maintenance){this._entities[`${key}_count`]=sensor(`${key}_count`);this._entities[`${key}_maintenance`]=sensor(`${key}_maintenance`);}
       this._cooler=config.coolcontrol!==false;
       if(this._cooler){this._entities.milk_level=config.coolcontrol?.level||'sensor.jura_coolcontrol_jura_coolcontrol_level';this._entities.milk_temperature=config.coolcontrol?.temperature||'sensor.jura_coolcontrol_jura_coolcontrol_temperature';}
+      this._entities.coolcontrol_override=`switch.${p}_jura_cool_control_override`;
       Object.assign(this._entities,config.entities||{});
       this._signature=null;this._tileSignature=null;this._build();this._update();
     }
@@ -171,15 +177,19 @@
        <div class="machine-stage">${GRAPHIC}</div>
        <section id="operation" class="operation" hidden aria-label="Observed machine operation"><div class="operation-heading"><strong id="actual-product"></strong><span id="overall"></span></div><div class="phase-row"><span id="phase"></span><span id="stage"></span></div><div id="progress-track" class="progress-track" role="progressbar" aria-label="Overall drink progress" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div></section>
        <div class="readings">${this._reading('water_tank_status','water-check','Water')}${this._reading('tray_status','tray','Tray')}${this._reading('empty_grounds','hockey-puck','Grounds')}${this._reading('no_beans','seed-outline','Beans')}${this._cooler?this._reading('milk_level','water-percent','Milk'):''}</div>
-       <section id="my-recipes" class="drink-section" hidden aria-label="My Recipes"><div class="section-label">MY RECIPES<span>${this._config.hold_to_brew?'Tap or hold to brew':'Select, then brew'}</span></div><div id="recipe-tiles" class="drink-tiles">${this._recipes.map((recipe,index)=>`<button class="drink-tile" data-recipe="${index}" aria-label="Select ${escapeHTML(recipe.name)}" aria-pressed="false">${cup(recipe.base_drink)}<span>${escapeHTML(recipe.name)}</span><small>Based on ${escapeHTML(pretty(recipe.base_drink))}</small></button>`).join('')}</div></section>
-       <section class="drink-section" aria-label="Drink selection"><div class="section-label">CHOOSE A DRINK<span>${this._config.hold_to_brew?'Tap or hold to brew':'Select, then brew'}</span></div><div id="drink-tiles" class="drink-tiles"></div><details id="more-drinks"><summary>More drinks<span id="more-count"></span></summary><div id="extra-tiles" class="drink-tiles"></div></details></section>
-       <section id="recipe" class="recipe" aria-label="Selected drink recipe"><div class="recipe-heading"><strong id="selected-name">Select a drink</strong><span id="recipe-source" class="source-chip"></span></div><div id="recipe-summary"></div><div id="recipe-message" class="recipe-message"></div><details id="adjust"><summary>Adjust this drink<span id="modified"></span></summary><div class="recipe-controls">${choiceControls.map(([key,,,label])=>`<label data-control="${key}" hidden>${label}<select data-input="${key}" aria-label="${label}"></select></label>`).join('')}${numberControls.map(([key,,,label,unit])=>`<label data-control="${key}" hidden>${label} <span class="unit">${unit}</span><input type="number" data-input="${key}" aria-label="${label}" inputmode="numeric"><span class="bounds" data-bounds="${key}"></span></label>`).join('')}</div><button id="reset" class="text-button" type="button">Reset to saved recipe</button></details><button id="brew" class="brew-button" type="button" disabled><ha-icon icon="mdi:coffee-maker"></ha-icon><span>Brew</span></button><div id="brew-reason" class="brew-reason"></div><div id="command" class="command" role="status" hidden></div><button id="acknowledge" class="text-button" type="button" hidden>I checked the machine</button><div id="error" class="error" role="alert" hidden></div></section>
+       <section id="cooler-override" class="cooler-override" hidden><div><strong id="cooler-override-label">Ignore milk cooler fault</strong><p id="cooler-override-help"></p></div><button id="cooler-override-toggle" type="button" role="switch" aria-label="Ignore milk cooler fault" aria-checked="false"><span></span></button></section>
+       <details id="my-recipes" class="drink-section section-disclosure" hidden aria-label="My Recipes"><summary class="section-label">MY RECIPES<span>${this._config.hold_to_brew?'Tap or hold to brew':'Select, then brew'}</span></summary><div id="recipe-tiles" class="drink-tiles">${this._recipes.map((recipe,index)=>`<button class="drink-tile" data-recipe="${index}" aria-label="Select ${escapeHTML(recipe.name)}" aria-pressed="false">${cup(recipe.base_drink)}<span>${escapeHTML(recipe.name)}</span><small>Based on ${escapeHTML(pretty(recipe.base_drink))}</small></button>`).join('')}</div></details>
+       <details id="choose-a-drink" class="drink-section section-disclosure" aria-label="Drink selection"><summary class="section-label">CHOOSE A DRINK<span>${this._config.hold_to_brew?'Tap or hold to brew':'Select, then brew'}</span></summary><div id="drink-tiles" class="drink-tiles"></div></details>
+       <details id="more-drinks" class="more-drinks-section" aria-label="More drinks"><summary>More drinks<span id="more-count"></span></summary><div id="extra-tiles" class="drink-tiles"></div></details>
+       <details id="recipe" class="recipe section-disclosure" aria-label="Selected drink recipe"><summary class="section-label">BREW SETTINGS</summary><div class="recipe-heading"><strong id="selected-name">Select a drink</strong><span id="recipe-source" class="source-chip"></span></div><div id="recipe-summary"></div><div id="recipe-message" class="recipe-message"></div><details id="adjust"><summary>Adjust this drink<span id="modified"></span></summary><div class="recipe-controls">${choiceControls.map(([key,,,label])=>`<label data-control="${key}" hidden>${label}<select data-input="${key}" aria-label="${label}"></select></label>`).join('')}${numberControls.map(([key,,,label,unit])=>`<label data-control="${key}" hidden>${label} <span class="unit">${unit}</span><input type="number" data-input="${key}" aria-label="${label}" inputmode="numeric"><span class="bounds" data-bounds="${key}"></span></label>`).join('')}</div><button id="reset" class="text-button" type="button">Reset to saved recipe</button></details><button id="brew" class="brew-button" type="button" disabled><ha-icon icon="mdi:coffee-maker"></ha-icon><span>Brew</span></button><div id="brew-reason" class="brew-reason"></div><div id="command" class="command" role="status" hidden></div><button id="acknowledge" class="text-button" type="button" hidden>I checked the machine</button><div id="error" class="error" role="alert" hidden></div></details>
        <details id="maintenance"><summary><span><ha-icon icon="mdi:wrench-outline"></ha-icon>Maintenance & totals</span><span id="total"></span></summary><div class="maintenance-meters">${maintenance.slice(0,3).map(([key,label])=>`<button class="maintenance-meter" data-info="${key}_maintenance"><span>${label}</span><strong data-number="${key}_maintenance" data-unit="%">—</strong><div class="meter-track"><div data-meter="${key}_maintenance"></div></div></button>`).join('')}</div><div class="detail-rows">${maintenance.map(([key,label])=>`<button data-info="${key}_count" class="detail-row"><span>${label} count</span><strong data-number="${key}_count">—</strong></button>`).join('')}</div><div id="all-counters" class="detail-rows"></div><button id="refresh" class="text-button">Refresh readings</button></details>
        <details id="diagnostics"><summary><span><ha-icon icon="mdi:pulse"></ha-icon>Diagnostics</span></summary>${['detected_model','profile','session','current_product','progress_state','stage_code','stage_progress','requested_product','command_result','command_recipe_source','command_recipe_status','recipe_status','saved_recipe_raw','command_recipe_raw','tf_raw','tv_raw','uart_timeouts','uart_framing_errors','grounds_level','changed_counters'].map(key=>`<button class="diagnostic-row" data-info="${key}"><span>${key.replaceAll('_',' ')}</span><code data-diagnostic="${key}">—</code></button>`).join('')}<div class="diagnostic-note">Legacy grounds and raw counters are unverified. They are not used for drink totals or readiness.</div></details>
       </ha-card>`;
       this._root=this.shadowRoot;this._card=this._root.querySelector('ha-card');
       this._root.addEventListener('click',event=>{const node=event.target.closest('[data-info]');if(node)this._info(node.dataset.info);});
       this._root.querySelectorAll('[data-recipe]').forEach(button=>this._bindDrinkButton(button,'recipe',Number(button.dataset.recipe)));
+      for(const [key,id]of Object.entries({my_recipes:'my-recipes',choose_a_drink:'choose-a-drink',more_drinks:'more-drinks',brew:'recipe',maintenance:'maintenance',diagnostics:'diagnostics'})){const section=this._root.querySelector('#'+id);section.hidden=this._sections[key]==='hidden';section.open=this._sections[key]==='expanded';}
+      this._root.querySelector('#cooler-override-toggle').addEventListener('click',()=>this._toggleCoolerOverride());
       this._root.querySelector('#brew').addEventListener('click',()=>this._brew());
       this._root.querySelector('#reset').addEventListener('click',()=>this._reset());
       this._root.querySelector('#refresh').addEventListener('click',()=>this._service('button','press','refresh'));
@@ -200,7 +210,7 @@
       const main=primary.map(label=>options.find(x=>x.toLowerCase()===label.toLowerCase())).filter((x,i,a)=>x&&a.indexOf(x)===i),extra=options.filter(x=>!main.includes(x));
       const tiles=items=>items.map(name=>`<button class="drink-tile" data-drink="${escapeHTML(name)}" aria-label="Select ${escapeHTML(pretty(name))}" aria-pressed="false">${cup(name)}<span>${escapeHTML(pretty(name))}</span><small data-count="${escapeHTML(name)}">— made</small></button>`).join('');
       this._root.querySelector('#drink-tiles').innerHTML=tiles(main);this._root.querySelector('#extra-tiles').innerHTML=tiles(extra);
-      this._root.querySelector('#more-drinks').hidden=!extra.length;this._root.querySelector('#more-count').textContent=extra.length?String(extra.length):'';
+      this._root.querySelector('#more-drinks').hidden=!extra.length||this._sections.more_drinks==='hidden';this._root.querySelector('#more-count').textContent=extra.length?String(extra.length):'';
       this._root.querySelectorAll('[data-drink]').forEach(button=>this._bindDrinkButton(button,'drink',button.dataset.drink));
       this._root.querySelector('#all-counters').innerHTML=options.map(name=>`<button class="detail-row" data-counter-info="${escapeHTML(name)}"><span>${escapeHTML(pretty(name))}</span><strong data-count="${escapeHTML(name)}">—</strong></button>`).join('');
       this._root.querySelectorAll('[data-counter-info]').forEach(button=>button.addEventListener('click',()=>{const id=this._countEntity(button.dataset.counterInfo);if(this._hass.states[id])this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:id},bubbles:true,composed:true}));}));
@@ -237,6 +247,7 @@
     }
     async _holdAndBrew(kind,value){
       if(this._holdBrewPending||this._brewReason())return;
+      if(this._milkReason(kind==='recipe'?this._recipes[value]?.base_drink:value))return;
       const job={};this._holdJob=job;this._holdBrewPending=true;this._writeError='';this._update(true);
       const valid=()=>this._holdJob===job&&this.isConnected&&this._state('connected')==='on'&&this._state('status')==='ready'&&this._state('alerts_stale')==='off'&&!pendingCommand(this._state('command_result'));
       try{
@@ -255,7 +266,7 @@
       finally{if(this._holdJob===job){this._holdJob=null;this._holdBrewPending=false;this._update(true);}}
     }
     async _selectDrink(name,fromRecipe=false){
-      if(!this._options().includes(name)||this._selection||this._brewLock||this._state('connected')!=='on'||this._state('status')!=='ready'||pendingCommand(this._state('command_result')))return;
+      if(this._milkReason(name)||!this._options().includes(name)||this._selection||this._brewLock||this._state('connected')!=='on'||this._state('status')!=='ready'||pendingCommand(this._state('command_result')))return;
       if(this._recipeRun&&!fromRecipe)return;
       if(!fromRecipe){this._customRecipe=null;this._recipeError='';}
       if(name===this._state('drink')){if(this._state('recipe_modified')==='on'||this._editUnconfirmed)await this._reset();else this._update(true);return;}
@@ -284,6 +295,7 @@
       if(this._recipeRun||this._selection||this._edits.size||this._brewLock||this._state('connected')!=='on'||this._state('status')!=='ready'||pendingCommand(this._state('command_result')))return;
       const recipe=this._recipes[index];if(!recipe)return;
       this._customRecipe={...recipe,index};this._recipeError='';this._writeError='';
+      if(this._milkReason(recipe.base_drink))return;
       if(!this._options().includes(recipe.base_drink)){this._recipeError=`Base drink "${recipe.base_drink}" is unavailable. Use the component's exact drink label.`;this._update(true);return;}
       const run={};this._recipeRun=run;this._editUnconfirmed=false;this._update(true);
       try{
@@ -321,11 +333,29 @@
       if(!ok){this._edits.delete(key);this._editUnconfirmed=true;this._update(true);return;}
       this._later(()=>{if(this._edits.get(key)===expected){this._edits.delete(key);this._editUnconfirmed=true;this._writeError='Setting change unconfirmed. Reset the recipe before brewing.';this._update(true);}},10000);
     }
+    async _toggleCoolerOverride(){
+      const state=this._state('coolcontrol_override');
+      if(this._overridePending||!['on','off'].includes(state)||this._state('connected')!=='on'||this._state('brew_active')==='on')return;
+      const target=state==='on'?'off':'on';this._overridePending=target;this._writeError='';this._update(true);
+      if(!await this._service('switch',target==='on'?'turn_on':'turn_off','coolcontrol_override')){this._overridePending=null;this._update(true);return;}
+      this._later(()=>{if(this._overridePending===target){this._overridePending=null;this._writeError='Milk cooler override change not confirmed. Check the switch state.';this._update(true);}},10000);
+    }
+    _milkReason(name,includeOverridden=false){
+      if(!includeOverridden&&this._state('coolcontrol_override')==='on')return '';
+
+      // Use the Jura's own alerts, rather than inferring readiness from cooler telemetry.
+      if(!/flat white|cappuccino|latte|milk|foam/i.test(name||''))return '';
+      const labels=this._text('active_alerts','').split(/[,;]/).map(s=>s.trim().toLowerCase().replace(/_/g,' '));
+      for(const label of ['no milk (milk sensor)','error milk (milk sensor)','no signal (milk sensor)'])
+        if(labels.includes(label))return friendlyAlert(label);
+      return '';
+    }
     _brewReason(){
       if(this._state('connected')!=='on')return 'Machine disconnected';
       if(this._state('brew_active')==='on')return 'Machine operation in progress';
       if(this._state('status')!=='ready')return friendlyAlert(this._text('status_detail','Waiting for the machine to be ready'));
       if(this._state('alerts_stale')!=='off')return 'Waiting for fresh machine alerts';
+      if(this._milkReason(this._state('drink')))return this._milkReason(this._state('drink'));
       if(this._recipeRun)return 'Preparing your custom recipe…';
       if(this._recipeError)return 'Custom recipe not ready — reset or choose a recipe';
       if(this._selection||this._state('recipe_loading')!=='off')return 'Loading the saved recipe…';
@@ -398,16 +428,32 @@
       reading('tray_status',trayFresh?(trayMissing?'Missing':trayFull?'Full':this._text('tray_status')):'—',trayFresh&&(trayMissing||trayFull));
       reading('empty_grounds',!connected||stale||!['on','off'].includes(this._state('empty_grounds'))?'—':this._state('insert_coffee_bin')==='on'?'Missing':this._state('empty_grounds')==='on'?'Empty bin':'OK',this._state('empty_grounds')==='on'||this._state('insert_coffee_bin')==='on');
       reading('no_beans',!connected||stale||!['on','off'].includes(this._state('no_beans'))?'—':this._state('no_beans')==='on'?'Refill':'OK',this._state('no_beans')==='on');
-      if(this._cooler)reading('milk_level',`${this._format(this._state('milk_level'))}% · ${this._format(this._state('milk_temperature'),1)}°C`);
+      const milkReason=connected&&!stale?this._milkReason('Milk',true):'';
+      const milkState=!milkReason?'ok':milkReason==='Milk Container Empty'?'empty':milkReason.startsWith('Milk Cooler Error')?'fault':'no-signal';
+      this._card.dataset.milkState=milkState;
+      const overrideState=this._state('coolcontrol_override'),overrideOn=overrideState==='on';
+      if(this._overridePending===overrideState)this._overridePending=null;
+      $('#cooler-override').hidden=!this._entity('coolcontrol_override')||!(overrideOn||milkReason);
+      $('#cooler-override').classList.toggle('enabled',overrideOn);
+      set('#cooler-override-label',overrideOn?'Milk cooler override is on':'Ignore milk cooler fault');
+      set('#cooler-override-help',this._overridePending?'Waiting for the machine to confirm...':!['on','off'].includes(overrideState)?'Override switch unavailable.':overrideOn?'Milk cooler protection is bypassed. Check the milk supply before brewing.':'Allow milk drinks despite the cooler fault. Check the milk supply first.');
+      $('#cooler-override-toggle').setAttribute('aria-checked',String(overrideOn));
+      $('#cooler-override-toggle').disabled=!!this._overridePending||!['on','off'].includes(overrideState)||!connected||active;
+
+      $('#jura-cooler-warning').setAttribute('display',milkReason?'inline':'none');
+      set('#jura-cooler-label',milkState==='empty'?'MILK EMPTY':milkState==='fault'?'COOLER FAULT':milkState==='no-signal'?'NO SIGNAL':'COOL CONTROL');
+      $('#jura-cooler-title').textContent=milkReason||'Cool Control';
+      if(this._cooler)reading('milk_level',`${this._format(this._state('milk_level'))}% · ${this._format(this._state('milk_temperature'),1)}°C`,!!milkReason);
+      const milkReading=$('[data-reading=milk_level]');if(milkReading)milkReading.closest('button').title=milkReason;
       const level=numeric(this._state('milk_level')),height=level===null?0:43*Math.min(100,level)/100;$('#jura-milk-fill').setAttribute('height',height);$('#jura-milk-fill').setAttribute('y',231-height);
       this._card.classList.toggle('tank-alert',connected&&!stale&&this._state('fill_water')==='on');this._card.classList.toggle('tray-alert',connected&&!stale&&(this._state('insert_tray')==='on'||this._state('empty_tray')==='on'));this._card.classList.toggle('beans-alert',connected&&!stale&&this._state('no_beans')==='on');
       this._renderTiles();const selected=this._state('drink');
       if(this._customRecipe&&!this._recipeRun&&!this._selection&&!this._recipeError&&(selected!==this._customRecipe.base_drink||this._state('recipe_modified')==='off'&&Object.entries(this._customRecipe.overrides).some(([field,value])=>String(this._state(recipeKeys[field]))!==String(value)))){this._customRecipe=null;this._recipeError='';}
       if(this._hold&&(active||!connected||stale||status!=='ready'))this._cancelHold();
       const controlsBlocked=!!this._holdBrewPending||!!this._recipeRun||shuttingDown||!connected||status!=='ready'||this._brewLock||pendingCommand(this._state('command_result'));
-      this._root.querySelectorAll('[data-drink]').forEach(button=>{button.setAttribute('aria-pressed',String(!this._customRecipe&&button.dataset.drink===selected));button.disabled=controlsBlocked||!!this._selection||this._edits.size>0;});
-      $('#my-recipes').hidden=!this._recipes.length;
-      this._root.querySelectorAll('[data-recipe]').forEach(button=>{button.setAttribute('aria-pressed',String(Number(button.dataset.recipe)===this._customRecipe?.index));button.disabled=controlsBlocked||!!this._selection||this._edits.size>0;});
+      this._root.querySelectorAll('[data-drink]').forEach(button=>{button.setAttribute('aria-pressed',String(!this._customRecipe&&button.dataset.drink===selected));const milkReason=this._milkReason(button.dataset.drink);button.disabled=controlsBlocked||!!this._selection||this._edits.size>0||!!milkReason;button.title=milkReason;});
+      $('#my-recipes').hidden=!this._recipes.length||this._sections.my_recipes==='hidden';
+      this._root.querySelectorAll('[data-recipe]').forEach(button=>{button.setAttribute('aria-pressed',String(Number(button.dataset.recipe)===this._customRecipe?.index));const milkReason=this._milkReason(this._recipes[Number(button.dataset.recipe)]?.base_drink);button.disabled=controlsBlocked||!!this._selection||this._edits.size>0||!!milkReason;button.title=milkReason;});
       this._root.querySelectorAll('[data-count]').forEach(el=>{const state=this._hass.states[this._countEntity(el.dataset.count)]?.state;el.textContent=`${this._format(state)}${el.tagName==='SMALL'?' made':''}`;});
       set('#selected-name',this._customRecipe?.name||(known(selected)?pretty(selected):'Select a drink'));const loading=!!this._recipeRun||!!this._selection||this._state('recipe_loading')==='on';const source=this._text('recipe_source','Unknown');
       set('#recipe-source',loading?'Loading…':source==='Machine'?(this._customRecipe?'Custom recipe':'Machine saved'):source==='Profile defaults'?'Profile defaults':'Source unknown');$('#recipe-source').dataset.fallback=String(source==='Profile defaults'&&!loading);

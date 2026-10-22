@@ -23,6 +23,7 @@ and queue tests without changing either component's firmware.
 | Saved espresso water read | Screen change 45 → 60 → 45 ml followed by valid `@TM:41,02` responses |
 | Physical saved-default API brewing | Still needs acceptance testing after the 0.3 update |
 | Physical E8 EF1092M V01.07 | AT handshake with challenge `01C041B628` → `8120000000`, saved Flat White read, full Flat White brew with TV stages/progress, TF alerts and AT counters (ESP32-C3 / ESP-IDF, 0.3.2) |
+| Physical E8 EF1092 Cool Control bridge | Confirmed on `milky` from owner-supplied logs reviewed 2026-10-21: `@HM:80` requests receive cached bare `@mn`; two Milk Foam attempts report `@TV:2D08` (no milk), clear brew activity and refresh TF without a progress timeout. A later forwarded `@mo` clears the machine's milk/no-milk alerts. Advancing HA counters maintain freshness without duplicate notifications |
 | Physical E8 EF533M V01.18 | AT handshake with 1-byte challenge `01` → `81`, TF alerts, AT product/maintenance counters and TV coffee stages/progress (classic ESP32 / Arduino, ESPHome 2026.9.1, 0.3.3). `@TM:41` saved-recipe reads time out on this firmware |
 | Dev AN:01 diagnostic | Host-tested blocked-TF dispatch, offline/busy/duplicate rejection, replies, cancellation and no retry; generated YAML checked with the C3 IDF compiler; physical effect unverified |
 | Other models/parameters | Not established by their presence in the database |
@@ -32,6 +33,28 @@ and queue tests without changing either component's firmware.
 The compiler syntax check is not a complete firmware link or flash test. The
 user has compiled/uploaded earlier V2 revisions; do not infer that every current
 control path or model has been exercised on hardware.
+
+### EF1092 Cool Control bridge hardware evidence
+
+The supplied capture starts with reporting already negotiated; it does not
+include the startup T2/T3 handshake or `@H1` announcement. It confirms the
+following machine-side behavior:
+
+- At 19:34:21 and 19:34:42, `@HM:80` requests are answered with cached `@mn`.
+  Each Milk Foam attempt then produces `@TV:2D08`, handled as **Blocked: no milk**
+  with brew activity OFF and a fresh TF query, rather than a progress timeout.
+- At 19:34:52, the cooler changes to `@mo`; forwarding it changes TF from
+  `01060000000000` to `00040000000000`, clearing the milk and no-milk alerts
+  within approximately half a second.
+- HA counter updates continue without repetitive unchanged status transmissions.
+  Temperature/level changes are suppressed on the machine link because `@HM:80`
+  selects bare reporting. Explicit requests still receive unchanged replies.
+
+No command or progress timeouts appear in this capture. It does not show a
+successful milk preparation after recovery, extended reporting, loss/recovery
+of the cooler connection, or override-switch operation on EF1092. The exact
+software version is not present in this capture; do not infer it from the
+separate EF1092M V01.07 test above.
 
 ## Regression coverage
 

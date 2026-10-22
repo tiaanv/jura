@@ -9,6 +9,7 @@
 #include "jura_profiles.h"
 #include "jura_progress.h"
 #include "jura_transport.h"
+#include "jura_coolcontrol_bridge.h"
 
 namespace esphome {
 namespace jura_native {
@@ -30,6 +31,22 @@ class JuraController : public TransportSink {
     profile_hint_ = hint;
   }
   void set_read_saved_recipes(bool v) { read_saved_recipes_ = v; }
+  void configure_coolcontrol(uint32_t timeout, uint32_t coalesce, const std::string &reporting = "auto") {
+    cooler_.configure(timeout, coalesce, reporting == "legacy" ? CoolcontrolBridge::ReportingMode::LEGACY
+                                      : reporting == "negotiated" ? CoolcontrolBridge::ReportingMode::NEGOTIATED
+                                                                  : CoolcontrolBridge::ReportingMode::AUTO);
+  }
+  void coolcontrol_snapshot(const std::string &raw, float counter, bool online, uint32_t now) {
+    cooler_.snapshot(raw, counter, online, now);
+  }
+  void set_coolcontrol_override(bool value) {
+    const bool previous = cooler_.overridden();
+    cooler_.set_override(value);
+    if (previous == cooler_.overridden()) return;
+    trace(cooler_.overridden() ? "Cool Control override ON: forcing healthy @mo; milk alerts bypassed for brew checks"
+                              : "Cool Control override OFF: using actual cooler status");
+  }
+  bool coolcontrol_override() const { return cooler_.overridden(); }
   void set_accept_short_status(bool v) { accept_short_status_ = v; }
   void begin(uint32_t now) {
     now_ = boot_ = now;
@@ -61,6 +78,14 @@ class JuraController : public TransportSink {
   void advance(uint32_t now) {
     now_ = now;
     transport_.tick(now);
+    cooler_.advance(now);
+    if (cooler_.enabled()) {
+      const auto diagnostic = cooler_.reporting_description() + "; " + cooler_.input_description();
+      if (diagnostic != cooler_diagnostic_) {
+        cooler_diagnostic_ = diagnostic;
+        trace("Cool Control bridge: " + diagnostic);
+      }
+    }
     const uint32_t boot_elapsed = uint32_t(now - boot_);
     // TY is optional: some machines reveal their model only in the AT T3 reply.
     // Keep API discovery gated while that first handshake can identify the profile.
@@ -134,7 +159,7 @@ class JuraController : public TransportSink {
         reject_("AN:01 test cancelled: connection or operation changed");
         return;
       }
-      if (r.kind == Kind::API_RECIPE && (!api_recipe_pending_ || !ready_for_brew_())) {
+      if (r.kind == Kind::API_RECIPE && (!api_recipe_pending_ || !ready_for_brew_(api_recipe_code_))) {
         cancel_api_recipe_("Machine no longer ready before settings read");
         return;
       }
@@ -145,7 +170,7 @@ class JuraController : public TransportSink {
         trace("Espresso probe: " + why);
         return;
       }
-      if (r.kind == Kind::BREW && (!ready_for_brew_() || !brew_pending_)) {
+      if (r.kind == Kind::BREW && (!ready_for_brew_(requested_code_) || !brew_pending_)) {
         brew_pending_ = false;
         text("command_result", "Rejected: machine no longer ready");
         return;
@@ -166,6 +191,20 @@ class JuraController : public TransportSink {
       return;
     }
     if (session_ != Session::READY) return;
+    if (cooler_.take_announcement()) {
+      trace(cooler_.overridden() ? "Cool Control announcement: @H1 (plaintext; manual healthy override)"
+                                : "Cool Control announcement: @H1 (plaintext; fresh cooler available in this machine session)");
+      start_("@H1", Kind::COOLER, false, false);
+      return;
+    }
+    std::string cooler_command;
+    bool cooler_requested = false;
+    if (cooler_.next(now, cooler_command, &cooler_requested)) {
+      if (cooler_requested) trace("Cool Control request response: " + cooler_command + " (plaintext; " + cooler_.input_description() + ")");
+      // Milk status uses plaintext framing without the AT cipher envelope.
+      start_(cooler_command, Kind::COOLER, false, false);
+      return;
+    }
     // TF is replaced by TV during a product. Don't query or restart a live TV session.
     if (!busy_() && (tf_requested_ || uint32_t(now - last_tf_query_) >= 30000)) {
       tf_requested_ = false;
@@ -270,6 +309,8 @@ class JuraController : public TransportSink {
         !control_.empty())
       return reject_("Another command is pending");
     if (!ready_for_brew_()) return reject_("Machine not ready or status unavailable");
+    const auto milk_reason = milk_block_reason_(p->code);
+    if (!milk_reason.empty()) return reject_(milk_reason);
     // Validate explicit overrides now; omitted values are filled after the read.
     for (uint8_t attr = 0; attr < ATTRIBUTE_COUNT; ++attr) {
       if (values[attr] == -1) continue;
@@ -399,7 +440,8 @@ class JuraController : public TransportSink {
     TEST_AN01,
     RECIPE_PROBE,
     SAVED_RECIPE,
-    API_RECIPE
+    API_RECIPE,
+    COOLER
   };
   struct Request {
     std::string command;
@@ -504,10 +546,24 @@ class JuraController : public TransportSink {
       if (a.blocking && flag_(a.bit)) return true;
     return false;
   }
-  bool ready_for_brew_() const {
+  std::string milk_block_reason_(uint8_t code) const {
+    if (cooler_.overridden()) return "";
+    const auto *p = profiles_.find(code);
+    if (!p || (!profiles_.option_for(*p, MILK).valid() && !profiles_.option_for(*p, FOAM).valid())) return "";
+    for (const auto &a : profiles_.alerts) {
+      const auto name = Profiles::lower(a.name);
+      if (name != "no milk (milk sensor)" && name != "error milk (milk sensor)" &&
+          name != "no signal (milk sensor)") continue;
+      if (tf_missing_(a.bit)) return "Milk sensor status unavailable";
+      if (flag_(a.bit)) return a.name;
+    }
+    return "";
+  }
+  bool ready_for_brew_(int product_code = -1) const {
     if (model_mismatch_ || !profile_ok() || session_ != Session::READY || !tf_valid_ || busy_() ||
         awaiting_tf_ || uint32_t(now_ - last_tf_) >= 60000 || blocked_())
       return false;
+    if (product_code >= 0 && !milk_block_reason_(uint8_t(product_code)).empty()) return false;
     for (const auto &a : profiles_.alerts)
       if (a.blocking && tf_missing_(a.bit)) return false;
     for (const auto &a : profiles_.alerts)
@@ -524,7 +580,7 @@ class JuraController : public TransportSink {
   }
   void resolve_api_recipe_(bool received_response) {
     if (!api_recipe_pending_) return;
-    if (!ready_for_brew_()) {
+    if (!ready_for_brew_(api_recipe_code_)) {
       cancel_api_recipe_("Machine no longer ready after settings read");
       return;
     }
@@ -557,6 +613,8 @@ class JuraController : public TransportSink {
         active_ == Kind::API_RECIPE || !control_.empty())
       return reject_("Another command is pending");
     if (!ready_for_brew_()) return reject_("Machine not ready or status unavailable");
+    const auto milk_reason = milk_block_reason_(product.code);
+    if (!milk_reason.empty()) return reject_(milk_reason);
     std::string payload, error;
     if (!profiles_.recipe(product, values, payload, error)) return reject_(error);
     brew_pending_ = true;
@@ -596,6 +654,7 @@ class JuraController : public TransportSink {
     }
   }
   void install_profile_() {
+    cooler_.set_model(profiles_.ef);
     discovery_done_ = true;
     profile_changed(true);
     text("profile", profiles_.ef);
@@ -610,6 +669,7 @@ class JuraController : public TransportSink {
     refresh();
   }
   void start_session_() {
+    cooler_.reset_session();
     session_ = Session::ACK0;
     session_started_ = now_;
     handshake_command_ = "@T0";
@@ -725,7 +785,8 @@ class JuraController : public TransportSink {
     }
   }
   void received(const std::string &frame, bool encrypted) override {
-    if (encrypted) {
+    // Accept HM requests with plaintext or encrypted framing.
+    if (encrypted || frame == "@HM" || starts_(frame, "@HM:")) {
       receive_at_(frame);
       return;
     }
@@ -751,6 +812,18 @@ class JuraController : public TransportSink {
       last_activity_ = now_;
       binary("connected", 1);
     }
+    // HM may follow T3 before our final t3 acknowledgement has drained.
+    if (cooler_.enabled() && session_ != Session::OFF && session_ != Session::BACKOFF &&
+        (frame == "@HM" || (frame.size() == 6 && starts_(frame, "@HM:") && hex_(frame.substr(4))))) {
+      if (frame == "@HM") {
+        cooler_.request_status();
+      } else {
+        cooler_.negotiate(uint8_t(hexval_(frame.substr(4))));
+        trace("Cool Control reporting flags: " + frame.substr(4));
+      }
+      trace("Cool Control status request: " + frame + "; cached response queued");
+      return;
+    }
     if (frame == "@t0" && session_ == Session::ACK0 && active_ == Kind::H0 && transport_.waiting()) {
       transport_.complete(true, now_);
       session_ = Session::ACK1;
@@ -774,6 +847,15 @@ class JuraController : public TransportSink {
           response = "818000";
         else if (challenge.size() == 10)
           response = "8120000000";
+      }
+      if (cooler_.enabled() && response_override_.empty() && !response.empty() &&
+          hex_(challenge) && challenge.size() % 2 == 0) {
+        // Acknowledge byte0, retain byte1 bit7 and advertise cooler capability in bit5.
+        response = hexbyte_(uint8_t(hexval_(challenge.substr(0, 2))) | 0x80);
+        if (challenge.size() >= 4) {
+          response += hexbyte_((uint8_t(hexval_(challenge.substr(2, 2))) & 0x80) | 0x20);
+          response.append(challenge.size() - 4, '0');
+        }
       }
       if (!hex_(challenge) || challenge.size() % 2 || !hex_(response) ||
           response.size() != challenge.size()) {
@@ -871,7 +953,7 @@ class JuraController : public TransportSink {
     for (const auto &a : profiles_.alerts)
       if (a.blocking && tf_missing_(a.bit)) complete_status = false;
     if (!busy_() && complete_status) clear_operation_("Idle", "None", 0);
-    if (api_recipe_pending_ && !ready_for_brew_())
+    if (api_recipe_pending_ && !ready_for_brew_(api_recipe_code_))
       cancel_api_recipe_("Machine reported not ready during settings read");
     update_status_();
     return true;
@@ -958,6 +1040,25 @@ class JuraController : public TransportSink {
     const char *process = process_(code);
     if (!p && !process) return;
     cancel_api_recipe_("Machine progress observed during settings read");
+    // Milk sensor progress states indicate a
+    // blocked attempt, not dispensing progress or successful completion.
+    if (state >= 0x2D && state <= 0x2F) {
+      const std::string reason = state == 0x2D ? "no milk" : state == 0x2E ? "milk cooler error" : "no milk cooler signal";
+      const std::string result = "Blocked: " + reason;
+      clear_operation_(result.c_str(), p ? p->name.c_str() : process, 0);
+      number("product_code", code);
+      number("stage_code", state);
+      if (brew_pending_) {
+        text("command_result", code == requested_code_ ? result : "Different operation blocked: " + reason);
+      }
+      brew_pending_ = brew_sent_ = brew_started_ = false;
+      if (active_ == Kind::BREW && transport_.waiting()) transport_.complete(true, now_);
+      awaiting_tf_ = tf_requested_ = true;
+      trace("Milk preparation blocked: " + reason + "; requesting fresh TF status");
+      text("status", "blocked");
+      text("status_detail", reason);
+      return;
+    }
     operation_seen_ = true;
     operation_finished_ = state == 0x3E;
     last_tv_ = now_;
@@ -1117,7 +1218,7 @@ class JuraController : public TransportSink {
       number("total_products", counters_[0] == 0xFFFF ? NAN : float(counters_[0]));
       for (const auto &p : profiles_.products) {
         unsigned slot = p.code;
-        // The J.O.E. app has this EF545-only remap; preserve own-code fallback.
+        // EF545 uses alternate counter slots; preserve the product-code fallback.
         if (profiles_.ef == "EF545" && (p.code == 0x31 || p.code == 0x36)) {
           const unsigned alt = p.code == 0x31 ? 0x12 : 0x13;
           if (counters_[alt] != 0xFFFF) slot = alt;
@@ -1166,6 +1267,8 @@ class JuraController : public TransportSink {
 
   Profiles profiles_;
   JuraTransport transport_;
+  CoolcontrolBridge cooler_;
+  std::string cooler_diagnostic_;
   Session session_{Session::OFF};
   Kind active_{Kind::NONE}, handshake_kind_{Kind::H0};
   std::string active_command_, handshake_command_, detected_, response_override_, profile_hint_, phase_;

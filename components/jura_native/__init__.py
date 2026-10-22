@@ -2,12 +2,12 @@
 import re
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import uart, sensor, text_sensor, binary_sensor, select, number, button
+from esphome.components import uart, sensor, text_sensor, binary_sensor, select, number, button, switch
 from esphome.const import CONF_ID, CONF_NAME, ENTITY_CATEGORY_DIAGNOSTIC
 from .profiles import load_profiles
 
 DEPENDENCIES = ["uart"]
-AUTO_LOAD = ["sensor", "text_sensor", "binary_sensor", "select", "number", "button"]
+AUTO_LOAD = ["sensor", "text_sensor", "binary_sensor", "select", "number", "button", "switch"]
 ns = cg.esphome_ns.namespace("jura_native")
 JuraNative = ns.class_("JuraNative", cg.PollingComponent, uart.UARTDevice)
 ProfileSensor = ns.class_("ProfileSensor", sensor.Sensor)
@@ -15,6 +15,7 @@ ProfileBinarySensor = ns.class_("ProfileBinarySensor", binary_sensor.BinarySenso
 RecipeSelect = ns.class_("RecipeSelect", select.Select)
 RecipeNumber = ns.class_("RecipeNumber", number.Number)
 CommandButton = ns.class_("CommandButton", button.Button)
+CoolcontrolOverrideSwitch = ns.class_("CoolcontrolOverrideSwitch", switch.Switch)
 
 TEXT = {
     "status": "Jura Status", "status_detail": "Jura Status Detail",
@@ -77,8 +78,30 @@ def profile_hint(value):
     return value
 
 
+def validate_coolcontrol(config):
+    if config["coalesce_delay"].total_milliseconds >= config["timeout"].total_milliseconds:
+        raise cv.Invalid("coolcontrol coalesce_delay must be shorter than timeout")
+    return config
+
+
+COOLCONTROL_SCHEMA = cv.All(cv.Schema({
+    cv.Optional("override_switch", default={CONF_NAME: "Jura Cool Control Override"}):
+        switch.switch_schema(CoolcontrolOverrideSwitch).extend({
+            cv.Optional("restore_mode", default="RESTORE_DEFAULT_OFF"):
+                cv.enum({key: switch.RESTORE_MODES[key] for key in
+                         ("RESTORE_DEFAULT_OFF", "ALWAYS_OFF")}, upper=True),
+        }),
+    cv.Optional("reporting", default="auto"): cv.one_of("auto", "negotiated", "legacy", lower=True),
+    cv.Required("raw_message"): cv.use_id(text_sensor.TextSensor),
+    cv.Required("message_counter"): cv.use_id(sensor.Sensor),
+    cv.Required("online"): cv.use_id(binary_sensor.BinarySensor),
+    cv.Optional("timeout", default="15s"): cv.All(cv.positive_not_null_time_period, cv.positive_time_period_milliseconds),
+    cv.Optional("coalesce_delay", default="250ms"): cv.positive_time_period_milliseconds,
+}), validate_coolcontrol)
+
 schema = {
     cv.GenerateID(): cv.declare_id(JuraNative),
+    cv.Optional("coolcontrol"): COOLCONTROL_SCHEMA,
     cv.Optional("allow_brew", default=False): cv.boolean,
     cv.Optional("allow_power_off", default=False): cv.boolean,
     cv.Optional("raw_extras", default=True): cv.boolean,
@@ -123,6 +146,15 @@ async def to_code(config):
     cg.add(var.set_profile_hint("" if config["profile_hint"] == "AUTO" else config["profile_hint"]))
     cg.add(var.set_read_saved_recipes(config["read_saved_recipes"]))
     cg.add(var.set_accept_short_status(config["accept_short_status"]))
+    if "coolcontrol" in config:
+        cooler = config["coolcontrol"]
+        override = await switch.new_switch(cooler["override_switch"])
+        cg.add(var.set_coolcontrol_override_switch(override))
+        cg.add(var.set_coolcontrol(await cg.get_variable(cooler["raw_message"]),
+                                  await cg.get_variable(cooler["message_counter"]),
+                                  await cg.get_variable(cooler["online"]),
+                                  cooler["timeout"].total_milliseconds,
+                                  cooler["coalesce_delay"].total_milliseconds, cooler["reporting"]))
     for key in TEXT:
         entity = await text_sensor.new_text_sensor(config[key])
         cg.add(var.register_text(cg.std_string(key), entity))

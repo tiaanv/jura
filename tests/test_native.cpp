@@ -23,7 +23,46 @@ static void inject_at(JuraNative &device, const std::string &frame) {
     device.incoming.push_back(raw);
   ticks(device, 10);
 }
+struct CoolerLogProbe : public JuraNative {
+  void log_inputs(uint32_t now) { log_coolcontrol_inputs_(now); }
+  float logged_counter() const { return cooler_logged_counter_; }
+  uint8_t availability() const { return cooler_logged_availability_; }
+  bool logged_online() const { return cooler_logged_online_; }
+  uint32_t logged_at() const { return cooler_inputs_logged_at_; }
+};
 int main() {
+  CoolerLogProbe logging;
+  esphome::text_sensor::TextSensor imported_raw;
+  esphome::sensor::Sensor imported_counter;
+  esphome::binary_sensor::BinarySensor imported_online;
+  logging.set_coolcontrol(&imported_raw, &imported_counter, &imported_online, 15000, 250);
+  CoolcontrolOverrideSwitch override;
+  logging.set_coolcontrol_override_switch(&override);
+  logging.setup();
+  assert(!override.state && !logging.coolcontrol_override());
+  override.turn_on(); assert(override.state && logging.coolcontrol_override());
+  override.turn_off(); assert(!override.state && !logging.coolcontrol_override());
+  override.turn_on(); logging.setup();
+  assert(override.state && logging.coolcontrol_override());
+  override.turn_off(); logging.setup();
+  assert(!override.state && !logging.coolcontrol_override());
+  CoolerLogProbe restored;
+  CoolcontrolOverrideSwitch restored_override;
+  restored_override.saved_state = true;
+  restored.set_coolcontrol(&imported_raw, &imported_counter, &imported_online, 15000, 250);
+  restored.set_coolcontrol_override_switch(&restored_override);
+  restored.setup();
+  assert(restored_override.state && restored.coolcontrol_override());
+  logging.log_inputs(0); assert(logging.availability() == 0);
+  imported_raw.publish_state("@mo:321E"); imported_counter.publish_state(1); imported_online.publish_state(true);
+  logging.log_inputs(1); assert(logging.availability() == 7 && logging.logged_counter() == 1);
+  imported_counter.publish_state(2); logging.log_inputs(1000); assert(logging.logged_counter() == 1);
+  logging.log_inputs(5001); assert(logging.logged_counter() == 2);
+  imported_online.publish_state(false); logging.log_inputs(5002); assert(!logging.logged_online());
+  imported_online.invalidate_state(); logging.log_inputs(5003); assert(logging.availability() == 3);
+  logging.log_inputs(20002); assert(logging.logged_at() == 5003);
+  logging.log_inputs(20003); assert(logging.logged_at() == 20003 && logging.availability() == 3);
+
   test_now = 0;
   JuraNative device;
   RecipeSelect drink, strength, temp, grinder;
@@ -117,7 +156,7 @@ int main() {
   esphome::sensor::Sensor level, temperature;
   cooler.set_level_sensor(&level);
   cooler.set_temperature_sensor(&temperature);
-  const std::string frame = "abcd321E\r\n";
+  const std::string frame = "@mo:321E\r\n";
   for (unsigned char c : frame) cooler.incoming.push_back(c);
   cooler.loop();
   cooler.update();

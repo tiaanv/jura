@@ -163,6 +163,11 @@ ESP32 Arduino and ESP8266 Arduino. See the [legacy guide](legacy/README.md),
 [button migration](docs/migration.md#keep-using-the-legacy-component).
 See the [change log](CHANGELOG.md).
 
+## Support
+
+Enjoying the project? [Buy me a beer 🍺](https://ko-fi.com/tiaanvee).
+Always appreciated, never expected.
+
 ## Credits and licence
 
 The model database, AT cipher reference and progress glossary build on
