@@ -1,5 +1,15 @@
 # Card changelog
 
+## 2.1.9 — machine graphic and readable display
+
+- Move original lowercase script lettering above the machine display.
+- Use the full display for friendly status text, wrapping with native SVG tspans
+  for consistent positioning in desktop browsers and mobile WebViews.
+- Increase short status text from 10 to 14 SVG units; reduce size only as needed
+  for longer messages. Keep full status in the accessible label.
+- Remove the caption below Cool Control while retaining its fault indicators
+  and real milk level and temperature.
+
 ## 2.1.8 — configurable sections
 
 - Make My Recipes, Choose a Drink and Brew Settings collapsible.

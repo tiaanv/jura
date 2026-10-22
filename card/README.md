@@ -1,7 +1,7 @@
 # Jura Graphical Card
 
 Home Assistant dashboard card for this repository's `jura_native` ESPHome
-component. Current card version: **2.1.8**. Component versions remain in the
+component. Current card version: **2.1.9**. Component versions remain in the
 repository-root `VERSION`; card versions are tracked separately in `card/VERSION`.
 
 The card combines an outlined Jura machine, optional Cool Control, graphical

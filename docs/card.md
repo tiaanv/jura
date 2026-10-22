@@ -71,7 +71,7 @@ external-component configuration and UART setup are unaffected.
 3. Add a dashboard resource of type **JavaScript module**:
 
    ```text
-   /local/jura-native-card.js?v=2.1.8
+   /local/jura-native-card.js?v=2.1.9
    ```
 
 4. Refresh the browser and add the card YAML.
@@ -350,3 +350,17 @@ set all six sections to `hidden`.
 
 Only `expanded`, `collapsed` and `hidden` are accepted. Unknown section names,
 invalid values and non-mapping `sections` settings produce a configuration error.
+
+## Machine illustration and display
+
+The machine has original lowercase script lettering above the display. It is
+local vector artwork, independent of installed fonts, rather than the corporate
+wordmark. The full display area shows the friendly machine status or current
+operation phase. Native SVG text wraps into centred lines for consistent
+positioning on desktop and mobile. Short messages use a larger 14-unit font;
+long messages reduce in size as needed. Exceptionally long text is shortened
+visually, with the complete message retained in the accessible label and the
+card's status/operation text.
+
+The Cool Control has no caption beneath it. Fault outlines, its warning badge,
+the real milk percentage and temperature, and the override control still work.

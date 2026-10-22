@@ -1,4 +1,4 @@
-// Jura Native Graphical Card 2.1.8 — native ESPHome entities, no MQTT or external dependencies.
+// Jura Native Graphical Card 2.1.9 — native ESPHome entities, no MQTT or external dependencies.
 (() => {
   const GRAPHIC = /*GRAPHIC*/;
   const STYLES = /*STYLES*/;
@@ -196,6 +196,24 @@
       this._root.querySelector('#acknowledge').addEventListener('click',()=>{if(this._state('status')!=='ready'||this._state('connected')!=='on')return;this._ack=this._stamp('command_result');this._brewLock=false;this._localUncertain=false;this._update(true);});
       this._root.querySelectorAll('[data-input]').forEach(input=>input.addEventListener('change',()=>this._edit(input.dataset.input,input.value)));
       if(!this._cooler)this._root.querySelectorAll('.cooler,.milk-part').forEach(el=>el.setAttribute('display','none'));
+    }
+    _screenText(value){
+      const el=this._root.querySelector('#jura-screen-status'),text=String(value||''),ns='http://www.w3.org/2000/svg';
+      el.setAttribute('aria-label',text);
+      const wrap=size=>{
+        el.style.fontSize=size+'px';const lines=[];let line='';
+        const fits=value=>{el.textContent=value;return el.getComputedTextLength()<=82;};
+        for(const word of text.split(/\s+/).filter(Boolean)){
+          if(fits(line?line+' '+word:word)){line=line?line+' '+word:word;continue;}
+          if(line){lines.push(line);line='';}
+          for(const character of word){if(line&&!fits(line+character)){lines.push(line);line='';}line+=character;}
+        }
+        if(line)lines.push(line);return lines;
+      };
+      let size=14,lines=wrap(size);while((lines.length>4||lines.length*(size+1)>39)&&size>9)lines=wrap(--size);
+      if(lines.length>4){lines=lines.slice(0,4);lines[3]=lines[3].slice(0,-1)+'…';}
+      el.textContent='';const spacing=size+1,start=101-(lines.length-1)*spacing/2+size*.34;
+      lines.forEach((line,index)=>{const span=document.createElementNS(ns,'tspan');span.setAttribute('x','216.5');span.setAttribute('y',String(start+index*spacing));span.textContent=line+(index<lines.length-1?' ':'');el.appendChild(span);});
     }
     _reading(key,icon,label){return `<button class="reading" data-info="${key}"><ha-icon icon="mdi:${icon}"></ha-icon><strong data-reading="${key}">—</strong><span>${label}</span></button>`;}
     async _service(domain,service,key,data={}){
@@ -420,8 +438,8 @@
       $('#progress-track').setAttribute('aria-valuetext',percentText);$('#progress-fill').style.width=`${percent??0}%`;
       const current=numeric(this._state('stage_current')),target=numeric(this._state('stage_target')),unit=this._text('stage_unit','');
       set('#stage',(current!==null||target!==null)&&['ml','s','level'].includes(unit)?`${this._format(current)} / ${this._format(target)} ${unit}`:'');
-      const screen=shuttingDown?'Switching Off':connected?(active?(/grind/i.test(phase)?'Grinding':/brewing/i.test(displayPhase)?'Brewing':phase==='Dispensing milk foam'?'Adding Foam':phase==='Dispensing milk'?'Adding Milk':/heating/i.test(phase)?'Heating':phase==='Milk pause'?'Settling Milk':phase==='Dispensing water'?'Hot Water':/rinsing the milk/i.test(displayPhase)?'Milk Rinse':/rinsing the coffee/i.test(displayPhase)?'Coffee Rinse':displayPhase.slice(0,16)):statusNames[status]||'Unknown'):'Offline';
-      set('#jura-screen-status',screen);
+      const screen=shuttingDown?'Switching Off':connected?(active?displayPhase:statusNames[status]||'Unknown'):'Offline';
+      this._screenText(screen);
       const reading=(key,value,alert=false)=>{const el=$(`[data-reading="${key}"]`);if(el){el.textContent=value;el.closest('button').classList.toggle('alert',alert);}};
       reading('water_tank_status',connected&&!stale?this._text('water_tank_status'):'—',this._state('fill_water')==='on');
       const trayFresh=connected&&!stale,trayMissing=this._state('insert_tray')==='on'||this._state('tray_status')==='Missing',trayFull=this._state('empty_tray')==='on';
@@ -441,7 +459,6 @@
       $('#cooler-override-toggle').disabled=!!this._overridePending||!['on','off'].includes(overrideState)||!connected||active;
 
       $('#jura-cooler-warning').setAttribute('display',milkReason?'inline':'none');
-      set('#jura-cooler-label',milkState==='empty'?'MILK EMPTY':milkState==='fault'?'COOLER FAULT':milkState==='no-signal'?'NO SIGNAL':'COOL CONTROL');
       $('#jura-cooler-title').textContent=milkReason||'Cool Control';
       if(this._cooler)reading('milk_level',`${this._format(this._state('milk_level'))}% · ${this._format(this._state('milk_temperature'),1)}°C`,!!milkReason);
       const milkReading=$('[data-reading=milk_level]');if(milkReading)milkReading.closest('button').title=milkReason;
