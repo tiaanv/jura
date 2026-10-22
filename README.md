@@ -4,6 +4,13 @@ Monitor and prepare Jura drinks through Home Assistant using ESPHome's native
 API. MQTT is not required. The `main` branch contains both `jura_native` and legacy `jura`;
 its current component version is recorded in [VERSION](VERSION).
 
+> **Unofficial project — use at your own risk.** This independent community
+> project is not affiliated with, endorsed by, sponsored by, or supported by
+> JURA Elektroapparate AG. Installation and use may cause equipment damage,
+> unintended operation, hot-liquid discharge, or injury. Read the
+> [full disclaimer](docs/disclaimer.md) before installing or using it. The software
+> is provided without warranty under the [MIT License](LICENSE).
+
 ## Features
 
 - **Model identification:** automatic EF detection with 75 bundled model profiles.
