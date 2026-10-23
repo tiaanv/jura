@@ -45,6 +45,80 @@ Values must match the base drink's supported choices, range and step. Zero is
 accepted only when that profile allows it. Unknown override names and malformed
 configuration are rejected. Not every drink supports every parameter.
 
+### Milk settings differ between machine profiles
+
+The examples above use **EF533** Flat White settings. An **EF1092** Flat White
+uses `foam_seconds` instead of `milk_seconds`, even though the drink has the same
+name. For example, on EF1092:
+
+```yaml
+recipes:
+  - name: Milky White
+    base_drink: "1 Flat White"
+    overrides:
+      foam_seconds: 30
+  - name: Kids White
+    base_drink: "1 Flat White"
+    overrides:
+      water_ml: 60
+      foam_seconds: 22
+```
+
+Select the standard base drink and open **Adjust this drink** to see the settings
+and ranges reported by your machine. **Milk** corresponds to `milk_seconds`;
+**Milk foam** corresponds to `foam_seconds`. The detected profile is available
+under Diagnostics. Do not automatically substitute one field for the other:
+they represent different settings, and some drinks support both.
+
+With a component that exposes **Jura Recipe Capabilities**, the card validates
+all configured recipes as soon as the complete catalogue for the detected profile
+arrives. Invalid tiles show an explanation; selecting one displays its requested
+overrides and keeps Brew blocked without sending a drink selection or reset.
+The card does not select drinks in the background. It also checks live choices,
+ranges and steps after loading the base drink's saved recipe before applying overrides.
+Older firmware, missing/disabled capability sensors, incomplete data and unknown
+schemas retain validation after selection. Unsupported milk
+fields name the other field when it is available; range and choice errors show
+the allowed values. No overrides are sent if validation fails.
+
+When preparation fails, the summary retains the **requested overrides — not
+ready**, separately from the current machine settings. Those requested values
+are not confirmed for brewing. A later communication failure may leave some
+overrides applied, so correct the YAML and select the recipe again, or reset.
+
+### Capability transport (component and card developers)
+
+The component publishes the selected profile's catalogue without UART traffic.
+`sensor.<prefix>_jura_recipe_capabilities` contains a manifest:
+`{"v":1,"p":"EF533","n":12,"h":123456789}` (count/hash shown as examples).
+Numbered `sensor.<prefix>_jura_recipe_capabilities_1`, `_2`, etc. contain contiguous
+JSON fragments, each at most 240 UTF-8 bytes. They are diagnostic text sensors;
+keep the used entities enabled in HA. Unused slots are internal. They are published
+on profile detection, not at every progress/status update, and native API state
+subscription supplies them again when HA reconnects.
+
+Concatenate fragments 1 through `n`. `h` is unsigned FNV-1a over the UTF-8 bytes
+(offset 2166136261, multiply 16777619 modulo 2^32). The assembled document is:
+
+```json
+{"v":1,"p":"EF533","d":{"1 Flat White":{"water_ml":{"n":[25,240,5]},"milk_seconds":{"n":[3,120,1]},"temperature":["Normal","High"]}}}
+```
+
+`d` maps exact drink names to supported fields. Numeric `n` values are minimum,
+maximum and step; arrays contain exact choice labels. Omitted fields are unsupported.
+The catalogue also includes `grinder` for completeness; custom recipe YAML retains
+its existing seven override fields. Defaults and machine-saved values are intentionally
+not part of this capability schema.
+
+The card requires matching profile identifiers, a supported schema, valid bounds
+and choices, and a complete checksum before using the catalogue. It never uses a
+partially delivered or mismatched catalogue. Explicit `entities` overrides support
+both `recipe_capabilities` and individual `recipe_capabilities_1` etc. keys.
+No extra YAML is required on the component; rebuild firmware from the local source
+to expose these sensors. This catalogue describes profile capabilities, not a
+guarantee that a machine will accept a brew; existing readiness and live validation
+checks still apply.
+
 Selecting a custom tile always reloads the **machine-saved base recipe**, even
 when the same base is selected. Unspecified settings therefore do not inherit
 overrides from the previous custom recipe. All overrides are validated before

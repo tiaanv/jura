@@ -3,6 +3,22 @@ from functools import lru_cache
 from pathlib import Path
 import re
 import struct
+import json
+
+
+def capability_slots():
+    """Upper bound for UTF-8-safe 240-byte chunks, for entity creation at codegen."""
+    fields = ('strength', 'grinder', 'temperature', 'water_ml', 'milk_seconds',
+              'foam_seconds', 'bypass_ml', 'pause_seconds')
+    largest = 0
+    for ef, profile in load_profiles().items():
+        drinks = {p['name']: {fields[o['attr']]: [c[1] for c in o['items']] if o['items']
+                  else {'n': [o['low'], o['high'], max(1, o['step'])]}
+                  for o in p['options'] if o['attr'] < len(fields)}
+                  for p in profile['products'] if p['flags'] & 1}
+        raw = json.dumps({'v': 1, 'p': ef, 'd': drinks}, ensure_ascii=False, separators=(',', ':'))
+        largest = max(largest, len(raw.encode('utf-8')))
+    return (largest + 236) // 237  # At most three bytes lost at a UTF-8 boundary.
 
 
 @lru_cache(maxsize=1)

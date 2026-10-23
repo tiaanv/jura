@@ -91,6 +91,10 @@ int main() {
   device.register_button(4, &probe);
   device.register_text("espresso_probe_result", &probe_result);
   device.register_text("recipe_source", &recipe_source);
+  esphome::text_sensor::TextSensor capability_manifest, capability_first, capability_unused;
+  device.register_text("recipe_capabilities", &capability_manifest);
+  device.register_text("recipe_capabilities_1", &capability_first);
+  device.register_text("recipe_capabilities_100", &capability_unused);
   device.register_binary("recipe_loading", &recipe_loading);
   device.register_binary("recipe_modified", &recipe_modified);
   device.set_allow_brew(true);
@@ -103,6 +107,9 @@ int main() {
   for (auto raw : encode("ty:EF533M V02.09\r\n")) device.incoming.push_back(raw);
   ticks(device, 2);
   assert(device.can_proceed());
+  assert(capability_manifest.state.find("\"p\":\"EF533\"") != std::string::npos);
+  assert(capability_first.state.size() <= 240 && capability_first.state.find("\"v\":1") != std::string::npos);
+  assert(capability_unused.is_internal() && capability_unused.state.empty());
   assert(legacy_rinses.name() == "Legacy Coffee Rinse Count (unverified)" && !legacy_rinses.is_internal());
   assert(espresso.name() == "Espresso Count" && !espresso.is_internal());
   assert(unrelated.is_internal() && unrelated_alert.is_internal());

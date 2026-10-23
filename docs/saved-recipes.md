@@ -77,6 +77,13 @@ Reads defer during a machine operation and do not change its saved recipes.
 The initial default selection (Espresso where available) loads after connection.
 
 ## API and card usage
+
+The component also exposes **Jura Recipe Capabilities**, a versioned catalogue of
+all selectable drinks and their supported settings for the detected profile.
+This comes from the profile database and needs no additional machine requests.
+The card uses it to validate custom recipes when the dashboard loads; machine-saved
+values are still read only when a drink is selected. See the
+[capability transport and fallback behaviour](card-recipes.md#capability-transport-component-and-card-developers).
 Use button.press on the native Jura Brew entity, or brew_selected(), to use the
 selected controls. The example's optional API action is normally exposed as
 esphome.jura_e8_brew_selected for the existing device name jura-e8.

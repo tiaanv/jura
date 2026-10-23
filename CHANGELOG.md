@@ -11,6 +11,12 @@
 
 ## Unreleased
 
+- Publish the detected profile's recipe capabilities for all selectable drinks as
+  bounded diagnostic text states with a versioned, checksummed manifest. This
+  needs no extra UART polling and allows card validation before drink selection.
+- Verify capability serialization against all 75 profiles, UTF-8 chunk boundaries,
+  codegen entity capacity and native adapter publication.
+
 - Add `read_saved_recipes` (default true). Disabling automatic recipe reads uses
   profile defaults plus one-shot overrides for native/API brewing, with explicit
   source/status reporting. The manual diagnostic probe remains available.

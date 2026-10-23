@@ -1,5 +1,16 @@
 # Card changelog
 
+## Unreleased
+
+- Validate all custom recipes when the complete capability catalogue for the
+  detected profile arrives, without selecting drinks or changing machine settings.
+- Explain incompatible milk/foam fields, allowed choices, ranges and steps;
+  retain requested values separately from machine settings when preparation fails.
+- Flag invalid recipe tiles and reject their selection/hold before device commands.
+- Keep live validation before brewing and validation-on-selection for older
+  firmware, incomplete catalogues and unsupported capability schemas.
+- Document EF533 and EF1092 milk-setting differences and the capability transport.
+
 ## 2.1.9 — machine graphic and readable display
 
 - Move original lowercase script lettering above the machine display.

@@ -4,6 +4,8 @@ entity_prefix: jura_e8
 coolcontrol: false
 hold_to_brew: true
 recipes:
+  # EF533 Flat White uses milk_seconds. EF1092 Flat White uses foam_seconds.
+  # Check Adjust this drink for the supported settings on your machine.
   - name: Milky White
     base_drink: "1 Flat White"
     overrides:
@@ -13,3 +15,15 @@ recipes:
     overrides:
       water_ml: 60
       milk_seconds: 22
+
+# EF1092 equivalent (replace the recipes above; do not add a second recipes key):
+# recipes:
+#   - name: Milky White
+#     base_drink: "1 Flat White"
+#     overrides:
+#       foam_seconds: 30
+#   - name: Kids White
+#     base_drink: "1 Flat White"
+#     overrides:
+#       water_ml: 60
+#       foam_seconds: 22

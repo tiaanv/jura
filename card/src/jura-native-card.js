@@ -137,10 +137,10 @@
         }
         return {name:recipe.name.trim(),base_drink:recipe.base_drink.trim(),overrides:{...overrides}};
       });
-      this._recipeRun=null;this._customRecipe=null;this._recipeError='';
+      this._recipeRun=null;this._customRecipe=null;this._recipeError='';this._capabilityCache=null;
       this._config={entity_prefix:'jura_e8',name:'Jura E8',...config};
       const p=this._config.entity_prefix,sensor=suffix=>`sensor.${p}_${suffix}`,binary=suffix=>`binary_sensor.${p}_${suffix}`;
-      const textKeys=['status','status_detail','active_alerts','current_product','progress_state','stage_unit','command_result','requested_product','recipe_source','recipe_status','saved_recipe_raw','command_recipe_source','command_recipe_status','command_recipe_raw','session','profile','tf_raw','tv_raw','progress','stage_progress','stage_current','stage_target','product_code','stage_code','total_products','uart_timeouts','uart_framing_errors'];
+      const textKeys=['recipe_capabilities','status','status_detail','active_alerts','current_product','progress_state','stage_unit','command_result','requested_product','recipe_source','recipe_status','saved_recipe_raw','command_recipe_source','command_recipe_status','command_recipe_raw','session','profile','tf_raw','tv_raw','progress','stage_progress','stage_current','stage_target','product_code','stage_code','total_products','uart_timeouts','uart_framing_errors'];
       this._entities=Object.fromEntries(textKeys.map(k=>[k,sensor(`jura_${k}`)]));
       for(const k of ['connected','brew_active','alerts_stale','recipe_loading','recipe_modified'])this._entities[k]=binary(`jura_${k}`);
       for(const k of ['tray_status','water_tank_status','grounds_level','changed_counters'])this._entities[k]=sensor(k);
@@ -313,6 +313,8 @@
       if(this._recipeRun||this._selection||this._edits.size||this._brewLock||this._state('connected')!=='on'||this._state('status')!=='ready'||pendingCommand(this._state('command_result')))return;
       const recipe=this._recipes[index];if(!recipe)return;
       this._customRecipe={...recipe,index};this._recipeError='';this._writeError='';
+      const preflight=this._catalogueErrors(recipe);
+      if(preflight.length){this._recipeError=preflight.join(' ');this._update(true);return;}
       if(this._milkReason(recipe.base_drink))return;
       if(!this._options().includes(recipe.base_drink)){this._recipeError=`Base drink "${recipe.base_drink}" is unavailable. Use the component's exact drink label.`;this._update(true);return;}
       const run={};this._recipeRun=run;this._editUnconfirmed=false;this._update(true);
@@ -324,10 +326,8 @@
         if(this._state('recipe_source')!=='Machine')throw new Error('Saved machine recipe unavailable. Custom recipes require a confirmed machine-saved baseline.');
         const edits=Object.entries(recipe.overrides).map(([field,value])=>({field,key:recipeKeys[field],value:String(value)}));
         // Validate the complete recipe before sending any override.
-        for(const edit of edits){
-          const {field,key,value}=edit,choice=['strength','temperature'].includes(key),bounds=this._bounds(key),n=Number(value);
-          if(!this._entity(key)||!known(this._state(key))||(choice?!this._choices(key).includes(value):!bounds||n<bounds.min||n>bounds.max||Math.abs((n-bounds.min)/bounds.step-Math.round((n-bounds.min)/bounds.step))>1e-7))throw new Error(`${recipe.name}: ${field} (${value}) is not supported for ${pretty(recipe.base_drink)}. Check this drink's choices, range and step.`);
-        }
+        const errors=this._recipeValidationErrors(recipe);
+        if(errors.length)throw new Error(errors.join(' '));
         for(const {key,value}of edits){
           if(String(this._state(key))===value)continue;
           await this._edit(key,value);
@@ -336,6 +336,56 @@
         }
       }catch(error){if(this._recipeRun===run){this._recipeError=error.message;this._writeError='';}}
       finally{if(this._recipeRun===run){this._recipeRun=null;this._update(true);}}
+    }
+    _catalogue(){
+      try{
+        const manifest=JSON.parse(this._state('recipe_capabilities'));
+        if(manifest.v!==1||manifest.p!==this._state('profile')||!Number.isInteger(manifest.n)||manifest.n<1||manifest.n>128||!Number.isInteger(manifest.h))return null;
+        let raw='';
+        for(let i=1;i<=manifest.n;i++){
+          const id=this._entities[`recipe_capabilities_${i}`]||`sensor.${this._config.entity_prefix}_jura_recipe_capabilities_${i}`,part=this._hass.states[id]?.state;
+          if(typeof part!=='string'||new TextEncoder().encode(part).length>240)return null;
+          raw+=part;
+        }
+        const identity=JSON.stringify(manifest);
+        if(this._capabilityCache?.identity===identity&&this._capabilityCache.raw===raw)return this._capabilityCache.data;
+        let hash=2166136261;for(const byte of new TextEncoder().encode(raw))hash=Math.imul(hash^byte,16777619)>>>0;
+        if(hash!==manifest.h)return null;
+        const data=JSON.parse(raw),fields=[...Object.keys(recipeKeys),'grinder'];
+        if(data.v!==1||data.p!==manifest.p||!data.d||typeof data.d!=='object'||Array.isArray(data.d))return null;
+        for(const options of Object.values(data.d)){
+          if(!options||typeof options!=='object'||Array.isArray(options))return null;
+          for(const [field,spec]of Object.entries(options)){
+            if(!fields.includes(field))return null;
+            if(Array.isArray(spec)){if(!spec.length||spec.some(x=>typeof x!=='string'))return null;}
+            else if(!spec||!Array.isArray(spec.n)||spec.n.length!==3||!spec.n.every(Number.isInteger)||spec.n[0]<0||spec.n[1]<spec.n[0]||spec.n[2]<=0)return null;
+          }
+        }
+        this._capabilityCache={identity,raw,data};return data;
+      }catch{return null;}
+    }
+    _catalogueErrors(recipe,catalogue=this._catalogue()){
+      if(!catalogue)return [];
+      if(!Object.hasOwn(catalogue.d,recipe.base_drink))return [`${recipe.name}: base drink "${recipe.base_drink}" is unavailable on ${catalogue.p}. Use the component’s exact drink label.`];
+      return this._recipeValidationErrors(recipe,catalogue.d[recipe.base_drink],catalogue.p);
+    }
+    _recipeValidationErrors(recipe,capabilities=null,profile=this._text('profile','')){
+      const drink=`${recipe.base_drink}${profile?` on ${profile}`:''}`;
+      const specFor=field=>capabilities&&Object.hasOwn(capabilities,field)?capabilities[field]:null;
+      const boundsFor=field=>{const n=specFor(field)?.n;return capabilities?(n?{min:n[0],max:n[1],step:n[2]}:null):this._bounds(recipeKeys[field]);};
+      const available=field=>capabilities?!!specFor(field):!!this._entity(recipeKeys[field])&&known(this._state(recipeKeys[field]));
+      return Object.entries(recipe.overrides).flatMap(([field,raw])=>{
+        const key=recipeKeys[field],value=String(raw),choice=['strength','temperature'].includes(key),bounds=boundsFor(field),choices=capabilities?(Array.isArray(specFor(field))?specFor(field):[]):this._choices(key);
+        const supported=available(field)&&(choice?choices.length>0:!!bounds);
+        if(!supported){
+          const alternative=field==='milk_seconds'?'foam_seconds':field==='foam_seconds'?'milk_seconds':null,other=recipeKeys[alternative];
+          const hint=other&&available(alternative)&&boundsFor(alternative)?` This drink supports ${alternative}; check its meaning and update the recipe YAML.`:' Check this drink’s available settings after its saved recipe has loaded.';
+          return [`${recipe.name}: ${drink} does not support ${field} (${value}).${hint}`];
+        }
+        if(choice)return choices.includes(value)?[]:[`${recipe.name}: ${field} (${value}) is not a supported choice for ${drink}. Choose: ${choices.join(', ')}.`];
+        const n=Number(value);
+        return n>=bounds.min&&n<=bounds.max&&Math.abs((n-bounds.min)/bounds.step-Math.round((n-bounds.min)/bounds.step))<=1e-7?[]:[`${recipe.name}: ${field} (${value}) is outside the supported range or step for ${drink}. Use ${bounds.min}–${bounds.max}, step ${bounds.step}.`];
+      });
     }
     _bounds(key){const min=numeric(this._state(`${key}_min`)),max=numeric(this._state(`${key}_max`)),step=numeric(this._state(`${key}_step`));return min!==null&&max!==null&&step!==null&&step>0&&max>=min?{min,max,step}:null;}
     _choices(key){const spec=choiceControls.find(x=>x[0]===key);return spec?String(this._state(spec[2])||'').split('|').map(s=>s.trim()).filter(known):[];}
@@ -375,7 +425,7 @@
       if(this._state('alerts_stale')!=='off')return 'Waiting for fresh machine alerts';
       if(this._milkReason(this._state('drink')))return this._milkReason(this._state('drink'));
       if(this._recipeRun)return 'Preparing your custom recipe…';
-      if(this._recipeError)return 'Custom recipe not ready — reset or choose a recipe';
+      if(this._recipeError||this._customRecipe&&this._catalogueErrors(this._customRecipe).length)return 'Custom recipe not ready — reset or choose a recipe';
       if(this._selection||this._state('recipe_loading')!=='off')return 'Loading the saved recipe…';
       if(this._edits.size)return 'Applying your settings…';
       if(this._editUnconfirmed)return 'Reset the recipe to verify its settings';
@@ -471,20 +521,31 @@
       this._root.querySelectorAll('[data-drink]').forEach(button=>{button.setAttribute('aria-pressed',String(!this._customRecipe&&button.dataset.drink===selected));const milkReason=this._milkReason(button.dataset.drink);button.disabled=controlsBlocked||!!this._selection||this._edits.size>0||!!milkReason;button.title=milkReason;});
       $('#my-recipes').hidden=!this._recipes.length||this._sections.my_recipes==='hidden';
       this._root.querySelectorAll('[data-recipe]').forEach(button=>{button.setAttribute('aria-pressed',String(Number(button.dataset.recipe)===this._customRecipe?.index));const milkReason=this._milkReason(this._recipes[Number(button.dataset.recipe)]?.base_drink);button.disabled=controlsBlocked||!!this._selection||this._edits.size>0||!!milkReason;button.title=milkReason;});
+      const catalogue=this._catalogue();
+      this._root.querySelectorAll('[data-recipe]').forEach(button=>{
+        const recipe=this._recipes[Number(button.dataset.recipe)],errors=catalogue?this._catalogueErrors(recipe,catalogue):[];
+        button.setAttribute('aria-invalid',String(errors.length>0));
+        let note=button.querySelector('[data-recipe-validation]');if(!note){note=document.createElement('small');note.dataset.recipeValidation='';button.append(note);}
+        note.textContent=errors[0]||'';note.hidden=!errors.length;
+        if(errors.length)button.title=errors.join(' ');
+      });
       this._root.querySelectorAll('[data-count]').forEach(el=>{const state=this._hass.states[this._countEntity(el.dataset.count)]?.state;el.textContent=`${this._format(state)}${el.tagName==='SMALL'?' made':''}`;});
       set('#selected-name',this._customRecipe?.name||(known(selected)?pretty(selected):'Select a drink'));const loading=!!this._recipeRun||!!this._selection||this._state('recipe_loading')==='on';const source=this._text('recipe_source','Unknown');
       set('#recipe-source',loading?'Loading…':source==='Machine'?(this._customRecipe?'Custom recipe':'Machine saved'):source==='Profile defaults'?'Profile defaults':'Source unknown');$('#recipe-source').dataset.fallback=String(source==='Profile defaults'&&!loading);
       set('#modified',this._state('recipe_modified')==='on'?'One-shot changes':'');
       const summary=[];for(const [key,,,label,unit]of numberControls){if(numeric(this._state(key))!==null&&this._bounds(key))summary.push(`${this._format(this._state(key))} ${unit}${key==='water'?'':` ${label.toLowerCase()}`}`);}for(const [key,,,label]of choiceControls){if(known(this._state(key))&&this._choices(key).includes(this._state(key)))summary.push(key==='temperature'?this._state(key):`${label} ${this._state(key)}`);}
-      set('#recipe-summary',loading?'Reading saved settings…':summary.join(' · ')||'No supported settings available');
+      const catalogueError=this._customRecipe?this._catalogueErrors(this._customRecipe).join(' '):'';
+      const failedRecipe=this._customRecipe&&!!(this._recipeError||catalogueError),requested=failedRecipe?Object.entries(this._customRecipe.overrides).map(([field,value])=>`${field}: ${value}`).join(' · '):'';
+      set('#recipe-summary',loading?'Reading saved settings…':failedRecipe?`Requested overrides — not ready: ${requested||'None'}`:summary.join(' · ')||'No supported settings available');
       set('#recipe-message',this._recipeRun?'Loading the saved base recipe and applying your overrides…':loading?'Wait for the machine’s recipe to load.':this._customRecipe?`Based on ${pretty(this._customRecipe.base_drink)}. Unspecified settings use the machine-saved recipe; further edits apply to this brew only.`:source==='Profile defaults'?this._text('recipe_status','Machine settings unavailable; using profile defaults.'):this._state('recipe_modified')==='on'?'Changes apply to the next brew only.':'Uses this drink’s saved machine settings.');
+      if(failedRecipe&&!loading)set('#recipe-message',`Recipe not ready. The requested values above are not confirmed for brewing. ${source==='Machine'?'Current machine settings':'Current reported settings'}: ${summary.join(' · ')||'unavailable'}. Correct the recipe YAML and select it again, or reset to saved recipe.`);
       for(const [key]of choiceControls){const choices=this._choices(key),input=$(`[data-input="${key}"]`),show=choices.length>0&&known(this._state(key));$(`[data-control="${key}"]`).hidden=!show;if(show){const html=choices.map(c=>`<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('');if(input.innerHTML!==html)input.innerHTML=html;if(this._root.activeElement!==input)input.value=this._state(key);}input.disabled=controlsBlocked||loading||this._edits.has(key);}
       for(const [key,,,label,unit]of numberControls){const bounds=this._bounds(key),input=$(`[data-input="${key}"]`),show=!!bounds&&numeric(this._state(key))!==null;$(`[data-control="${key}"]`).hidden=!show;if(show){input.min=bounds.min;input.max=bounds.max;input.step=bounds.step;if(this._root.activeElement!==input)input.value=this._state(key);set(`[data-bounds="${key}"]`,`${bounds.min}–${bounds.max} ${unit} · step ${bounds.step}`);}input.disabled=controlsBlocked||loading||this._edits.has(key);}
       $('#reset').disabled=controlsBlocked||loading;$('#refresh').disabled=!connected||active;
       const reason=this._holdBrewPending?'Preparing held drink…':shuttingDown?'Preparing to Switch Off':this._brewReason();$('#brew').disabled=!!reason;$('#brew span').textContent=this._brewLock||pendingCommand(this._state('command_result'))?'Preparing drink…':`Brew ${this._customRecipe?.name||(known(selected)?pretty(selected):'drink')}`;set('#brew-reason',reason);
       const command=this._text('command_result','');$('#command').hidden=!command||command==='No command';set('#command',command?`${this._text('requested_product','')}${known(this._state('requested_product'))?' · ':''}${command}`:'');
       $('#acknowledge').hidden=!(this._localUncertain||terminalUncertain(command)&&this._ack!==this._stamp('command_result'));$('#acknowledge').disabled=!connected||status!=='ready'||active||pendingCommand(command);
-      $('#error').hidden=!(this._recipeError||this._writeError);set('#error',this._recipeError||this._writeError);
+      $('#error').hidden=!(this._recipeError||catalogueError||this._writeError);set('#error',this._recipeError||catalogueError||this._writeError);
       set('#total',`${this._format(this._state('total_products'))} products`);
       this._root.querySelectorAll('[data-number]').forEach(el=>el.textContent=this._format(this._state(el.dataset.number))+(numeric(this._state(el.dataset.number))!==null?(el.dataset.unit||''):''));
       this._root.querySelectorAll('[data-meter]').forEach(el=>el.style.width=`${Math.min(100,numeric(this._state(el.dataset.meter))||0)}%`);

@@ -14,6 +14,7 @@
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 #include "jura_controller.h"
+#include "jura_capabilities.h"
 
 namespace esphome {
 namespace jura_native {
@@ -257,6 +258,21 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
     it->second->publish_state(value != 0);
   }
   void profile_changed(bool supported) override {
+    // No UART requests: this is the detected profile's static capability catalogue.
+    const auto catalogue = supported ? recipe_capabilities(profile()) : std::string();
+    const auto chunks = capability_chunks(catalogue);
+    for (auto &entry : texts_) {
+      const std::string prefix = "recipe_capabilities_";
+      if (entry.first.compare(0, prefix.size(), prefix) == 0) {
+        const auto index = unsigned(std::stoul(entry.first.substr(prefix.size())));
+        entry.second->set_internal(index > chunks.size());
+        if (index > chunks.size()) entry.second->publish_state("");
+      }
+    }
+    for (size_t i = 0; i < chunks.size(); ++i)
+      text("recipe_capabilities_" + std::to_string(i + 1), chunks[i]);
+    text("recipe_capabilities", "{\"v\":1,\"p\":" + capability_quote(supported ? profile().ef : "") +
+         ",\"n\":" + std::to_string(chunks.size()) + ",\"h\":" + std::to_string(capability_hash(catalogue)) + "}");
     for (auto &entry : buttons_)
       entry.second->set_internal(entry.first == 3  ? !allow_power_
                                  : entry.first < 2 ? (!supported || !allow_brew_)

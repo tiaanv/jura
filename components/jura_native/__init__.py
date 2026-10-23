@@ -4,7 +4,7 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import uart, sensor, text_sensor, binary_sensor, select, number, button, switch
 from esphome.const import CONF_ID, CONF_NAME, ENTITY_CATEGORY_DIAGNOSTIC
-from .profiles import load_profiles
+from .profiles import load_profiles, capability_slots
 
 DEPENDENCIES = ["uart"]
 AUTO_LOAD = ["sensor", "text_sensor", "binary_sensor", "select", "number", "button", "switch"]
@@ -18,6 +18,7 @@ CommandButton = ns.class_("CommandButton", button.Button)
 CoolcontrolOverrideSwitch = ns.class_("CoolcontrolOverrideSwitch", switch.Switch)
 
 TEXT = {
+    "recipe_capabilities": "Jura Recipe Capabilities",
     "status": "Jura Status", "status_detail": "Jura Status Detail",
     "detected_model": "Detected Jura Model", "model_family": "Jura Model Family", "profile": "Jura Profile",
     "session": "Jura Session", "challenge": "Jura Challenge", "active_alerts": "Jura Active Alerts",
@@ -36,6 +37,8 @@ TEXT = {
     "command_recipe_status": "Jura Command Recipe Status",
     "command_recipe_raw": "Jura Command Recipe Raw",
 }
+for chunk in range(1, capability_slots() + 1):
+    TEXT[f"recipe_capabilities_{chunk}"] = f"Jura Recipe Capabilities {chunk}"
 NUMERIC = {
     "progress": ("Jura Progress", "%"), "stage_progress": ("Jura Stage Progress", "%"), "stage_current": ("Jura Stage Current", ""),
     "stage_target": ("Jura Stage Target", ""), "product_code": ("Jura Product Code", ""),
@@ -114,7 +117,7 @@ schema = {
 }
 for key, name in TEXT.items():
     default = {CONF_NAME: name}
-    if key.startswith("espresso_probe") or key in ("saved_recipe_raw", "command_recipe_raw"):
+    if key.startswith(("espresso_probe", "recipe_capabilities")) or key in ("saved_recipe_raw", "command_recipe_raw"):
         default["entity_category"] = ENTITY_CATEGORY_DIAGNOSTIC
     schema[cv.Optional(key, default=default)] = text_sensor.text_sensor_schema()
 for key, (name, unit) in NUMERIC.items():

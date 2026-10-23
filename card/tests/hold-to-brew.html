@@ -41,6 +41,9 @@ setup();b=$('[data-recipe="2"]');start=calls.length;fire(b,'pointerdown');await 
 setup();b=$('[data-drink="Espresso"]');start=calls.length;fire(b,'pointerdown');machine({...patch,alerts_stale:'on'});await pause(1550);check('Stale readiness cancels hold before threshold',!calls.slice(start).some(c=>c.data.entity_id===card._entities.brew)&&!card._hold);
 setup();skipAck=true;b=$('[data-drink="Coffee"]');start=calls.length;fire(b,'pointerdown');await pause(1550);machine({...patch,connected:'off',status:'offline'});await pause(250);check('Disconnect during held recipe load cancels auto Brew',!calls.slice(start).some(c=>c.data.entity_id===card._entities.brew)&&!card._holdBrewPending);skipAck=false;
 setup();b=$('[data-drink="Espresso"]');start=calls.length;fire(b,'pointerdown');fire(b,'pointercancel');await pause(1550);check('Touch cancellation never starts Brew',calls.length===start);
+setup();const capData=JSON.stringify({v:1,p:'EF533',d:{'1 Flat White':{milk_seconds:{n:[3,120,1]}}}});let hash=2166136261;for(const byte of new TextEncoder().encode(capData))hash=Math.imul(hash^byte,16777619)>>>0;
+card.hass={...card._hass,states:{...card._hass.states,[card._entities.recipe_capabilities]:{state:JSON.stringify({v:1,p:'EF533',n:1,h:hash})},'sensor.jura_e8_jura_recipe_capabilities_1':{state:capData}}};
+start=calls.length;await card._holdAndBrew('recipe',2);check('Catalogue-invalid hold sends no selection reset overrides or brew',calls.length===start&&$('#brew').disabled);
 setup();report.textContent=checks.join('\n');
 }catch(error){report.textContent=checks.join('\n')+'\nFAIL '+error.stack;}}
 holdTests();

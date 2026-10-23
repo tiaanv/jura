@@ -35,3 +35,4 @@ details{border-top:1px solid var(--line)}summary{list-style:none;display:flex;ju
 
 
 .screen-brand{fill:var(--text);stroke:none}
+.drink-tile[aria-invalid=true]{border-color:var(--warn)}.drink-tile [data-recipe-validation]{color:var(--warn);white-space:normal;overflow-wrap:anywhere}
