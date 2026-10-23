@@ -105,12 +105,15 @@ class CoolcontrolBridge {
     announced_ = true;
     return true;
   }
-  bool next(uint32_t now, std::string &command, bool *requested = nullptr) {
-    if (!enabled_ || (!requested_ && (!reporting_ || !pending_)) || (!override_ && coalescing_) ||
-        (sent_ && uint32_t(now - last_send_) < 1000)) return false;
+  bool next(uint32_t now, std::string &command, bool *requested = nullptr, bool requested_only = false) {
+    // A machine request may use the last coherent, fresh snapshot while new inputs settle.
+    // Automatic updates still coalesce and obey the transmission limit.
+    if (!enabled_ || (requested_only && !requested_) || (!requested_ && (!reporting_ || !pending_)) ||
+        (!override_ && coalescing_ && (!requested_ || !fresh_)) ||
+        (!requested_ && sent_ && uint32_t(now - last_send_) < 1000)) return false;
     command = override_ ? "@mo" : fresh_ ? raw_ : "@me1";
     if (command.size() == 8 && (!extended_ || (nibble_(command[4]) == 15 && nibble_(command[5]) == 15))) command.resize(3);
-    pending_ = false;
+    pending_ = coalescing_;
     // Compare the actual negotiated wire message, not heartbeat or stripped telemetry.
     // Explicit machine requests must still receive an unchanged cached response.
     if (!requested_ && last_sent_ == command) return false;

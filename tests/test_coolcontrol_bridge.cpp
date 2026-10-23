@@ -20,8 +20,7 @@ int main() {
   b.negotiate(0xC0);
   assert(b.next(2251, out) && out == "@mo:321E");
   b.request_status();
-  assert(!b.next(2252, out)); // UART traffic capped, latest state retained.
-  assert(b.next(3251, out) && out == "@mo:321E");
+  assert(b.next(2252, out) && out == "@mo:321E"); // Explicit replies bypass the automatic throttle.
   b.snapshot("@mo:321E", 3, true, 4000); // Counter arrives before raw entity.
   b.advance(4100); assert(!b.next(4100, out));
   b.snapshot("@mn:0028", 3, true, 4150);
@@ -58,6 +57,27 @@ int main() {
     fast.advance(t);
   }
   assert(fast.next(500, out) && out == "@mo"); // Frequent heartbeats cannot postpone forever.
+  CoolcontrolBridge priority;
+  priority.configure(15000, 250); priority.negotiate(0xC0);
+  priority.snapshot("@mo:321E", 1, true, 0); priority.advance(250);
+  assert(priority.next(250, out) && out == "@mo:321E");
+  priority.snapshot("@mn:0028", 2, true, 300);
+  priority.request_status();
+  bool requested = false;
+  assert(priority.next(301, out, &requested, true) && requested && out == "@mo:321E");
+  priority.advance(550);
+  assert(!priority.next(550, out)); // Automatic update remains throttled.
+  assert(priority.next(1301, out) && out == "@mn:0028"); // Pending new state was retained.
+  priority.snapshot("@mo", 3, false, 1302); priority.request_status();
+  assert(priority.next(1302, out, nullptr, true) && out == "@me1"); // Never reuse offline cache.
+  priority.snapshot("@mo", 4, true, 1400); priority.advance(1650);
+  priority.advance(16400); priority.request_status();
+  assert(priority.next(16400, out, nullptr, true) && out == "@me1"); // Nor expired cache.
+  CoolcontrolBridge initial;
+  initial.configure(15000, 250); initial.request_status();
+  initial.snapshot("@mo", 1, true, 0);
+  assert(!initial.next(1, out, nullptr, true)); // No coherent cache yet.
+  initial.advance(250); assert(initial.next(250, out, nullptr, true) && out == "@mo");
   CoolcontrolBridge automatic;
   automatic.configure(15000, 250); automatic.set_model("EF533"); automatic.reset_session();
   automatic.snapshot("@mo:321E", 1, true, 0); automatic.advance(250);
@@ -78,8 +98,7 @@ int main() {
   strict.set_model("EF533"); strict.reset_session(); strict.snapshot("@mo", 1, true, 0);
   strict.advance(250); assert(!strict.next(250, out));
   strict.request_status(); assert(strict.next(250, out) && out == "@mo");
-  strict.request_status(); assert(!strict.next(251, out));
-  assert(strict.next(1250, out) && out == "@mo");
+  strict.request_status(); assert(strict.next(251, out) && out == "@mo");
   strict.snapshot("@mn", 2, true, 1500); strict.advance(1750);
   assert(!strict.next(2250, out)); // Bare poll did not enable automatic reporting.
   strict.advance(17000); strict.request_status();

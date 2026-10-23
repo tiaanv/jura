@@ -1160,6 +1160,40 @@ static void test_current_product_lifecycle() {
   assert(m.dev.ready() && m.dev.texts["current_product"] == "None");
 }
 
+static void test_coolcontrol_request_priority() {
+  Machine m;
+  m.dev.configure_coolcontrol(15000, 250, "negotiated");
+  m.begin(); m.tick(16000);
+  m.dev.coolcontrol_snapshot("@mo:321E", 1, true, m.clock);
+  m.tick(1000);
+  m.inject("@HM:80", false); m.tick(500);
+  assert(m.count("@mo") == 1);
+  m.answer_at = false;
+  m.dev.refresh();
+  for (unsigned i = 0; i < 2000 && !m.dev.waiting(); ++i) m.tick();
+  assert(m.dev.waiting() && m.dev.active() == "@TR:32,00");
+  const auto sent = m.commands.size();
+  // A request during an outstanding poll must not interrupt the current transaction.
+  m.inject("@HM", false);
+  m.tick(150);
+  assert(m.dev.waiting() && m.dev.active() == "@TR:32,00");
+  assert(m.commands.size() == sent);
+  // New HA inputs are settling when the poll completes: use the coherent cache.
+  m.dev.coolcontrol_snapshot("@mn:0028", 2, true, m.clock);
+  m.inject("@tr:32,00,0001000200030004");
+  m.tick(200);
+  assert(m.commands.size() == sent + 1 && m.commands[sent] == "@mo");
+  assert(m.count("@mn") == 0);
+  // A second request shortly after that response bypasses the one-second throttle.
+  m.inject("@HM:00", false);
+  m.tick(300);
+  assert(m.count("@mn") == 1);
+  assert(m.commands[sent + 1] == "@mn");
+  // The next routine query is allowed once requested responses have drained.
+  m.tick(1000);
+  assert(m.count("@TR:32,01") >= 1);
+}
+
 static void test_coolcontrol_forwarding() {
   Machine disabled;
   disabled.begin(); disabled.tick(12000);
@@ -1196,9 +1230,10 @@ static void test_coolcontrol_forwarding() {
   assert(legacy.count("@mn") == 1 && legacy.count("@mn:321E") == 0);
   legacy.inject("@HM:00", false);
   legacy.dev.coolcontrol_snapshot("@mo:321E", 2, true, legacy.clock);
-  legacy.tick(1500); assert(legacy.count("@mo") == 1); // One requested reply despite disable.
+  legacy.tick(1500);
+  assert(legacy.count("@mn") == 2 && legacy.count("@mo") == 0); // Reply uses the coherent cache during coalescing.
   legacy.dev.coolcontrol_snapshot("@mo:321E", 3, true, legacy.clock);
-  legacy.tick(1500); assert(legacy.count("@mo") == 1);
+  legacy.tick(1500); assert(legacy.count("@mo") == 0); // Disabled automatic reporting stays disabled.
   legacy.inject("@HM:C0"); legacy.tick(1500);
   assert(legacy.count("@mo:321E") == 1);
   Machine early;
@@ -1256,6 +1291,7 @@ int main() {
   test_milk_brew_checks();
   test_milk_error_progress();
   test_no_milk_progress();
+  test_coolcontrol_request_priority();
   test_coolcontrol_forwarding();
   test_current_product_lifecycle();
   test_an01_diagnostic();

@@ -11,6 +11,13 @@
 
 ## Unreleased
 
+- Prioritise explicit Cool Control status replies over queued commands and routine
+  polling after the active UART transaction finishes. Requested replies bypass
+  the automatic status throttle and use the last coherent fresh snapshot while
+  new Home Assistant inputs settle; offline and stale handling is unchanged.
+- Add regression coverage for cooler requests during polling, coalescing and
+  rapid successive requests, including retained updates and unavailable sources.
+
 - Accept empty `@tp:` brew acknowledgements, as reported on the E8 EF1092,
   while retaining rejection handling for nonempty responses such as `@tp:00` (#35, #36).
 - Cover both acknowledgement forms through product confirmation and completion,

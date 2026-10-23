@@ -150,6 +150,17 @@ class JuraController : public TransportSink {
       start_session_();
       return;
     }
+    const auto send_cooler = [&](bool requested_only) {
+      std::string command;
+      bool requested = false;
+      if (!cooler_.next(now, command, &requested, requested_only)) return false;
+      if (requested) trace("Cool Control request response: " + command + " (plaintext; " + cooler_.input_description() + ")");
+      // Milk status uses plaintext framing without the AT cipher envelope.
+      start_(command, Kind::COOLER, false, false);
+      return true;
+    };
+    // Finish active transport first, then answer the machine before queued work.
+    if (session_ == Session::READY && send_cooler(true)) return;
     if (!control_.empty()) {
       const Request r = control_.front();
       control_.pop_front();
@@ -197,14 +208,7 @@ class JuraController : public TransportSink {
       start_("@H1", Kind::COOLER, false, false);
       return;
     }
-    std::string cooler_command;
-    bool cooler_requested = false;
-    if (cooler_.next(now, cooler_command, &cooler_requested)) {
-      if (cooler_requested) trace("Cool Control request response: " + cooler_command + " (plaintext; " + cooler_.input_description() + ")");
-      // Milk status uses plaintext framing without the AT cipher envelope.
-      start_(cooler_command, Kind::COOLER, false, false);
-      return;
-    }
+    if (send_cooler(false)) return;
     // TF is replaced by TV during a product. Don't query or restart a live TV session.
     if (!busy_() && (tf_requested_ || uint32_t(now - last_tf_query_) >= 30000)) {
       tf_requested_ = false;
