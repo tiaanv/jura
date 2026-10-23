@@ -11,6 +11,12 @@
 
 ## Unreleased
 
+- Accept empty `@tp:` brew acknowledgements, as reported on the E8 EF1092,
+  while retaining rejection handling for nonempty responses such as `@tp:00` (#35, #36).
+- Cover both acknowledgement forms through product confirmation and completion,
+  with and without a separate start announcement; verify pending requests block
+  overlapping brews, are not resent, and ignore stray acknowledgements during settings reads.
+
 - Publish the detected profile's recipe capabilities for all selectable drinks as
   bounded diagnostic text states with a versioned, checksummed manifest. This
   needs no extra UART polling and allows card validation before drink selection.

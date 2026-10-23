@@ -435,22 +435,44 @@ static void test_brew() {
   assert(!m.dev.brew_custom("Espresso", "6", 50, 20, -1, "High", -1, -1, ""));
 }
 static void test_empty_tp_ack() {
-  // EF1092 acknowledges a brew with an empty "@tp:" before "@TB"; that is not a rejection.
-  Machine m;
-  m.answer_brew = false;
-  m.begin();
-  m.tick(16000);
-  assert(m.dev.brew_named("Espresso"));
-  m.tick(2000);
-  unsigned brews = 0;
-  for (const auto &c : m.commands) brews += c.compare(0, 4, "@TP:") == 0;
-  assert(brews == 1);
-  m.inject("@tp:");
-  assert(m.dev.texts["command_result"] == "Accepted; waiting for start");
-  m.inject("@TB");
-  assert(m.dev.texts["command_result"] == "Machine active; waiting for product confirmation");
-  m.inject("@TV:390206060009FFFFFFFF22FFFF1100FF");
-  assert(m.dev.texts["command_result"] == "Started");
+  // Both acknowledgement forms keep the request pending until product confirmation.
+  for (const char *ack : {"@tp", "@tp:"}) {
+    for (bool announce_start : {false, true}) {
+      Machine m;
+      m.answer_brew = false;
+      m.begin();
+      m.tick(16000);
+      assert(m.dev.brew_named("Espresso"));
+      m.tick(2000);
+      const auto brew_count = [&]() {
+        size_t count = 0;
+        for (const auto &command : m.commands) count += command.compare(0, 4, "@TP:") == 0;
+        return count;
+      };
+      assert(brew_count() == 1);
+      m.inject(ack);
+      assert(m.dev.texts["command_result"] == "Accepted; waiting for start");
+      assert(m.dev.bins["brew_active"] == 0);
+      assert(!m.dev.brew_named("Coffee"));
+      m.tick(2000);
+      assert(brew_count() == 1);
+      if (announce_start) {
+        m.inject("@TB");
+        assert(m.dev.texts["command_result"] == "Machine active; waiting for product confirmation");
+      }
+      // Progress can confirm the product even without a separate @TB announcement.
+      m.inject("@TV:390206060009FFFFFFFF22FFFF1100FF");
+      assert(m.dev.texts["command_result"] == "Started");
+      assert(m.dev.bins["brew_active"] == 1);
+      assert(!m.dev.brew_named("Coffee"));
+      m.inject("@TV:3E02");
+      assert(m.dev.texts["command_result"] == "Completed");
+      assert(m.dev.bins["brew_active"] == 0 && m.dev.nums["progress"] == 100);
+      m.tick(25000);
+      assert(brew_count() == 1);
+      assert(m.dev.texts["command_result"] == "Completed");
+    }
+  }
 }
 static void test_ef1092_handshake() {
   Machine m;
@@ -952,6 +974,7 @@ static void test_api_saved_defaults() {
   stray_ack.tick(1200);
   stray_ack.inject("@tp:00");
   stray_ack.inject("@tp");
+  stray_ack.inject("@tp:");
   assert(stray_ack.dev.texts["command_result"] == "Reading saved settings before brew");
   stray_ack.inject(actual);
   stray_ack.tick(2500);
