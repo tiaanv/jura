@@ -434,6 +434,24 @@ static void test_brew() {
   assert(!m.dev.brew_custom("Espresso", "6", 52, -1, -1, "High", -1, -1, ""));
   assert(!m.dev.brew_custom("Espresso", "6", 50, 20, -1, "High", -1, -1, ""));
 }
+static void test_empty_tp_ack() {
+  // EF1092 acknowledges a brew with an empty "@tp:" before "@TB"; that is not a rejection.
+  Machine m;
+  m.answer_brew = false;
+  m.begin();
+  m.tick(16000);
+  assert(m.dev.brew_named("Espresso"));
+  m.tick(2000);
+  unsigned brews = 0;
+  for (const auto &c : m.commands) brews += c.compare(0, 4, "@TP:") == 0;
+  assert(brews == 1);
+  m.inject("@tp:");
+  assert(m.dev.texts["command_result"] == "Accepted; waiting for start");
+  m.inject("@TB");
+  assert(m.dev.texts["command_result"] == "Machine active; waiting for product confirmation");
+  m.inject("@TV:390206060009FFFFFFFF22FFFF1100FF");
+  assert(m.dev.texts["command_result"] == "Started");
+}
 static void test_ef1092_handshake() {
   Machine m;
   m.model = "EF1092M V01.07";
@@ -1227,6 +1245,7 @@ int main() {
   test_disabled_saved_recipes();
   test_dispensing_stage_progress();
   test_brew();
+  test_empty_tp_ack();
   test_failure_and_rejection();
   test_banks_and_progress();
   test_at_only_identification();

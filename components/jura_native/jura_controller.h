@@ -907,7 +907,8 @@ class JuraController : public TransportSink {
           if (active_ == Kind::BREW && transport_.waiting()) transport_.complete(true, now_);
         }
         update_status_();
-      } else if (frame == "@tp" && brew_pending_ && brew_sent_) {
+      } else if ((frame == "@tp" || frame == "@tp:") && brew_pending_ && brew_sent_) {
+        // EF1092 acknowledges with an empty "@tp:"; only a payload such as "@tp:00" rejects.
         text("command_result", "Accepted; waiting for start");
         if (active_ == Kind::BREW && transport_.waiting()) transport_.complete(true, now_);
       } else if (starts_(frame, "@tp:") && brew_pending_ && brew_sent_) {
