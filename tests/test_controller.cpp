@@ -59,6 +59,7 @@ struct Machine {
   std::vector<std::string> commands;
   std::string probe_reply = "@tm:41,0200040A00000200010000000000000000F4";
   std::string an01_reply, early_hm;
+  bool answer_power = true;
   bool early_hm_encrypted = true;
   std::map<std::string, std::string> recipe_replies;
   void inject(const std::string &s, bool at = true) {
@@ -100,7 +101,7 @@ struct Machine {
       if (command == "@H1") assert(!at);
       if (command == "TY:" && answer_type)
         inject("ty:" + model, false);
-      else if (command == "AN:02")
+      else if (command == "AN:02" && answer_power)
         inject("an:OK", false);
       else if (command == "AN:01" && !an01_reply.empty())
         inject(an01_reply, false);
@@ -428,12 +429,79 @@ static void test_brew() {
   assert(m.dev.texts["command_result"] == "Completed");
   assert(m.dev.texts["status"] == "finishing");
   assert(m.dev.nums["progress"] == 100 && m.dev.bins["brew_active"] == 0);
-  m.tick(1000);
+  m.tick(4000);
   assert(m.dev.texts["status"] == "ready");
   assert(!m.dev.brew_custom("Espresso", "99", 50, -1, -1, "High", -1, -1, ""));
   assert(!m.dev.brew_custom("Espresso", "6", 52, -1, -1, "High", -1, -1, ""));
   assert(!m.dev.brew_custom("Espresso", "6", 50, 20, -1, "High", -1, -1, ""));
 }
+static void test_repeated_finish_status() {
+  Machine m;
+  m.begin(); m.tick(16000);
+  m.inject("@TV:390304040014FFFFFFFF11FFFF00");
+  const auto queries = m.count("@TF:");
+  const auto timeouts = m.dev.nums["timeouts"];
+  for (unsigned i = 0; i < 6; ++i) {
+    m.inject("@TV:3E03");
+    m.tick(2000);
+    assert(m.count("@TF:") == queries);
+    assert(m.dev.texts["status"] == "finishing");
+  }
+  m.tick(2000);
+  assert(m.count("@TF:") == queries + 1);
+  assert(m.dev.texts["status"] == "ready" && m.dev.nums["timeouts"] == timeouts);
+  // An endless stream of finish frames cannot postpone recovery forever.
+  Machine bounded;
+  bounded.begin(); bounded.tick(16000);
+  bounded.inject("@TV:390304040014FFFFFFFF11FFFF00");
+  const auto before = bounded.count("@TF:");
+  for (unsigned i = 0; i < 9; ++i) {
+    bounded.inject("@TV:3E03"); bounded.tick(2000);
+  }
+  assert(bounded.count("@TF:") > before);
+  // A real lack of response is still counted, rather than hidden.
+  Machine silent;
+  silent.begin(); silent.tick(16000); silent.auto_tf = false;
+  const auto failures = silent.dev.nums["timeouts"];
+  silent.inject("@TV:3E03"); silent.tick(9000);
+  assert(silent.dev.nums["timeouts"] == failures + 1);
+}
+
+static void test_observed_power_off() {
+  Machine m;
+  m.answer_power = false;
+  m.begin(); m.tick(16000);
+  const auto timeouts = m.dev.nums["timeouts"];
+  assert(m.dev.power_off()); m.tick(500);
+  assert(m.dev.waiting() && m.dev.active() == "AN:02");
+  m.inject("@TB");
+  assert(m.dev.waiting()); // Generic busy is not proof of switch-off.
+  m.inject("@TV:4A02");
+  assert(!m.dev.waiting());
+  assert(m.dev.texts["command_result"] == "Sent; switch-off observed");
+  assert(m.dev.texts["progress_state"] == "Switching off");
+  assert(m.dev.texts["current_product"] == "Switching off");
+  assert(std::isnan(m.dev.nums["product_code"]) && std::isnan(m.dev.nums["progress"]));
+  assert(std::isnan(m.dev.nums["stage_target"]) && m.dev.bins["brew_active"] == 0);
+  m.tick(6000);
+  assert(m.dev.nums["timeouts"] == timeouts && m.count("AN:02") == 1);
+  m.inject("@TV:2322");
+  assert(m.dev.texts["current_product"] == "Coffee rinsing");
+  Machine unsolicited;
+  unsolicited.begin(); unsolicited.tick(16000);
+  const auto result = unsolicited.dev.texts["command_result"];
+  unsolicited.inject("@TV:4A02");
+  assert(unsolicited.dev.texts["current_product"] == "Switching off");
+  assert(unsolicited.dev.texts["command_result"] == result);
+  Machine unconfirmed;
+  unconfirmed.answer_power = false;
+  unconfirmed.begin(); unconfirmed.tick(16000);
+  assert(unconfirmed.dev.power_off()); unconfirmed.tick(500);
+  unconfirmed.inject("@TB"); unconfirmed.tick(6000);
+  assert(unconfirmed.dev.texts["command_result"] == "Power-off reply timeout; not retried");
+  assert(unconfirmed.count("AN:02") == 1);
+}
+
 static void test_empty_tp_ack() {
   // Both acknowledgement forms keep the request pending until product confirmation.
   for (const char *ack : {"@tp", "@tp:"}) {
@@ -1304,6 +1372,8 @@ int main() {
   test_disabled_saved_recipes();
   test_dispensing_stage_progress();
   test_brew();
+  test_repeated_finish_status();
+  test_observed_power_off();
   test_empty_tp_ack();
   test_failure_and_rejection();
   test_banks_and_progress();

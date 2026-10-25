@@ -11,6 +11,14 @@
 
 ## Unreleased
 
+- Defer post-finish status/poll traffic until Finished frames have been quiet for
+  three seconds, with a fifteen-second recovery bound from the first finish frame.
+  Repeated finish frames no longer restart the delayed counter-refresh timer.
+- Report TV state `0x4A` as Switching off without a drink identity or dispensing
+  quantities. A pending `AN:02` can be confirmed by `@TV:4A02` without an `an:` reply;
+  generic busy activity alone does not confirm power-off, and commands are not retried.
+- Add regression coverage and record EF533M V01.18 hardware results from issue #31.
+
 - Prioritise explicit Cool Control status replies over queued commands and routine
   polling after the active UART transaction finishes. Requested replies bypass
   the automatic status throttle and use the last coherent fresh snapshot while

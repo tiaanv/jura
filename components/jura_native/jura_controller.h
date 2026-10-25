@@ -209,6 +209,10 @@ class JuraController : public TransportSink {
       return;
     }
     if (send_cooler(false)) return;
+    // Some machines repeat Finished while still ignoring status queries. Wait for
+    // a quiet interval, but bound the wait from the first finish frame.
+    if (operation_finished_ && awaiting_tf_ && uint32_t(now - last_tv_) < 3000 &&
+        uint32_t(now - finished_at_) < 15000) return;
     // TF is replaced by TV during a product. Don't query or restart a live TV session.
     if (!busy_() && (tf_requested_ || uint32_t(now - last_tf_query_) >= 30000)) {
       tf_requested_ = false;
@@ -1041,6 +1045,32 @@ class JuraController : public TransportSink {
     for (size_t i = 0; i < payload.size(); i += 2) v.push_back(uint8_t(hexval_(payload.substr(i, 2))));
     const uint8_t state = v[0], code = v[1];
     if (state == 0xFE || state == 0xFF) return;
+    if (state == 0x4A) {
+      cancel_api_recipe_("Switch-off observed during settings read");
+      operation_seen_ = true;
+      operation_finished_ = false;
+      last_tv_ = now_;
+      phase_ = "Switching off";
+      text("current_product", "Switching off");
+      text("progress_state", phase_);
+      number("product_code", NAN);
+      number("stage_code", state);
+      number("progress", NAN);
+      clear_stage_();
+      binary("brew_active", 0);
+      if (code == 0x02 && active_ == Kind::POWER && transport_.waiting()) {
+        text("command_result", "Sent; switch-off observed");
+        trace("Power-off confirmed by @TV:4A02; no reply retry required");
+        transport_.complete(true, now_);
+      }
+      if (brew_pending_) {
+        brew_pending_ = brew_sent_ = brew_started_ = false;
+        text("command_result", "Different operation observed: switching off");
+        if (active_ == Kind::BREW && transport_.waiting()) transport_.complete(true, now_);
+      }
+      update_status_();
+      return;
+    }
     const auto *p = profiles_.find(code);
     const char *process = process_(code);
     if (!p && !process) return;
@@ -1064,6 +1094,7 @@ class JuraController : public TransportSink {
       text("status_detail", reason);
       return;
     }
+    const bool already_finished = operation_seen_ && operation_finished_;
     operation_seen_ = true;
     operation_finished_ = state == 0x3E;
     last_tv_ = now_;
@@ -1129,8 +1160,10 @@ class JuraController : public TransportSink {
       brew_sent_ = false;
       awaiting_tf_ = true;
       tf_requested_ = true;
-      finished_at_ = now_;
-      refresh_after_finish_ = true;
+      if (!already_finished) {
+        finished_at_ = now_;
+        refresh_after_finish_ = true;
+      }
     }
     update_status_();
   }
