@@ -905,6 +905,7 @@ class JuraController : public TransportSink {
         cancel_api_recipe_("Machine operation began during settings read");
         operation_seen_ = true;
         operation_finished_ = false;
+        coffee_rinse_ = false;
         last_tv_ = now_;
         phase_ = "Started";
         binary("brew_active", 1);
@@ -959,9 +960,22 @@ class JuraController : public TransportSink {
     // A completed or expired operation is not the current product. Preserve
     // actively arriving TV progress even if an incidental TF frame also arrives.
     bool complete_status = tf_.size() >= 2;
-    for (const auto &a : profiles_.alerts)
+    bool coffee_ready = false, rinse_cleared = false;
+    for (const auto &a : profiles_.alerts) {
       if (a.blocking && tf_missing_(a.bit)) complete_status = false;
-    if (!busy_() && complete_status) clear_operation_("Idle", "None", 0);
+      // Require the relevant flags to be present, even with short-status opt-in.
+      if (a.bit / 8 >= tf_.size()) continue;
+      const auto name = Profiles::lower(a.name);
+      if (name == "coffee ready") coffee_ready = flag_(a.bit);
+      if (name == "coffee rinsing") rinse_cleared = !flag_(a.bit);
+    }
+    // Coffee rinses may end without a Finished frame. Only this process may use
+    // positive ready status to end live progress; drinks retain their TV lifecycle.
+    const bool rinse_done = coffee_rinse_ && !brew_pending_ && coffee_ready && rinse_cleared && !blocked_();
+    if (complete_status && (!busy_() || rinse_done)) {
+      if (rinse_done) trace("Coffee rinse complete: fresh TF reports coffee ready with rinsing cleared");
+      clear_operation_("Idle", "None", 0);
+    }
     if (api_recipe_pending_ && !ready_for_brew_(api_recipe_code_))
       cancel_api_recipe_("Machine reported not ready during settings read");
     update_status_();
@@ -1022,6 +1036,7 @@ class JuraController : public TransportSink {
   void clear_operation_(const char *state, const char *product, int active) {
     operation_seen_ = false;
     operation_finished_ = false;
+    coffee_rinse_ = false;
     phase_.clear();
     text("current_product", product);
     text("progress_state", state);
@@ -1050,6 +1065,7 @@ class JuraController : public TransportSink {
       operation_seen_ = true;
       operation_finished_ = false;
       last_tv_ = now_;
+      coffee_rinse_ = false;
       phase_ = "Switching off";
       text("current_product", "Switching off");
       text("progress_state", phase_);
@@ -1097,6 +1113,7 @@ class JuraController : public TransportSink {
     const bool already_finished = operation_seen_ && operation_finished_;
     operation_seen_ = true;
     operation_finished_ = state == 0x3E;
+    coffee_rinse_ = state == 0x23 && code == 0x22;
     last_tv_ = now_;
     phase_ = phase_name_(state);
     text("current_product", p ? p->name : process);
@@ -1326,7 +1343,7 @@ class JuraController : public TransportSink {
   bool allow_brew_{false}, allow_power_{false}, raw_extras_{true}, discovery_done_{false},
       identify_pending_{false};
   bool tf_valid_{false}, tf_requested_{false}, awaiting_tf_{false}, operation_seen_{false},
-      operation_finished_{false};
+      operation_finished_{false}, coffee_rinse_{false};
   bool alerts_invalidated_{false}, model_mismatch_{false};
   bool accept_short_status_{false};
   bool read_saved_recipes_{true};

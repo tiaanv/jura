@@ -11,6 +11,13 @@
 
 ## Unreleased
 
+- End coffee-rinse progress immediately when a fresh complete TF confirms coffee
+  ready and the coffee-rinsing flag is cleared, without waiting for a missing
+  Finished frame or the progress timeout. Active drinks and other processes retain
+  their TV lifecycle; incomplete or blocked status cannot end a rinse.
+- Add regressions for rinse completion, five-byte EF533 compatibility, stale rinse
+  identity after a new start, and incidental ready status during real drinks.
+
 - Defer post-finish status/poll traffic until Finished frames have been quiet for
   three seconds, with a fifteen-second recovery bound from the first finish frame.
   Repeated finish frames no longer restart the delayed counter-refresh timer.

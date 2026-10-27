@@ -1185,6 +1185,59 @@ static void test_no_milk_progress() {
   m.inject("@TV:3E0A");
   assert(m.dev.bins["brew_active"] == 0 && m.dev.nums["progress"] == 100);
 }
+static void test_rinse_ready_status() {
+  Machine m;
+  m.begin(); m.tick(16000);
+  m.inject("@TV:23228F090A");
+  assert(m.dev.texts["status"] == "busy");
+  m.inject("@TF:000420000000"); // Even coffee-ready cannot override an active rinse flag.
+  assert(m.dev.texts["current_product"] == "Coffee rinsing");
+  m.inject("@TF:000000000000"); // Rinse flag cleared, but no positive ready signal.
+  assert(m.dev.texts["progress_state"] == "Rinsing");
+  m.inject("@TF:0004"); // Relevant rinse flag and blocking-alert coverage absent.
+  assert(m.dev.texts["current_product"] == "Coffee rinsing");
+  m.inject("@TF:400400000000"); // Ready alongside a blocking alert cannot end the rinse.
+  assert(m.dev.texts["current_product"] == "Coffee rinsing");
+  m.inject("@TF:000400000000");
+  assert(m.dev.texts["status"] == "ready" && m.dev.texts["progress_state"] == "Idle");
+  assert(m.dev.texts["current_product"] == "None" && m.dev.bins["brew_active"] == 0);
+  assert(std::isnan(m.dev.nums["product_code"]) && std::isnan(m.dev.nums["stage_code"]));
+  assert(std::isnan(m.dev.nums["stage_current"]) && std::isnan(m.dev.nums["progress"]));
+  for (const char *frame : {"@TV:390304040014FFFFFFFF11FFFF00", "@TV:210301",
+                            "@TV:3C0304040A14FFFFFFFF11FFFF00", "@TV:320AFFFFFFFF0514",
+                            "@TV:2323", "@TV:5425", "@TV:4A02"}) {
+    m.inject(frame);
+    const auto product = m.dev.texts["current_product"];
+    const auto phase = m.dev.texts["progress_state"];
+    m.inject("@TF:000400000000");
+    assert(m.dev.texts["status"] == "busy");
+    assert(m.dev.texts["current_product"] == product && m.dev.texts["progress_state"] == phase);
+  }
+  // A generic new start must not inherit the preceding rinse exception.
+  m.inject("@TV:2322"); m.inject("@TB"); m.inject("@TF:000400000000");
+  assert(m.dev.texts["status"] == "busy" && m.dev.texts["progress_state"] == "Started");
+  // Supported short EF533 status still includes both readiness and rinse flags.
+  Machine older;
+  older.dev.set_accept_short_status(true);
+  older.begin(); older.tick(16000);
+  older.inject("@TV:2322"); older.inject("@TF:0004000060");
+  assert(older.dev.texts["status"] == "ready" && older.dev.texts["current_product"] == "None");
+  Machine strict;
+  strict.begin(); strict.tick(16000);
+  strict.inject("@TV:2322"); strict.inject("@TF:0004000060");
+  assert(strict.dev.texts["current_product"] == "Coffee rinsing");
+  // A ready TF during an HA-initiated drink must not complete its request.
+  Machine brew;
+  brew.begin(); brew.tick(16000);
+  assert(brew.dev.brew_named("Espresso")); brew.tick(2000);
+  brew.inject("@TV:390206060009FFFFFFFF22FFFF1100FF");
+  brew.inject("@TF:000400000000");
+  assert(brew.dev.texts["command_result"] == "Started" && brew.dev.bins["brew_active"] == 1);
+  assert(!brew.dev.brew_named("Coffee"));
+  brew.inject("@TV:3E02");
+  assert(brew.dev.texts["command_result"] == "Completed");
+}
+
 static void test_current_product_lifecycle() {
   Machine m;
   m.begin();
@@ -1194,7 +1247,7 @@ static void test_current_product_lifecycle() {
   assert(m.dev.texts["current_product"] == "None");
   m.inject("@TV:2322");  // Coffee rinsing, often no ENJOY frame follows.
   assert(m.dev.texts["current_product"] == "Coffee rinsing");
-  m.inject("@TF:000400000000");  // Do not erase live TV on an incidental TF.
+  m.inject("@TF:000020000000");  // An ongoing rinse must retain its progress.
   assert(m.dev.texts["current_product"] == "Coffee rinsing");
   m.auto_tf = false;
   m.tick(21000);
@@ -1361,6 +1414,7 @@ int main() {
   test_no_milk_progress();
   test_coolcontrol_request_priority();
   test_coolcontrol_forwarding();
+  test_rinse_ready_status();
   test_current_product_lifecycle();
   test_an01_diagnostic();
   test_profiles();
