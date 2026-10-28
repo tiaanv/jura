@@ -69,3 +69,5 @@ profile-default recipes validate in the bundled database.
 
 The repository is MIT licensed; see [LICENSE](../LICENSE) and the retained
 [upstream notice](../components/jura_native/LICENSE.harryzz).
+
+Additional distribution attribution is retained in [Contributor notices](notices.md).
