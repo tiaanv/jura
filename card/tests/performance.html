@@ -1,0 +1,54 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jura native card test</title><style>body{font:14px Arial;background:#151719;color:#e3e5e7;margin:0;padding:18px;--primary-text-color:#e3e5e7;--secondary-text-color:#a3a6aa;--card-background-color:#1c1c1e;--secondary-background-color:#252527;--divider-color:#35373a;--info-color:#4aa9e7}main{max-width:520px;margin:auto}pre{white-space:pre-wrap;font-size:12px}nav{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}nav button{background:#252527;color:#e3e5e7;border:1px solid #45474a;border-radius:5px;padding:8px}ha-card{display:block}ha-icon{display:inline-block;width:18px;height:18px}ha-icon:before{content:'·';font-size:20px}</style></head><body><main><h2>Native card verification</h2><pre id="results">Running…</pre><nav id="scenarios"></nav><jura-native-card id="card"></jura-native-card></main><script src="../../dist/jura-native-card.js"></script><script>
+const card=document.getElementById('card'),report=document.getElementById('results'),calls=[],checks=[];let revision=0;
+const drinks=['Ristretto','Espresso','Coffee','Cappuccino','Latte Macchiato','Milk Portion','Hotwater Portion(normal)','2 Ristretti','2 Espressi','2 Coffee','1 Flat White'];
+const base={status:'ready',status_detail:'Ready',connected:'on',alerts_stale:'off',brew_active:'off',active_alerts:'None',drink:'Espresso',recipe_loading:'off',recipe_modified:'off',recipe_source:'Machine',recipe_status:'Saved recipe loaded for Espresso',command_result:'No command',requested_product:'unknown',progress:'unknown',progress_state:'Idle',current_product:'None',stage_current:'unknown',stage_target:'unknown',stage_unit:'',stage_code:'unknown',water_tank_status:'OK',tray_status:'Present',empty_grounds:'off',insert_coffee_bin:'off',no_beans:'off',fill_water:'off',insert_tray:'off',empty_tray:'off',water:'45',water_min:'15',water_max:'80',water_step:'5',milk:'unknown',foam:'unknown',bypass:'unknown',pause:'unknown',strength:'8',temperature:'High',current_strength_choices:'3 | 4 | 5 | 6 | 7 | 8 | 9 | 10',current_temperature_choices:'Normal | High',current_grinder_choices:'',total_products:'14600',milk_level:'40',milk_temperature:'2.0',cleaning_maintenance:'80',decalc_maintenance:'30',cleaning_count:'73',profile:'EF533',detected_model:'EF533M V02.09',session:'Connected'};
+card.setConfig({name:'Jura E8',entity_prefix:'jura_e8',hold_to_brew:true,recipes:[{name:'Milky White',base_drink:'1 Flat White',overrides:{milk_seconds:30}},{name:'Black',base_drink:'Espresso',overrides:{}}]});
+let patch={};function apply(extra={},merge=false){patch=merge?{...patch,...extra}:extra;const values={...base,...patch},states={};for(const [key,id]of Object.entries(card._entities)){const value=values[key]??'unknown';states[id]={entity_id:id,state:String(value),last_updated:'revision-'+revision,attributes:{}};}
+states[card._entities.drink].attributes.options=drinks;states[card._entities.water].attributes={min:15,max:450,step:5};for(const [i,name]of drinks.entries()){const id='sensor.jura_e8_'+name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')+'_count';states[id]={state:String([4,246,333,58,20,1525,760,0,0,1,11584][i]),attributes:{friendly_name:'Jura-E8 '+name+' Count'}};}
+card.hass={states,locale:{language:'en'},async callService(domain,service,data){calls.push({domain,service,data});}};}
+const $=s=>card.shadowRoot.querySelector(s);function check(name,value){if(!value)throw new Error(name);checks.push('PASS '+name);}const settle=()=>new Promise(r=>setTimeout(r,0));
+const BASELINE=false;
+
+async function performanceTests(){try{
+apply();await settle();await settle();
+const states={...card._hass.states};for(let i=0;i<10000;i++)states['sensor.unrelated_'+i]={state:'0',attributes:{}};
+let scans=0,reads=0,measurements=0;
+const wrapped=new Proxy(states,{ownKeys(target){scans++;return Reflect.ownKeys(target);},get(target,key){reads++;return target[key];}});
+const screen=$('#jura-screen-status'),measure=screen.getComputedTextLength.bind(screen);screen.getComputedTextLength=()=>{measurements++;return measure();};
+const send=()=>{card.hass={...card._hass,states:wrapped};};
+if(card._discoverCounters)card._discoveryAt=0;send();await settle();await settle();
+const observer=new MutationObserver(()=>{});observer.observe(card.shadowRoot,{subtree:true,childList:true,attributes:true,characterData:true});observer.takeRecords();
+scans=reads=measurements=0;const start=performance.now();
+for(let i=0;i<100;i++){states['sensor.unrelated_0']={state:String(i),attributes:{}};send();}
+const unrelatedMs=performance.now()-start,unrelated={scans,reads,measurements,mutations:observer.takeRecords().length};
+states[card._entities.status]={state:'busy'};states[card._entities.brew_active]={state:'on'};states[card._entities.progress_state]={state:'Dispensing coffee'};states[card._entities.stage_code]={state:'55'};states[card._entities.current_product]={state:'Espresso'};send();await settle();observer.takeRecords();
+const recipeObserver=new MutationObserver(()=>{});recipeObserver.observe($('#recipe'),{subtree:true,childList:true,attributes:true,characterData:true});recipeObserver.takeRecords();scans=reads=measurements=0;const progressStart=performance.now();
+for(let i=0;i<100;i++){states[card._entities.progress]={state:String(i%100)};send();}
+const progressMs=performance.now()-progressStart,progress={scans,reads,measurements,recipeMutations:recipeObserver.takeRecords().length};
+observer.disconnect();recipeObserver.disconnect();
+const metrics={entities:Object.keys(states).length,updates:100,unrelatedMs:+unrelatedMs.toFixed(2),unrelated,progressMs:+progressMs.toFixed(2),progress};
+if(BASELINE){report.textContent=JSON.stringify(metrics,null,2);return;}
+check('100 unrelated updates over 10000 extra entities do not enumerate HA states',unrelated.scans===0);
+check('Unrelated updates cause no DOM mutations or SVG measurements',unrelated.mutations===0&&unrelated.measurements===0);
+check('Direct state reads stay bounded independently of total HA entities',unrelated.reads<50000);
+check('Progress updates do not enumerate HA states',progress.scans===0);
+check('Unchanged SVG status is not measured again',progress.measurements===0);
+check('Progress updates do not mutate the recipe section',progress.recipeMutations===0);
+check('Latest progress and busy Brew safety remain current',$('#overall').textContent==='99%'&&$('#brew').disabled);
+let parsed=0;const read=card._readCatalogue.bind(card);card._readCatalogue=()=>{parsed++;return read();};card._catalogue();card._catalogue();check('Catalogue lookup is memoized until capability states change',parsed===0);
+const oldDiagnostic=$('[data-diagnostic=progress_state]').textContent;states[card._entities.progress_state]={state:'Heating'};send();check('Closed diagnostics do not render background values',$('[data-diagnostic=progress_state]').textContent===oldDiagnostic);
+$('#diagnostics').open=true;await settle();check('Opening diagnostics immediately displays latest state',$('[data-diagnostic=progress_state]').textContent==='Heating');
+$('#recipe').open=false;await settle();const oldSummary=$('#recipe-summary').textContent;states[card._entities.water]={state:'55'};send();check('Collapsed brew section defers visual settings updates',$('#recipe-summary').textContent===oldSummary);
+$('#recipe').open=true;await settle();check('Opening brew settings displays latest values',$('#recipe-summary').textContent.includes('55 ml'));
+const counter=card._countEntity('Espresso');states[counter]={...states[counter],state:'999'};send();check('Cached counter lookup tracks changing counts',$('[data-count="Espresso"]').textContent==='999 made');
+const renamed='sensor.jura_e8_custom_espresso_counter';states[renamed]={state:'1000',attributes:{friendly_name:'Jura E8 Espresso Count'}};delete states[counter];send();check('Removed or renamed counters trigger rediscovery',card._countEntity('Espresso')===renamed&&$('[data-count="Espresso"]').textContent==='1,000 made');
+card._onScreen=false;card._motion();check('Offscreen machine animations pause',$('ha-card').dataset.motion==='paused');card._onScreen=true;card._motion();
+card.setConfig({name:'Jura E8',entity_prefix:'jura_e8',animations:false});apply();check('Explicit reduced-animation mode pauses machine effects',$('ha-card').dataset.motion==='paused');
+card.setConfig({name:'Jura E8',entity_prefix:'jura_e8',entities:{status:'sensor.external_status'}});apply();const overrideStates={...card._hass.states,'sensor.external_status':{state:'heating'}};card.hass={...card._hass,states:overrideStates};check('Explicit entities outside prefix remain watched',$('#status').textContent==='Heating');
+card.setConfig({name:'Jura E8',entity_prefix:'jura_e8',entities:{status:'sensor.shared_status',status_detail:'sensor.shared_status'}});apply();const sharedStates={...card._hass.states,'sensor.shared_status':{state:'heating'}};card.hass={...card._hass,states:sharedStates};sharedStates['sensor.shared_status']={state:'ready'};card.hass={...card._hass,states:sharedStates};check('Multiple logical roles sharing one entity all invalidate correctly',$('#status').textContent==='Ready'&&!$('#brew').disabled);
+card._brewLock=true;card._brewStamp=card._stamp('command_result');sharedStates[card._entities.command_result]={state:card._state('command_result'),last_updated:'new-confirmation'};card.hass={...card._hass,states:sharedStates};check('Same-value fresh command reports still process confirmation',!card._brewLock);
+let rejected=false;try{card.setConfig({animations:'false'});}catch{rejected=true;}check('Invalid animation option rejected',rejected);
+report.textContent=checks.join('\n')+'\n\n'+JSON.stringify(metrics,null,2);
+}catch(error){report.textContent=checks.join('\n')+'\nFAIL '+error.stack;}}
+performanceTests();
+</script></body></html>

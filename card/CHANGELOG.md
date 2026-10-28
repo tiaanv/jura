@@ -1,5 +1,18 @@
 # Card changelog
 
+## 2.1.11 — faster dashboards and configurable hold-to-brew
+
+- Default hold-to-brew to 1 second, with configurable `hold_to_brew_seconds`
+  shared by the timer and visual feedback. Move the progress bar to the top of
+  standard and custom drink tiles so it remains visible above a finger.
+
+- Reduce dashboard load by watching known entities directly, caching counter
+  discovery, SVG text layout and capability validation, and avoiding unchanged DOM writes.
+- Defer hidden/collapsed panel rendering until opened; keep command safety checks
+  and confirmations synchronous. Progress updates no longer refresh recipe panels.
+- Pause decorative machine animations off-screen or in background tabs; add
+  `animations: false` for slower displays without changing hold-to-brew feedback.
+
 ## 2.1.10 — profile-aware custom recipes
 
 - Validate all custom recipes when the complete capability catalogue for the

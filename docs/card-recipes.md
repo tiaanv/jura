@@ -137,13 +137,20 @@ This shortcut is **off by default**. Add this at the card's top level, alongside
 
 ```yaml
 hold_to_brew: true
+hold_to_brew_seconds: 1
 ```
+
+`hold_to_brew_seconds` defaults to **1 second** when omitted. Use a positive number
+up to 60; decimals such as `1.5` are supported. For a longer hold, set it to `2`.
+The timer and the progress bar use the same configured duration. The bar is at
+the **top edge** of the tile to keep it visible above your finger. Setting the
+duration alone does not enable hold-to-brew; `hold_to_brew: true` is still required.
 
 The tile section then displays **Tap or hold to brew**:
 
 - **Tap:** select the standard drink or custom recipe; review settings and use
   the separate Brew button as before.
-- **Hold for 1.5 seconds:** a bar fills along the tile. When it completes, the
+- **Hold for 1 second by default:** a bar fills along the top edge of the tile. When it completes, the
   card loads the saved base, applies custom overrides where applicable, waits
   for confirmation, then requests one brew automatically.
 - Releasing early keeps ordinary tap behaviour and never auto-brews. Leaving

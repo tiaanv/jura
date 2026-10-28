@@ -20,7 +20,7 @@ details{border-top:1px solid var(--line)}summary{list-style:none;display:flex;ju
 .milk-flow{display:none;color:var(--text)}[data-phase=milk] .milk-flow,[data-phase=foam] .milk-flow{display:block}
 @media(prefers-reduced-motion:reduce){.milk-flow{display:none!important}}
 
-.drink-tile.hold-enabled{position:relative;overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:pan-y}.drink-tile.hold-enabled:after{content:"";position:absolute;bottom:0;left:0;height:4px;width:0;background:var(--blue);pointer-events:none}.drink-tile.holding:after{animation:jura-hold 1.5s linear forwards}@keyframes jura-hold{from{width:0}to{width:100%}}
+.drink-tile.hold-enabled{position:relative;overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:pan-y}.drink-tile.hold-enabled:after{content:"";position:absolute;top:0;left:0;height:5px;width:0;background:var(--blue);pointer-events:none}.drink-tile.holding:after{animation:jura-hold var(--jura-hold-duration,1s) linear forwards}@keyframes jura-hold{from{width:0}to{width:100%}}
 
 .jura-card[data-milk-state=empty],.jura-card[data-milk-state=no-signal]{--milk-alert:var(--warn)}.jura-card[data-milk-state=fault]{--milk-alert:var(--danger)}
 .jura-card:not([data-milk-state=ok]) .shell.cooler{stroke:var(--milk-alert)}.jura-card:not([data-milk-state=ok]) .shell.cooler circle{fill:var(--milk-alert)}.jura-card:not([data-milk-state=ok]) .milk-part{color:var(--milk-alert)}#jura-cooler-warning{color:var(--milk-alert)}.jura-card:not([data-milk-state=ok]) [data-reading=milk_level]{color:var(--milk-alert)}.jura-card:not([data-milk-state=ok]) [data-reading=milk_level] ha-icon{color:var(--milk-alert)}.jura-card[data-milk-state=no-signal] .shell.cooler>rect{stroke-dasharray:5 4}
@@ -36,3 +36,4 @@ details{border-top:1px solid var(--line)}summary{list-style:none;display:flex;ju
 
 .screen-brand{fill:var(--text);stroke:none}
 .drink-tile[aria-invalid=true]{border-color:var(--warn)}.drink-tile [data-recipe-validation]{color:var(--warn);white-space:normal;overflow-wrap:anywhere}
+.jura-card[data-motion=paused] .machine-stage *{animation-play-state:paused!important}.jura-card[data-motion=paused] .machine-stage .shell>path,.jura-card[data-motion=paused] .machine-stage .coffee-part,.jura-card[data-motion=paused] .machine-stage .shell>rect{filter:none!important}

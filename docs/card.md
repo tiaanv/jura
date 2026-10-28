@@ -71,7 +71,7 @@ external-component configuration and UART setup are unaffected.
 3. Add a dashboard resource of type **JavaScript module**:
 
    ```text
-   /local/jura-native-card.js?v=2.1.10
+   /local/jura-native-card.js?v=2.1.11
    ```
 
 4. Refresh the browser and add the card YAML.
@@ -115,15 +115,39 @@ or trailing underscore. For example, `sensor.kitchen_jura_jura_status` uses
 | `coolcontrol` | Enabled | Set `false` to hide the cooler, hose and milk reading; otherwise configure `level` and `temperature`. |
 | `entities` | Generated mappings | Overrides for individual logical entity keys. |
 | `recipes` | None | Custom recipe tiles; see [custom recipe configuration](card-recipes.md). |
-| `hold_to_brew` | `false` | Enable 1.5-second tile holds to prepare and brew; short taps still select. |
+| `hold_to_brew` | `false` | Enable 1-second tile holds to prepare and brew; short taps still select. |
+| `hold_to_brew_seconds` | `1` | Hold duration in seconds; accepts positive numbers up to 60, including decimals. Applies to standard and custom drink tiles. |
+| `animations` | `true` | Set `false` to pause decorative machine animations and remove animated shadows on slower displays. Hold-to-brew feedback remains enabled. |
 
 There is currently no graphical configuration editor or automatic device picker.
 Use YAML. Explicit `coolcontrol: false` is recommended if there is no cooler.
 
+### Slower displays and background updates
+
+The card watches its known machine, cooler, capability and counter entities rather
+than scanning every HA entity on each update. Counter names are discovered once
+and cached. Discovery is repeated when drink options or mapped counter names
+change, or at most once per minute during incoming updates to pick up new entities.
+Unrelated HA updates do not render the card. Unchanged SVG display text is not
+measured again, and progress-only updates do not rebuild the recipe panels.
+
+Hidden and collapsed panel contents render when opened. Readiness, command
+confirmation and brewing checks continue immediately regardless of section visibility.
+Decorative animations pause when the card is off-screen or its browser tab is
+hidden. On an Echo Show or similar slower display, optionally add:
+
+```yaml
+animations: false
+```
+
+This retains the graphical status, warnings and drink progress. Reload the dashboard
+after installing an updated card bundle. Actual Silk responsiveness still depends
+on the rest of the dashboard and should be checked on the device.
+
 ### Custom recipes and hold-to-brew
 
 Personal recipes appear above standard drinks and can override only selected
-parameters. Optionally enable a 1.5-second hold to prepare and brew either kind
+parameters. Optionally enable a 1-second hold to prepare and brew either kind
 of tile. See **[configuration, examples and gesture behaviour](card-recipes.md)**.
 
 ### Renamed entities
@@ -170,7 +194,7 @@ map in this release. Arbitrarily renamed counters may show unavailable.
 ## Using the card
 
 The steps below describe ordinary taps. With `hold_to_brew: true`, a completed
-1.5-second hold prepares and brews automatically; see [hold-to-brew](card-recipes.md#hold-to-brew).
+1-second hold prepares and brews automatically; see [hold-to-brew](card-recipes.md#hold-to-brew).
 
 1. Place a suitable cup and check water, beans and the milk supply where needed.
 2. Select a graphical drink tile or expand **More drinks**. Selection loads that

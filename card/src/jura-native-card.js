@@ -1,4 +1,4 @@
-// Jura Native Graphical Card 2.1.10 — native ESPHome entities, no MQTT or external dependencies.
+// Jura Native Graphical Card 2.1.11 — native ESPHome entities, no MQTT or external dependencies.
 (() => {
   const GRAPHIC = /*GRAPHIC*/;
   const STYLES = /*STYLES*/;
@@ -115,6 +115,7 @@
   const choiceControls=[['strength','coffee_strength','current_strength_choices','Strength'],['temperature','temperature','current_temperature_choices','Temperature'],['grinder','grinder_ratio','current_grinder_choices','Grinder ratio']];
   const maintenance=[['cleaning','Cleaning'],['filterchange','Filter'],['decalc','Descaling'],['cappurinse','Milk rinses'],['coffeerinse','Coffee rinses'],['cappuclean','Milk cleaning']];
   const recipeKeys={strength:'strength',water_ml:'water',milk_seconds:'milk',foam_seconds:'foam',temperature:'temperature',bypass_ml:'bypass',pause_seconds:'pause'};
+  const recipeRenderKeys=['connected','status','brew_active','alerts_stale','active_alerts','command_result','requested_product','drink','catalogue','coolcontrol_override','recipe_loading','recipe_modified','recipe_source','recipe_status',...numberControls.flatMap(([key])=>[key,key+'_min',key+'_max',key+'_step']),...choiceControls.flatMap(([key,,choices])=>[key,choices])];
   class JuraNativeCard extends HTMLElement {
     constructor(){ super();this.attachShadow({mode:'open'});this._timers=new Set();this._edits=new Map();this._selection=null;this._brewLock=false;this._writeError=''; }
     setConfig(config){
@@ -124,6 +125,9 @@
       this._sections={...defaults,...config.sections};
 
       if(config.hold_to_brew!==undefined&&typeof config.hold_to_brew!=='boolean')throw new Error('hold_to_brew must be true or false');
+      if(config.hold_to_brew_seconds!==undefined&&(typeof config.hold_to_brew_seconds!=='number'||!Number.isFinite(config.hold_to_brew_seconds)||config.hold_to_brew_seconds<=0||config.hold_to_brew_seconds>60))throw new Error('hold_to_brew_seconds must be a number greater than 0 and at most 60');
+      this._holdSeconds=config.hold_to_brew_seconds??1;
+      if(config.animations!==undefined&&typeof config.animations!=='boolean')throw new Error('animations must be true or false');
       this._cancelHold?.();this._holdBrewPending=false;this._holdJob=null;this._heldClicks=new WeakSet();
       if(config.recipes!==undefined&&!Array.isArray(config.recipes))throw new Error('recipes must be a list');
       this._recipes=(config.recipes||[]).map((recipe,index)=>{
@@ -155,14 +159,20 @@
       if(this._cooler){this._entities.milk_level=config.coolcontrol?.level||'sensor.jura_coolcontrol_jura_coolcontrol_level';this._entities.milk_temperature=config.coolcontrol?.temperature||'sensor.jura_coolcontrol_jura_coolcontrol_temperature';}
       this._entities.coolcontrol_override=`switch.${p}_jura_cool_control_override`;
       Object.assign(this._entities,config.entities||{});
-      this._signature=null;this._tileSignature=null;this._build();this._update();
+      this._signature=null;this._tileSignature=null;this._watchSnapshot=new Map();this._counterEntities=new Map();this._discoveryAt=0;this._discoveryOptions=null;this._groupReady=new Set();this._screenValue=null;this._catalogueRevision=0;this._catalogueMemo=null;this._validationCache=new WeakMap();this._build();this._update();
     }
     set hass(hass){this._hass=hass;this._update();}
     getCardSize(){return 15;}
     getGridOptions(){return {columns:12,min_columns:6};}
     static getStubConfig(){return {name:'Jura E8',entity_prefix:'jura_e8'};}
-    disconnectedCallback(){this._cancelHold();this._holdJob=null;this._holdBrewPending=false;for(const id of this._timers)clearTimeout(id);this._timers.clear();}
-    connectedCallback(){this._update();}
+    disconnectedCallback(){this._cancelHold();this._holdJob=null;this._holdBrewPending=false;for(const id of this._timers)clearTimeout(id);this._timers.clear();this._visibilityObserver?.disconnect();this._visibilityObserver=null;if(this._visibilityHandler)document.removeEventListener('visibilitychange',this._visibilityHandler);this._visibilityHandler=null;}
+    connectedCallback(){this._startVisibility();this._update();}
+    _startVisibility(){
+      if(!this._visibilityHandler){this._visibilityHandler=()=>this._motion();document.addEventListener('visibilitychange',this._visibilityHandler);}
+      if(!this._visibilityObserver&&typeof IntersectionObserver!=='undefined'){this._visibilityObserver=new IntersectionObserver(entries=>{this._onScreen=entries[0]?.isIntersecting!==false;this._motion();});this._visibilityObserver.observe(this);}
+      this._motion();
+    }
+    _motion(){if(this._card){const mode=this._config.animations===false||document.hidden||this._onScreen===false?'paused':'running';if(this._card.dataset.motion!==mode)this._card.dataset.motion=mode;}}
     _later(fn,delay){const id=setTimeout(()=>{this._timers.delete(id);fn();},delay);this._timers.add(id);return id;}
     _entity(key){return this._hass?.states?.[this._entities[key]];}
     _state(key){return this._entity(key)?.state;}
@@ -185,7 +195,9 @@
        <details id="maintenance"><summary><span><ha-icon icon="mdi:wrench-outline"></ha-icon>Maintenance & totals</span><span id="total"></span></summary><div class="maintenance-meters">${maintenance.slice(0,3).map(([key,label])=>`<button class="maintenance-meter" data-info="${key}_maintenance"><span>${label}</span><strong data-number="${key}_maintenance" data-unit="%">—</strong><div class="meter-track"><div data-meter="${key}_maintenance"></div></div></button>`).join('')}</div><div class="detail-rows">${maintenance.map(([key,label])=>`<button data-info="${key}_count" class="detail-row"><span>${label} count</span><strong data-number="${key}_count">—</strong></button>`).join('')}</div><div id="all-counters" class="detail-rows"></div><button id="refresh" class="text-button">Refresh readings</button></details>
        <details id="diagnostics"><summary><span><ha-icon icon="mdi:pulse"></ha-icon>Diagnostics</span></summary>${['detected_model','profile','session','current_product','progress_state','stage_code','stage_progress','requested_product','command_result','command_recipe_source','command_recipe_status','recipe_status','saved_recipe_raw','command_recipe_raw','tf_raw','tv_raw','uart_timeouts','uart_framing_errors','grounds_level','changed_counters'].map(key=>`<button class="diagnostic-row" data-info="${key}"><span>${key.replaceAll('_',' ')}</span><code data-diagnostic="${key}">—</code></button>`).join('')}<div class="diagnostic-note">Legacy grounds and raw counters are unverified. They are not used for drink totals or readiness.</div></details>
       </ha-card>`;
-      this._root=this.shadowRoot;this._card=this._root.querySelector('ha-card');
+      this._root=this.shadowRoot;this._card=this._root.querySelector('ha-card');this._nodes=new Map();
+      this._motion();
+      this._root.querySelectorAll('details').forEach(el=>el.addEventListener('toggle',()=>{if(el.open)this._update(true);}));
       this._root.addEventListener('click',event=>{const node=event.target.closest('[data-info]');if(node)this._info(node.dataset.info);});
       this._root.querySelectorAll('[data-recipe]').forEach(button=>this._bindDrinkButton(button,'recipe',Number(button.dataset.recipe)));
       for(const [key,id]of Object.entries({my_recipes:'my-recipes',choose_a_drink:'choose-a-drink',more_drinks:'more-drinks',brew:'recipe',maintenance:'maintenance',diagnostics:'diagnostics'})){const section=this._root.querySelector('#'+id);section.hidden=this._sections[key]==='hidden';section.open=this._sections[key]==='expanded';}
@@ -198,6 +210,7 @@
       if(!this._cooler)this._root.querySelectorAll('.cooler,.milk-part').forEach(el=>el.setAttribute('display','none'));
     }
     _screenText(value){
+      if(this._screenValue===value)return;this._screenValue=value;
       const el=this._root.querySelector('#jura-screen-status'),text=String(value||''),ns='http://www.w3.org/2000/svg';
       el.setAttribute('aria-label',text);
       const wrap=size=>{
@@ -221,7 +234,47 @@
       catch(error){this._writeError=error?.message||String(error);this._update(true);return false;}
     }
     _options(){return (this._entity('drink')?.attributes?.options||[]).filter(known);}
-    _countEntity(name){const wanted=`${name} Count`.toLowerCase(),prefix=`sensor.${this._config.entity_prefix}_`;return Object.keys(this._hass?.states||{}).find(id=>id.startsWith(prefix)&&String(this._hass.states[id].attributes?.friendly_name||'').toLowerCase().replace(new RegExp(`^${this._config.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\s+`,'i'),'')===wanted)||`${prefix}${name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')}_count`;}
+    _countEntity(name){return this._counterEntities.get(name)||`sensor.${this._config.entity_prefix}_${name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')}_count`;}
+    _node(selector){if(!this._nodes.has(selector))this._nodes.set(selector,this._root.querySelector(selector));return this._nodes.get(selector);}
+    _setText(el,value){const text=String(value);if(el.textContent!==text)el.textContent=text;}
+    _setAttr(el,key,value){const text=String(value);if(el.getAttribute(key)!==text)el.setAttribute(key,text);}
+    _setProp(el,key,value){if(el[key]!==value)el[key]=value;}
+    _visible(id){let el=this._node('#'+id);if(!el||el.hidden||!el.open)return false;for(el=el.parentElement;el&&el!==this._root;el=el.parentElement)if(el.hidden||el.tagName==='DETAILS'&&!el.open)return false;return true;}
+    _dirty(group,keys,force){const dirty=force||!this._groupReady.has(group)||keys.some(key=>this._changed.has(key));if(dirty)this._groupReady.add(group);return dirty;}
+    _discoverCounters(){
+      const options=this._options(),signature=JSON.stringify(options),now=Date.now();
+      const renamed=[...this._counterEntities.values()].some(id=>{const old=this._watchSnapshot.get(id),entity=this._hass.states[id];return old?.exists&&(!entity||old.name!==entity.attributes?.friendly_name);});
+      if(signature===this._discoveryOptions&&!renamed&&now-this._discoveryAt<60000)return;
+      this._discoveryOptions=signature;this._discoveryAt=now;
+      const prefix=`sensor.${this._config.entity_prefix}_`,strip=new RegExp(`^${this._config.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\s+`,'i'),names=new Map();
+      // One discovery pass, not one full HA scan per drink counter per update.
+      for(const id of Object.keys(this._hass.states))if(id.startsWith(prefix)){
+        const label=String(this._hass.states[id].attributes?.friendly_name||'').replace(strip,'').toLowerCase();
+        if(!names.has(label))names.set(label,id);
+      }
+      this._counterEntities=new Map(options.map(name=>[name,names.get(`${name} Count`.toLowerCase())||`${prefix}${name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')}_count`]));
+      this._watchList=null;
+    }
+    _collectChanges(){
+      this._discoverCounters();
+      const manifest=this._state('recipe_capabilities');
+      if(manifest!==this._watchManifest){this._watchManifest=manifest;this._watchList=null;}
+      if(!this._watchList){
+        this._watchList=new Map();const add=(id,key)=>{if(!this._watchList.has(id))this._watchList.set(id,[]);this._watchList.get(id).push(key);};
+        for(const [key,id]of Object.entries(this._entities))add(id,key);
+        for(const id of this._counterEntities.values())add(id,'counters');
+        let count=0;try{const n=JSON.parse(manifest).n;if(Number.isInteger(n)&&n>0&&n<=128)count=n;}catch{}
+        for(let i=1;i<=count;i++)add(this._entities[`recipe_capabilities_${i}`]||`sensor.${this._config.entity_prefix}_jura_recipe_capabilities_${i}`,'catalogue');
+      }
+      const changed=new Set();
+      for(const [id,keys]of this._watchList){
+        const e=this._hass.states[id],old=this._watchSnapshot.get(id),stamp=keys.some(key=>key==='recipe_status'||key==='command_result')?e?.last_updated||e?.last_changed:'',options=keys.includes('drink')?this._discoveryOptions:'',name=keys.includes('counters')?e?.attributes?.friendly_name:undefined;
+        if(!old||old.state!==e?.state||old.stamp!==stamp||old.options!==options||old.name!==name){for(const key of keys)changed.add(key);this._watchSnapshot.set(id,{state:e?.state,stamp,options,name,exists:!!e});}
+      }
+      if(this._language!==this._hass.locale?.language){this._language=this._hass.locale?.language;changed.add('locale');}
+      if(changed.has('profile')||changed.has('recipe_capabilities')||changed.has('catalogue')){this._catalogueRevision++;changed.add('catalogue');}
+      this._changed=changed;return changed.size>0;
+    }
     _renderTiles(){
       const options=this._options(),signature=JSON.stringify(options);if(signature===this._tileSignature)return;
       this._tileSignature=signature;const primary=['Espresso','Coffee','1 Flat White','Flat White','Cappuccino','Latte Macchiato','Ristretto'];
@@ -233,6 +286,7 @@
       this._root.querySelector('#all-counters').innerHTML=options.map(name=>`<button class="detail-row" data-counter-info="${escapeHTML(name)}"><span>${escapeHTML(pretty(name))}</span><strong data-count="${escapeHTML(name)}">—</strong></button>`).join('');
       this._root.querySelectorAll('[data-counter-info]').forEach(button=>button.addEventListener('click',()=>{const id=this._countEntity(button.dataset.counterInfo);if(this._hass.states[id])this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:id},bubbles:true,composed:true}));}));
     }
+    _holdHint(){return this._config.hold_to_brew?`Tap to select; hold for ${this._holdSeconds} second${this._holdSeconds===1?'':'s'} to prepare and brew`:'';}
     _bindDrinkButton(button,kind,value){
       const select=()=>kind==='recipe'?this._selectRecipe(value):this._selectDrink(value);
       button.addEventListener('click',event=>{
@@ -240,7 +294,8 @@
         if(!this._holdBrewPending)select();
       });
       if(!this._config.hold_to_brew)return;
-      button.title='Tap to select; hold for 1.5 seconds to prepare and brew';
+      button.title=this._holdHint();
+      button.style.setProperty('--jura-hold-duration',`${this._holdSeconds}s`);
       button.classList.add('hold-enabled');
       button.addEventListener('contextmenu',event=>event.preventDefault());
       button.addEventListener('pointerdown',event=>{
@@ -254,7 +309,7 @@
           if(this._hold!==hold)return;
           this._heldClicks.add(button);this._cancelHold();
           this._holdAndBrew(kind,value);
-        },1500);
+        },this._holdSeconds*1000);
       });
       for(const type of ['pointerup','pointercancel','pointerleave','lostpointercapture'])button.addEventListener(type,()=>{if(this._hold?.button===button)this._cancelHold();});
     }
@@ -338,6 +393,10 @@
       finally{if(this._recipeRun===run){this._recipeRun=null;this._update(true);}}
     }
     _catalogue(){
+      if(this._catalogueMemo?.revision===this._catalogueRevision)return this._catalogueMemo.data;
+      const data=this._readCatalogue();this._catalogueMemo={revision:this._catalogueRevision,data};return data;
+    }
+    _readCatalogue(){
       try{
         const manifest=JSON.parse(this._state('recipe_capabilities'));
         if(manifest.v!==1||manifest.p!==this._state('profile')||!Number.isInteger(manifest.n)||manifest.n<1||manifest.n>128||!Number.isInteger(manifest.h))return null;
@@ -366,8 +425,9 @@
     }
     _catalogueErrors(recipe,catalogue=this._catalogue()){
       if(!catalogue)return [];
-      if(!Object.hasOwn(catalogue.d,recipe.base_drink))return [`${recipe.name}: base drink "${recipe.base_drink}" is unavailable on ${catalogue.p}. Use the component’s exact drink label.`];
-      return this._recipeValidationErrors(recipe,catalogue.d[recipe.base_drink],catalogue.p);
+      const cached=this._validationCache.get(recipe);if(cached?.catalogue===catalogue)return cached.errors;
+      const errors=!Object.hasOwn(catalogue.d,recipe.base_drink)?[`${recipe.name}: base drink "${recipe.base_drink}" is unavailable on ${catalogue.p}. Use the component’s exact drink label.`]:this._recipeValidationErrors(recipe,catalogue.d[recipe.base_drink],catalogue.p);
+      this._validationCache.set(recipe,{catalogue,errors});return errors;
     }
     _recipeValidationErrors(recipe,capabilities=null,profile=this._text('profile','')){
       const drink=`${recipe.base_drink}${profile?` on ${profile}`:''}`;
@@ -445,9 +505,9 @@
     }
     _update(force=false){
       if(!this._hass||!this._root)return;
-      const signature=JSON.stringify([Object.keys(this._hass.states).filter(id=>id.includes(this._config.entity_prefix)||id===this._entities.milk_level||id===this._entities.milk_temperature||Object.values(this._entities).includes(id)).map(id=>[id,this._hass.states[id].state,this._hass.states[id].last_updated,this._hass.states[id].attributes?.options]),this._hass.locale?.language]);
-      if(!force&&signature===this._signature)return;this._signature=signature;
-      const $=selector=>this._root.querySelector(selector),set=(selector,text)=>{$(selector).textContent=text;};
+      const changed=this._collectChanges();if(!force&&!changed)return;
+      force=force||this._changed.has('locale');
+      const $=selector=>this._node(selector),set=(selector,text)=>{this._setText($(selector),text);};
       const status=this._text('status','unknown').toLowerCase(),connected=this._state('connected')==='on',stale=this._state('alerts_stale')!=='off',phase=this._text('progress_state',''),code=numeric(this._state('stage_code'));
       const activeAlerts=this._text('active_alerts',''),alertLabels=activeAlerts.split(/[,;]/).map(s=>s.trim().toLowerCase());
       // Fresh TF shutdown status can outlive the last rinse TV frame. Preserve a
@@ -466,7 +526,7 @@
       this._phaseProduct=observedProduct;
       const displayPhase=friendlyStage(phase,observedProduct,this._coffeeBeforeMilk);
       const mode=!connected?(status==='connecting'?'connecting':'offline'):shuttingDown?'switching_off':status==='blocked'?'blocked':status==='heating'?'heating':active?'busy':status;
-      this._card.dataset.mode=mode;this._card.dataset.phase=active?(code===33?'heating':code===49||code===57?'grinding':code===50?'milk':code===52?'foam':code===51?'pause':code===55||code===60?'coffee':code===65?'water':/rins|clean|descal/i.test(displayPhase)?'rinse':'working'):mode==='heating'?'heating':finished?'finished':'idle';
+      this._setAttr(this._card,'data-mode',mode);this._setAttr(this._card,'data-phase',active?(code===33?'heating':code===49||code===57?'grinding':code===50?'milk':code===52?'foam':code===51?'pause':code===55||code===60?'coffee':code===65?'water':/rins|clean|descal/i.test(displayPhase)?'rinse':'working'):mode==='heating'?'heating':finished?'finished':'idle');
       const statusNames={switching_off:'Switching off',ready:'Ready',busy:'Making a drink',blocked:'Needs attention',heating:'Heating',finishing:'Finishing',not_ready:'Not ready',connecting:'Connecting',offline:'Offline',unknown:'Unknown'};
       set('#status',statusNames[mode]||'Unknown');set('#detail',shuttingDown?'Preparing to Switch Off':!connected&&status!=='connecting'?'Machine disconnected':active?displayPhase||'Machine operation in progress':friendlyAlert(this._text('status_detail','Waiting for machine status')));
       // Active operations report TV progress instead of TF. Suppress only the
@@ -474,23 +534,23 @@
       const suppressStaleNotice=active||connected&&status==='finishing';
       const visibleAlerts=suppressStaleNotice?activeAlerts.split(/[,;]/).filter(label=>!/^(?:unknown\s*\(\s*stale alerts\s*\)|alert readings are stale|stale alerts|alerts stale)$/i.test(label.trim().replace(/_/g,' '))).join(', '):activeAlerts;
       const alerts=[];if(visibleAlerts&&visibleAlerts.toLowerCase()!=='none')alerts.push(friendlyAlert(visibleAlerts));if(stale&&!suppressStaleNotice&&!/stale/i.test(activeAlerts))alerts.push('Alert readings are stale');
-      $('#alerts').hidden=!connected||!alerts.length;set('#alerts',connected?alerts.join(' · '):'');
+      this._setProp($('#alerts'),'hidden',!connected||!alerts.length);set('#alerts',connected?alerts.join(' · '):'');
       const freshReady=connected&&!stale&&status==='ready';
-      const operation=connected&&!shuttingDown&&!freshReady&&(active||finished||/progress timeout/i.test(phase));$('#operation').hidden=!operation;
+      const operation=connected&&!shuttingDown&&!freshReady&&(active||finished||/progress timeout/i.test(phase));this._setProp($('#operation'),'hidden',!operation);
       set('#actual-product',pretty(this._text('current_product','Machine operation')));set('#phase',displayPhase||'Waiting for progress');
       const overall=connected?percentage(this._state('progress')):null;
       const stageProgress=active&&!/progress timeout|^idle$|^finished$/i.test(phase)?percentage(this._state('stage_progress')):null;
       const useStage=overall===null&&stageProgress!==null,percent=overall??stageProgress;
       const percentText=percent===null?'':useStage?`${displayPhase||'Current stage'} — ${this._format(percent)}%`:`${this._format(percent)}%`;
-      $('#overall').hidden=percent===null;set('#overall',percentText);
-      $('#progress-track').hidden=percent===null;$('#progress-track').setAttribute('aria-valuenow',percent===null?'0':String(percent));
-      $('#progress-track').setAttribute('aria-label',useStage?`${displayPhase||'Current stage'} stage progress`:'Overall drink progress');
-      $('#progress-track').setAttribute('aria-valuetext',percentText);$('#progress-fill').style.width=`${percent??0}%`;
+      this._setProp($('#overall'),'hidden',percent===null);set('#overall',percentText);
+      this._setProp($('#progress-track'),'hidden',percent===null);this._setAttr($('#progress-track'),'aria-valuenow',percent===null?'0':String(percent));
+      this._setAttr($('#progress-track'),'aria-label',useStage?`${displayPhase||'Current stage'} stage progress`:'Overall drink progress');
+      this._setAttr($('#progress-track'),'aria-valuetext',percentText);this._setProp($('#progress-fill').style,'width',`${percent??0}%`);
       const current=numeric(this._state('stage_current')),target=numeric(this._state('stage_target')),unit=this._text('stage_unit','');
       set('#stage',(current!==null||target!==null)&&['ml','s','level'].includes(unit)?`${this._format(current)} / ${this._format(target)} ${unit}`:'');
       const screen=shuttingDown?'Switching Off':connected?(active?displayPhase:statusNames[status]||'Unknown'):'Offline';
       this._screenText(screen);
-      const reading=(key,value,alert=false)=>{const el=$(`[data-reading="${key}"]`);if(el){el.textContent=value;el.closest('button').classList.toggle('alert',alert);}};
+      const reading=(key,value,alert=false)=>{const el=$(`[data-reading="${key}"]`);if(el){this._setText(el,value);el.closest('button').classList.toggle('alert',alert);}};
       reading('water_tank_status',connected&&!stale?this._text('water_tank_status'):'—',this._state('fill_water')==='on');
       const trayFresh=connected&&!stale,trayMissing=this._state('insert_tray')==='on'||this._state('tray_status')==='Missing',trayFull=this._state('empty_tray')==='on';
       reading('tray_status',trayFresh?(trayMissing?'Missing':trayFull?'Full':this._text('tray_status')):'—',trayFresh&&(trayMissing||trayFull));
@@ -498,58 +558,72 @@
       reading('no_beans',!connected||stale||!['on','off'].includes(this._state('no_beans'))?'—':this._state('no_beans')==='on'?'Refill':'OK',this._state('no_beans')==='on');
       const milkReason=connected&&!stale?this._milkReason('Milk',true):'';
       const milkState=!milkReason?'ok':milkReason==='Milk Container Empty'?'empty':milkReason.startsWith('Milk Cooler Error')?'fault':'no-signal';
-      this._card.dataset.milkState=milkState;
+      this._setAttr(this._card,'data-milk-state',milkState);
       const overrideState=this._state('coolcontrol_override'),overrideOn=overrideState==='on';
       if(this._overridePending===overrideState)this._overridePending=null;
-      $('#cooler-override').hidden=!this._entity('coolcontrol_override')||!(overrideOn||milkReason);
+      this._setProp($('#cooler-override'),'hidden',!this._entity('coolcontrol_override')||!(overrideOn||milkReason));
       $('#cooler-override').classList.toggle('enabled',overrideOn);
       set('#cooler-override-label',overrideOn?'Milk cooler override is on':'Ignore milk cooler fault');
       set('#cooler-override-help',this._overridePending?'Waiting for the machine to confirm...':!['on','off'].includes(overrideState)?'Override switch unavailable.':overrideOn?'Milk cooler protection is bypassed. Check the milk supply before brewing.':'Allow milk drinks despite the cooler fault. Check the milk supply first.');
-      $('#cooler-override-toggle').setAttribute('aria-checked',String(overrideOn));
-      $('#cooler-override-toggle').disabled=!!this._overridePending||!['on','off'].includes(overrideState)||!connected||active;
+      this._setAttr($('#cooler-override-toggle'),'aria-checked',String(overrideOn));
+      this._setProp($('#cooler-override-toggle'),'disabled',!!this._overridePending||!['on','off'].includes(overrideState)||!connected||active);
 
-      $('#jura-cooler-warning').setAttribute('display',milkReason?'inline':'none');
-      $('#jura-cooler-title').textContent=milkReason||'Cool Control';
+      this._setAttr($('#jura-cooler-warning'),'display',milkReason?'inline':'none');
+      set('#jura-cooler-title',milkReason||'Cool Control');
       if(this._cooler)reading('milk_level',`${this._format(this._state('milk_level'))}% · ${this._format(this._state('milk_temperature'),1)}°C`,!!milkReason);
       const milkReading=$('[data-reading=milk_level]');if(milkReading)milkReading.closest('button').title=milkReason;
-      const level=numeric(this._state('milk_level')),height=level===null?0:43*Math.min(100,level)/100;$('#jura-milk-fill').setAttribute('height',height);$('#jura-milk-fill').setAttribute('y',231-height);
+      const level=numeric(this._state('milk_level')),height=level===null?0:43*Math.min(100,level)/100;this._setAttr($('#jura-milk-fill'),'height',height);this._setAttr($('#jura-milk-fill'),'y',231-height);
       this._card.classList.toggle('tank-alert',connected&&!stale&&this._state('fill_water')==='on');this._card.classList.toggle('tray-alert',connected&&!stale&&(this._state('insert_tray')==='on'||this._state('empty_tray')==='on'));this._card.classList.toggle('beans-alert',connected&&!stale&&this._state('no_beans')==='on');
       this._renderTiles();const selected=this._state('drink');
       if(this._customRecipe&&!this._recipeRun&&!this._selection&&!this._recipeError&&(selected!==this._customRecipe.base_drink||this._state('recipe_modified')==='off'&&Object.entries(this._customRecipe.overrides).some(([field,value])=>String(this._state(recipeKeys[field]))!==String(value)))){this._customRecipe=null;this._recipeError='';}
       if(this._hold&&(active||!connected||stale||status!=='ready'))this._cancelHold();
       const controlsBlocked=!!this._holdBrewPending||!!this._recipeRun||shuttingDown||!connected||status!=='ready'||this._brewLock||pendingCommand(this._state('command_result'));
-      this._root.querySelectorAll('[data-drink]').forEach(button=>{button.setAttribute('aria-pressed',String(!this._customRecipe&&button.dataset.drink===selected));const milkReason=this._milkReason(button.dataset.drink);button.disabled=controlsBlocked||!!this._selection||this._edits.size>0||!!milkReason;button.title=milkReason;});
-      $('#my-recipes').hidden=!this._recipes.length||this._sections.my_recipes==='hidden';
-      this._root.querySelectorAll('[data-recipe]').forEach(button=>{button.setAttribute('aria-pressed',String(Number(button.dataset.recipe)===this._customRecipe?.index));const milkReason=this._milkReason(this._recipes[Number(button.dataset.recipe)]?.base_drink);button.disabled=controlsBlocked||!!this._selection||this._edits.size>0||!!milkReason;button.title=milkReason;});
+      const controlsDirty=this._dirty('controls',recipeRenderKeys,force);
+      if(controlsDirty){
+      this._root.querySelectorAll('[data-drink]').forEach(button=>{const milkReason=this._milkReason(button.dataset.drink);this._setProp(button,'disabled',controlsBlocked||!!this._selection||this._edits.size>0||!!milkReason);const section=button.closest('details');if(this._visible(section.id)){this._setAttr(button,'aria-pressed',String(!this._customRecipe&&button.dataset.drink===selected));this._setProp(button,'title',milkReason||this._holdHint());}});
+      this._setProp($('#my-recipes'),'hidden',!this._recipes.length||this._sections.my_recipes==='hidden');
+      if(this._visible('my-recipes')){
+      this._root.querySelectorAll('[data-recipe]').forEach(button=>{this._setAttr(button,'aria-pressed',String(Number(button.dataset.recipe)===this._customRecipe?.index));const milkReason=this._milkReason(this._recipes[Number(button.dataset.recipe)]?.base_drink);this._setProp(button,'disabled',controlsBlocked||!!this._selection||this._edits.size>0||!!milkReason);this._setProp(button,'title',milkReason||this._holdHint());});
       const catalogue=this._catalogue();
       this._root.querySelectorAll('[data-recipe]').forEach(button=>{
         const recipe=this._recipes[Number(button.dataset.recipe)],errors=catalogue?this._catalogueErrors(recipe,catalogue):[];
-        button.setAttribute('aria-invalid',String(errors.length>0));
+        this._setAttr(button,'aria-invalid',String(errors.length>0));
         let note=button.querySelector('[data-recipe-validation]');if(!note){note=document.createElement('small');note.dataset.recipeValidation='';button.append(note);}
-        note.textContent=errors[0]||'';note.hidden=!errors.length;
-        if(errors.length)button.title=errors.join(' ');
+        this._setText(note,errors[0]||'');this._setProp(note,'hidden',!errors.length);
+        if(errors.length)this._setProp(button,'title',errors.join(' '));
       });
-      this._root.querySelectorAll('[data-count]').forEach(el=>{const state=this._hass.states[this._countEntity(el.dataset.count)]?.state;el.textContent=`${this._format(state)}${el.tagName==='SMALL'?' made':''}`;});
-      set('#selected-name',this._customRecipe?.name||(known(selected)?pretty(selected):'Select a drink'));const loading=!!this._recipeRun||!!this._selection||this._state('recipe_loading')==='on';const source=this._text('recipe_source','Unknown');
+      }
+      }
+      if(this._dirty('counters',['counters','drink'],force))this._root.querySelectorAll('[data-count]').forEach(el=>{const section=el.closest('details');if(section&&!this._visible(section.id))return;const state=this._hass.states[this._countEntity(el.dataset.count)]?.state;this._setText(el,`${this._format(state)}${el.tagName==='SMALL'?' made':''}`);});
+      const catalogueError=this._customRecipe?this._catalogueErrors(this._customRecipe).join(' '):'';
+      const loading=!!this._recipeRun||!!this._selection||this._state('recipe_loading')==='on';
+      if(controlsDirty&&this._visible('recipe')){
+      set('#selected-name',this._customRecipe?.name||(known(selected)?pretty(selected):'Select a drink'));const source=this._text('recipe_source','Unknown');
       set('#recipe-source',loading?'Loading…':source==='Machine'?(this._customRecipe?'Custom recipe':'Machine saved'):source==='Profile defaults'?'Profile defaults':'Source unknown');$('#recipe-source').dataset.fallback=String(source==='Profile defaults'&&!loading);
       set('#modified',this._state('recipe_modified')==='on'?'One-shot changes':'');
       const summary=[];for(const [key,,,label,unit]of numberControls){if(numeric(this._state(key))!==null&&this._bounds(key))summary.push(`${this._format(this._state(key))} ${unit}${key==='water'?'':` ${label.toLowerCase()}`}`);}for(const [key,,,label]of choiceControls){if(known(this._state(key))&&this._choices(key).includes(this._state(key)))summary.push(key==='temperature'?this._state(key):`${label} ${this._state(key)}`);}
-      const catalogueError=this._customRecipe?this._catalogueErrors(this._customRecipe).join(' '):'';
       const failedRecipe=this._customRecipe&&!!(this._recipeError||catalogueError),requested=failedRecipe?Object.entries(this._customRecipe.overrides).map(([field,value])=>`${field}: ${value}`).join(' · '):'';
       set('#recipe-summary',loading?'Reading saved settings…':failedRecipe?`Requested overrides — not ready: ${requested||'None'}`:summary.join(' · ')||'No supported settings available');
       set('#recipe-message',this._recipeRun?'Loading the saved base recipe and applying your overrides…':loading?'Wait for the machine’s recipe to load.':this._customRecipe?`Based on ${pretty(this._customRecipe.base_drink)}. Unspecified settings use the machine-saved recipe; further edits apply to this brew only.`:source==='Profile defaults'?this._text('recipe_status','Machine settings unavailable; using profile defaults.'):this._state('recipe_modified')==='on'?'Changes apply to the next brew only.':'Uses this drink’s saved machine settings.');
       if(failedRecipe&&!loading)set('#recipe-message',`Recipe not ready. The requested values above are not confirmed for brewing. ${source==='Machine'?'Current machine settings':'Current reported settings'}: ${summary.join(' · ')||'unavailable'}. Correct the recipe YAML and select it again, or reset to saved recipe.`);
-      for(const [key]of choiceControls){const choices=this._choices(key),input=$(`[data-input="${key}"]`),show=choices.length>0&&known(this._state(key));$(`[data-control="${key}"]`).hidden=!show;if(show){const html=choices.map(c=>`<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('');if(input.innerHTML!==html)input.innerHTML=html;if(this._root.activeElement!==input)input.value=this._state(key);}input.disabled=controlsBlocked||loading||this._edits.has(key);}
-      for(const [key,,,label,unit]of numberControls){const bounds=this._bounds(key),input=$(`[data-input="${key}"]`),show=!!bounds&&numeric(this._state(key))!==null;$(`[data-control="${key}"]`).hidden=!show;if(show){input.min=bounds.min;input.max=bounds.max;input.step=bounds.step;if(this._root.activeElement!==input)input.value=this._state(key);set(`[data-bounds="${key}"]`,`${bounds.min}–${bounds.max} ${unit} · step ${bounds.step}`);}input.disabled=controlsBlocked||loading||this._edits.has(key);}
-      $('#reset').disabled=controlsBlocked||loading;$('#refresh').disabled=!connected||active;
-      const reason=this._holdBrewPending?'Preparing held drink…':shuttingDown?'Preparing to Switch Off':this._brewReason();$('#brew').disabled=!!reason;$('#brew span').textContent=this._brewLock||pendingCommand(this._state('command_result'))?'Preparing drink…':`Brew ${this._customRecipe?.name||(known(selected)?pretty(selected):'drink')}`;set('#brew-reason',reason);
-      const command=this._text('command_result','');$('#command').hidden=!command||command==='No command';set('#command',command?`${this._text('requested_product','')}${known(this._state('requested_product'))?' · ':''}${command}`:'');
-      $('#acknowledge').hidden=!(this._localUncertain||terminalUncertain(command)&&this._ack!==this._stamp('command_result'));$('#acknowledge').disabled=!connected||status!=='ready'||active||pendingCommand(command);
-      $('#error').hidden=!(this._recipeError||catalogueError||this._writeError);set('#error',this._recipeError||catalogueError||this._writeError);
-      set('#total',`${this._format(this._state('total_products'))} products`);
-      this._root.querySelectorAll('[data-number]').forEach(el=>el.textContent=this._format(this._state(el.dataset.number))+(numeric(this._state(el.dataset.number))!==null?(el.dataset.unit||''):''));
-      this._root.querySelectorAll('[data-meter]').forEach(el=>el.style.width=`${Math.min(100,numeric(this._state(el.dataset.meter))||0)}%`);
-      this._root.querySelectorAll('[data-diagnostic]').forEach(el=>el.textContent=this._text(el.dataset.diagnostic));
+      if(this._visible('adjust')){
+      for(const [key]of choiceControls){const choices=this._choices(key),input=$(`[data-input="${key}"]`),show=choices.length>0&&known(this._state(key));this._setProp($(`[data-control="${key}"]`),'hidden',!show);if(show){const html=choices.map(c=>`<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('');if(input.innerHTML!==html)input.innerHTML=html;if(this._root.activeElement!==input)input.value=this._state(key);}this._setProp(input,'disabled',controlsBlocked||loading||this._edits.has(key));}
+      for(const [key,,,label,unit]of numberControls){const bounds=this._bounds(key),input=$(`[data-input="${key}"]`),show=!!bounds&&numeric(this._state(key))!==null;this._setProp($(`[data-control="${key}"]`),'hidden',!show);if(show){input.min=bounds.min;input.max=bounds.max;input.step=bounds.step;if(this._root.activeElement!==input)input.value=this._state(key);set(`[data-bounds="${key}"]`,`${bounds.min}–${bounds.max} ${unit} · step ${bounds.step}`);}this._setProp(input,'disabled',controlsBlocked||loading||this._edits.has(key));}
+      }
+      }
+      if(controlsDirty){
+      this._setProp($('#reset'),'disabled',controlsBlocked||loading);this._setProp($('#refresh'),'disabled',!connected||active);
+      const reason=this._holdBrewPending?'Preparing held drink…':shuttingDown?'Preparing to Switch Off':this._brewReason();this._setProp($('#brew'),'disabled',!!reason);$('#brew span').textContent=this._brewLock||pendingCommand(this._state('command_result'))?'Preparing drink…':`Brew ${this._customRecipe?.name||(known(selected)?pretty(selected):'drink')}`;set('#brew-reason',reason);
+      const command=this._text('command_result','');this._setProp($('#command'),'hidden',!command||command==='No command');set('#command',command?`${this._text('requested_product','')}${known(this._state('requested_product'))?' · ':''}${command}`:'');
+      this._setProp($('#acknowledge'),'hidden',!(this._localUncertain||terminalUncertain(command)&&this._ack!==this._stamp('command_result')));this._setProp($('#acknowledge'),'disabled',!connected||status!=='ready'||active||pendingCommand(command));
+      this._setProp($('#error'),'hidden',!(this._recipeError||catalogueError||this._writeError));set('#error',this._recipeError||catalogueError||this._writeError);
+      }
+      if(!$('#maintenance').hidden)set('#total',`${this._format(this._state('total_products'))} products`);
+      if(this._visible('maintenance')){
+      this._root.querySelectorAll('[data-number]').forEach(el=>this._setText(el,this._format(this._state(el.dataset.number))+(numeric(this._state(el.dataset.number))!==null?(el.dataset.unit||''):'')));
+      this._root.querySelectorAll('[data-meter]').forEach(el=>{const width=`${Math.min(100,numeric(this._state(el.dataset.meter))||0)}%`;if(el.style.width!==width)el.style.width=width;});
+      }
+      if(this._visible('diagnostics'))this._root.querySelectorAll('[data-diagnostic]').forEach(el=>this._setText(el,this._text(el.dataset.diagnostic)));
     }
   }
   if(!customElements.get('jura-native-card'))customElements.define('jura-native-card',JuraNativeCard);

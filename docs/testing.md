@@ -141,6 +141,16 @@ the release package and checksum manifest.
 
 ## Physical acceptance checks
 
+For card performance regressions, serve the repository (for example,
+`python -m http.server 8765`) and open `card/tests/performance.html` in a browser.
+It adds 10,000 unrelated simulated entities and checks that 100 unrelated updates
+produce no full entity enumeration, DOM mutation or SVG measurement. Progress
+updates must also avoid full enumeration, repeat SVG measurement and recipe-panel
+mutation. Additional checks cover deferred panels, counter rediscovery, explicit
+entity mappings and animation pausing. Timings are diagnostic desktop measurements,
+not promises about Silk or a specific Echo Show. Also run the card, recipes and
+hold-to-brew browser suites before deployment.
+
 1. Confirm model, connected/ready states, alerts and plausible AT counts.
 2. Select each drink you intend to use; compare every supported saved setting
    with the machine screen and inspect source/status/raw on fallback.
