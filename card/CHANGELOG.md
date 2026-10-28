@@ -1,6 +1,6 @@
 # Card changelog
 
-## Unreleased
+## 2.1.10 — profile-aware custom recipes
 
 - Validate all custom recipes when the complete capability catalogue for the
   detected profile arrives, without selecting drinks or changing machine settings.

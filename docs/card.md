@@ -71,7 +71,7 @@ external-component configuration and UART setup are unaffected.
 3. Add a dashboard resource of type **JavaScript module**:
 
    ```text
-   /local/jura-native-card.js?v=2.1.9
+   /local/jura-native-card.js?v=2.1.10
    ```
 
 4. Refresh the browser and add the card YAML.

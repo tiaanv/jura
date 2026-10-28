@@ -1,4 +1,4 @@
-// Jura Native Graphical Card 2.1.9 — native ESPHome entities, no MQTT or external dependencies.
+// Jura Native Graphical Card 2.1.10 — native ESPHome entities, no MQTT or external dependencies.
 (() => {
   const GRAPHIC = /*GRAPHIC*/;
   const STYLES = /*STYLES*/;
