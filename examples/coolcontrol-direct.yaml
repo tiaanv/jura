@@ -1,0 +1,50 @@
+# Direct bridge provider. Keep both devices on a LAN that permits UDP broadcasts.
+esphome:
+  name: jura-coolcontrol-direct
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+external_components:
+- source:
+    type: git
+    url: https://github.com/tiaanv/jura
+    ref: dev
+  refresh: 0s
+  components:
+  - jura_coolcontrol
+logger: null
+api:
+  reboot_timeout: 0s
+wifi:
+  ssid: replace-with-your-network
+  password: replace-with-your-password
+uart:
+  id: cool_uart
+  rx_pin: GPIO20
+  baud_rate: 9600
+jura_coolcontrol:
+  uart_id: cool_uart
+  level:
+    name: Jura Coolcontrol Level
+  temperature:
+    name: Jura Coolcontrol Temperature
+  status:
+    name: Jura Coolcontrol Status
+  online:
+    name: Jura Coolcontrol Online
+  communication_timeout: 10s
+  measurement_timeout: 10s
+  bridge_packet:
+    id: cooler_packet
+    internal: true
+udp:
+  id: cooler_udp
+packet_transport:
+  platform: udp
+  udp_id: cooler_udp
+  update_interval: 5s
+  encryption: replace-with-the-same-private-key-on-both-devices
+  rolling_code_enable: true
+  sensors:
+  - cooler_packet

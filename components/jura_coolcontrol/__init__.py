@@ -19,6 +19,7 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional("level", default={"name": "Milk Level"}): sensor.sensor_schema(unit_of_measurement="%", accuracy_decimals=0),
     cv.Optional("temperature", default={"name": "Milk Temperature"}): sensor.sensor_schema(unit_of_measurement="°C", accuracy_decimals=1),
     cv.Optional("raw_message"): text_sensor.text_sensor_schema(),
+    cv.Optional("bridge_packet"): sensor.sensor_schema().extend({cv.Optional("internal", default=True): cv.boolean}),
     cv.Optional("message_counter"): sensor.sensor_schema(accuracy_decimals=0, icon="mdi:counter").extend({
         cv.Optional("force_update", default=True): cv.boolean,
     }),
@@ -45,6 +46,8 @@ async def to_code(config):
     cg.add(var.set_temperature_sensor(await sensor.new_sensor(config["temperature"])))
     if "raw_message" in config:
         cg.add(var.set_raw_message_sensor(await text_sensor.new_text_sensor(config["raw_message"])))
+    if "bridge_packet" in config:
+        cg.add(var.set_bridge_packet_sensor(await sensor.new_sensor(config["bridge_packet"])))
     if "message_counter" in config:
         cg.add(var.set_message_counter_sensor(await sensor.new_sensor(config["message_counter"])))
     if "status" in config:

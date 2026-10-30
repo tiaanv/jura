@@ -139,6 +139,7 @@ not an ESPHome device configuration.
 | --- | --- |
 | [Hardware and wiring](docs/hardware.md) | Connector reference, RX voltage divider, common ground and power |
 | [Configuration](docs/configuration.md) | Installation, wiring example, options, native controls, Cool Control |
+| [Direct Cool Control bridge](docs/direct-coolcontrol.md) | Optional dev trial: device-to-device UDP, no HA counter or MQTT |
 | [Saved recipes](docs/saved-recipes.md) | Loading, fallback, one-shot edits, API preparation and cancellation |
 | [Graphical card](docs/card.md) | HACS/manual installation, configuration and live screenshots |
 | [Home Assistant](docs/home-assistant.md) | Action YAML, native entity contract and card integration |

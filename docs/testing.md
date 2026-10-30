@@ -160,3 +160,12 @@ hold-to-brew browser suites before deployment.
 5. Test saved/custom API actions separately, following Command Recipe Source,
    Command Result and matching TV progress. Never auto-repeat an unconfirmed brew.
 6. Verify restart and power-cycle recovery with your actual wiring/power setup.
+
+## Direct Cool Control bridge trial
+
+Host integration tests cover source/receiver packet round trips, repeated identical
+heartbeats, network expiry, UART expiry while the sender runs, unknown telemetry,
+malformed/fractional/non-finite values, recovery, override and clock rollover.
+Both encrypted UDP examples pass schema validation and ESPHome source generation
+on 2026.9.1. This does not establish a full firmware build or hardware acceptance;
+see [the hardware checklist](direct-coolcontrol.md#hardware-checks).

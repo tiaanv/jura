@@ -82,7 +82,13 @@ def profile_hint(value):
 
 
 def validate_coolcontrol(config):
-    if config["coalesce_delay"].total_milliseconds >= config["timeout"].total_milliseconds:
+    packet = "packet" in config
+    legacy = [key in config for key in ("raw_message", "message_counter", "online")]
+    if packet and any(legacy):
+        raise cv.Invalid("coolcontrol packet cannot be combined with raw_message, message_counter or online")
+    if not packet and not all(legacy):
+        raise cv.Invalid("coolcontrol requires packet OR all of raw_message, message_counter and online")
+    if not packet and config["coalesce_delay"].total_milliseconds >= config["timeout"].total_milliseconds:
         raise cv.Invalid("coolcontrol coalesce_delay must be shorter than timeout")
     return config
 
@@ -95,9 +101,10 @@ COOLCONTROL_SCHEMA = cv.All(cv.Schema({
                          ("RESTORE_DEFAULT_OFF", "ALWAYS_OFF")}, upper=True),
         }),
     cv.Optional("reporting", default="auto"): cv.one_of("auto", "negotiated", "legacy", lower=True),
-    cv.Required("raw_message"): cv.use_id(text_sensor.TextSensor),
-    cv.Required("message_counter"): cv.use_id(sensor.Sensor),
-    cv.Required("online"): cv.use_id(binary_sensor.BinarySensor),
+    cv.Optional("packet"): cv.use_id(sensor.Sensor),
+    cv.Optional("raw_message"): cv.use_id(text_sensor.TextSensor),
+    cv.Optional("message_counter"): cv.use_id(sensor.Sensor),
+    cv.Optional("online"): cv.use_id(binary_sensor.BinarySensor),
     cv.Optional("timeout", default="15s"): cv.All(cv.positive_not_null_time_period, cv.positive_time_period_milliseconds),
     cv.Optional("coalesce_delay", default="250ms"): cv.positive_time_period_milliseconds,
 }), validate_coolcontrol)
@@ -153,11 +160,15 @@ async def to_code(config):
         cooler = config["coolcontrol"]
         override = await switch.new_switch(cooler["override_switch"])
         cg.add(var.set_coolcontrol_override_switch(override))
-        cg.add(var.set_coolcontrol(await cg.get_variable(cooler["raw_message"]),
-                                  await cg.get_variable(cooler["message_counter"]),
-                                  await cg.get_variable(cooler["online"]),
-                                  cooler["timeout"].total_milliseconds,
-                                  cooler["coalesce_delay"].total_milliseconds, cooler["reporting"]))
+        if "packet" in cooler:
+            cg.add(var.set_coolcontrol_packet(await cg.get_variable(cooler["packet"]),
+                                             cooler["timeout"].total_milliseconds, cooler["reporting"]))
+        else:
+            cg.add(var.set_coolcontrol(await cg.get_variable(cooler["raw_message"]),
+                                      await cg.get_variable(cooler["message_counter"]),
+                                      await cg.get_variable(cooler["online"]),
+                                      cooler["timeout"].total_milliseconds,
+                                      cooler["coalesce_delay"].total_milliseconds, cooler["reporting"]))
     for key in TEXT:
         entity = await text_sensor.new_text_sensor(config[key])
         cg.add(var.register_text(cg.std_string(key), entity))

@@ -31,6 +31,26 @@ bad_coalesce = copy.deepcopy(bridge)
 bad_coalesce["jura_native"]["coolcontrol"]["coalesce_delay"] = "15s"
 variants.append(("native-coolcontrol-invalid-coalesce", bad_coalesce, False))
 
+for name, example in (("direct-cooler-provider", "coolcontrol-direct.yaml"),
+                      ("direct-cooler-consumer", "e8-coolcontrol-direct.yaml")):
+    direct = yaml.safe_load((root / "examples" / example).read_text())
+    direct["external_components"][0]["source"] = {"type": "local", "path": str(root / "components")}
+    variants.append((name, direct, True))
+    if name == "direct-cooler-provider":
+        defaults = copy.deepcopy(direct)
+        del defaults["jura_coolcontrol"]["bridge_packet"]["internal"]
+        variants.append(("direct-cooler-default-internal", defaults, True))
+    if name == "direct-cooler-consumer":
+        fast_timeout = copy.deepcopy(direct)
+        fast_timeout["jura_native"]["coolcontrol"]["timeout"] = "200ms"
+        variants.append(("direct-cooler-no-coalesce", fast_timeout, True))
+        empty = copy.deepcopy(direct)
+        del empty["jura_native"]["coolcontrol"]["packet"]
+        variants.append(("direct-cooler-missing-inputs", empty, False))
+        mixed = copy.deepcopy(direct)
+        mixed["jura_native"]["coolcontrol"]["raw_message"] = "cooler_raw"
+        variants.append(("direct-cooler-mixed-inputs", mixed, False))
+
 short_status = copy.deepcopy(base)
 short_status["jura_native"]["accept_short_status"] = True
 variants.append(("native-five-byte-ef533-status", short_status, True))

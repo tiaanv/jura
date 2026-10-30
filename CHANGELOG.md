@@ -11,6 +11,12 @@
 
 ## Unreleased
 
+- Add an optional direct Cool Control bridge using internal ESPHome packet-transport
+  sensors over UDP. Atomic status/telemetry packets and local receipt freshness
+  remove the HA counter dependency in this mode; the existing HA bridge remains supported.
+- Publish UART unavailability independently of network heartbeats, retain legacy
+  bare statuses and the healthy override, and add paired dev examples and tests.
+
 - End coffee-rinse progress immediately when a fresh complete TF confirms coffee
   ready and the coffee-rinsing flag is cleared, without waiting for a missing
   Finished frame or the progress timeout. Active drinks and other processes retain

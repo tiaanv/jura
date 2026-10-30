@@ -38,7 +38,7 @@ class CoolcontrolBridge {
   std::string input_description() const {
     if (override_) return "manual healthy override; source freshness still monitored";
     if (!source_online_) return "source offline, missing or invalid";
-    if (!fresh_) return coalescing_ ? "waiting for coherent cooler snapshot" : "counter stale; withdrawing with @me1";
+    if (!fresh_) return coalescing_ ? "waiting for coherent cooler snapshot" : "source updates stale; withdrawing with @me1";
     return "fresh cooler snapshot";
   }
   static bool valid(const std::string &s) {

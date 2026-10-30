@@ -1,0 +1,51 @@
+# Direct bridge consumer. No Home Assistant imports or message-counter entity.
+esphome:
+  name: jura-machine-direct
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+external_components:
+- source:
+    type: git
+    url: https://github.com/tiaanv/jura
+    ref: dev
+  refresh: 0s
+  components:
+  - jura_native
+logger: null
+api:
+  reboot_timeout: 0s
+wifi:
+  ssid: replace-with-your-network
+  password: replace-with-your-password
+uart:
+  id: uart_bus
+  tx_pin: GPIO4
+  rx_pin: GPIO3
+  baud_rate: 9600
+  rx_buffer_size: 2048
+jura_native:
+  id: jura_coffee
+  uart_id: uart_bus
+  allow_brew: false
+  allow_power_off: false
+  handshake_response: auto
+  coolcontrol:
+    packet: received_cooler_packet
+    reporting: auto
+    timeout: 15s
+udp:
+  id: machine_udp
+packet_transport:
+  platform: udp
+  udp_id: machine_udp
+  providers:
+  - name: jura-coolcontrol-direct
+    encryption: replace-with-the-same-private-key-on-both-devices
+sensor:
+- platform: packet_transport
+  provider: jura-coolcontrol-direct
+  remote_id: cooler_packet
+  id: received_cooler_packet
+  internal: true

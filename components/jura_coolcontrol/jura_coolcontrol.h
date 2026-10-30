@@ -19,6 +19,7 @@ class JuraCoolcontrol : public PollingComponent, public uart::UARTDevice {
   void set_status_sensor(text_sensor::TextSensor *s) { status_sensor_ = s; }
   void set_raw_message_sensor(text_sensor::TextSensor *s) { raw_message_sensor_ = s; }
   void set_message_counter_sensor(sensor::Sensor *s) { message_counter_sensor_ = s; }
+  void set_bridge_packet_sensor(sensor::Sensor *s) { bridge_packet_sensor_ = s; }
   void set_online_sensor(binary_sensor::BinarySensor *s) { online_sensor_ = s; }
   void set_communication_timeout(uint32_t ms) { communication_timeout_ = ms; }
   void set_measurement_timeout(uint32_t ms) { measurement_timeout_ = ms; }
@@ -66,6 +67,7 @@ class JuraCoolcontrol : public PollingComponent, public uart::UARTDevice {
       last_probe_ = now;
       ++probe_attempts_;
     }
+    publish_packet_(); // Withdraw promptly if recognized UART traffic stops.
   }
   void update() override { publish_(); }
 
@@ -103,6 +105,10 @@ class JuraCoolcontrol : public PollingComponent, public uart::UARTDevice {
       last_measurement_ = millis();
       seen_measurement_ = true;
     }
+    // Atomic v1 packet: magic A, status nibble, then optional level/temperature bytes.
+    const uint32_t code = extended ? (status_ == "mo" ? 5 : 6)
+                                  : status_ == "mo" ? 1 : status_ == "mn" ? 2 : status_ == "me" ? 3 : 4;
+    bridge_packet_ = 0xA00000U | (code << 16) | (extended ? uint32_t((level << 8) | temp) : 0U);
     publish_();
     // Publish the exact accepted payload before its sequence marker. Never synthesize raw frames on expiry.
     if (raw_message_sensor_) raw_message_sensor_->publish_state(line_.substr(0, line_.size() - 2));
@@ -110,12 +116,21 @@ class JuraCoolcontrol : public PollingComponent, public uart::UARTDevice {
     message_counter_ = (message_counter_ + 1U) & 0xFFFFFFU;
     if (message_counter_sensor_) message_counter_sensor_->publish_state(float(message_counter_));
   }
+  void publish_packet_() {
+    if (!bridge_packet_sensor_) return;
+    const bool online = seen_status_ && uint32_t(millis() - last_status_) < communication_timeout_;
+    const float packet = float(online ? bridge_packet_ : 0xA00000U);
+    // Packet transport provides periodic repeats. Only changes trigger immediate sends.
+    if (!bridge_packet_sensor_->has_state() || bridge_packet_sensor_->state != packet)
+      bridge_packet_sensor_->publish_state(packet);
+  }
   void publish_() {
     const uint32_t now = millis();
     // Online means recognized serial traffic, even when the reported status is me1.
     const bool online = seen_status_ && uint32_t(now - last_status_) < communication_timeout_;
     if (!online) seen_measurement_ = false;
     const bool fresh = online && seen_measurement_ && uint32_t(now - last_measurement_) < measurement_timeout_;
+    publish_packet_();
     if (online_sensor_) online_sensor_->publish_state(online);
     if (status_sensor_) status_sensor_->publish_state(online ? status_ : "unknown");
     if (level_) level_->publish_state(fresh ? last_level_ : NAN);
@@ -124,6 +139,8 @@ class JuraCoolcontrol : public PollingComponent, public uart::UARTDevice {
   sensor::Sensor *level_{nullptr}, *temperature_{nullptr};
   text_sensor::TextSensor *status_sensor_{nullptr}, *raw_message_sensor_{nullptr};
   sensor::Sensor *message_counter_sensor_{nullptr};
+  sensor::Sensor *bridge_packet_sensor_{nullptr};
+  uint32_t bridge_packet_{0xA00000U};
   uint32_t message_counter_{0};
   binary_sensor::BinarySensor *online_sensor_{nullptr};
   std::string line_, status_{"unknown"}, probe_text_;

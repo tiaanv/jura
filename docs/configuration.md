@@ -249,11 +249,18 @@ that throttle, average or round this sensor if using it as a heartbeat.
 Polling and timeout expiry do not advance the counter or manufacture raw
 messages. The raw sensor retains the last received payload when offline; consumers
 must check `online` and use their own receive timeout before forwarding it.
-At boot there is no raw message until a valid frame arrives. These entities only
-expose the receiver data; forwarding to `jura_native` is not implemented yet.
+At boot there is no raw message until a valid frame arrives. These entities feed
+the optional Home Assistant bridge described below.
 Home Assistant/API delivery can batch updates, so this is a latest-status and
 liveness interface rather than a guaranteed lossless queue of serial messages.
 
+
+### Direct device-to-device bridge (dev trial)
+
+To avoid HA counter traffic and remove HA from the forwarding path, use the
+[direct UDP bridge](direct-coolcontrol.md). It uses an internal packet sensor,
+periodic heartbeats and local freshness checks, without MQTT. This is an optional
+alternative to the existing HA bridge; both devices need the new dev code.
 
 ### Forwarding Cool Control status to the coffee machine
 

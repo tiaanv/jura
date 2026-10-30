@@ -112,6 +112,14 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
     configure_coolcontrol(timeout, coalesce, reporting);
     cooler_reporting_ = reporting;
   }
+  void set_coolcontrol_packet(sensor::Sensor *packet, uint32_t timeout, const std::string &reporting = "auto") {
+    cooler_packet_ = packet;
+    cooler_timeout_ = timeout;
+    cooler_coalesce_ = 0; // One packet is already a coherent snapshot.
+    cooler_reporting_ = reporting;
+    configure_coolcontrol(timeout, 0, reporting);
+    packet->add_on_raw_state_callback([this](float value) { receive_coolcontrol_packet_(value); });
+  }
   void set_coolcontrol_override_switch(CoolcontrolOverrideSwitch *value) {
     cooler_override_switch_ = value;
     value->set_parent(this);
@@ -135,6 +143,9 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
   void setup() override {
     if (cooler_override_switch_) cooler_override_switch_->restore_state();
     begin(millis());
+    if (cooler_packet_)
+      ESP_LOGD("jura_native", "Cool Control direct packet bridge enabled: reporting=%s, timeout=%u ms",
+               cooler_reporting_.c_str(), unsigned(cooler_timeout_));
     if (cooler_raw_ && cooler_counter_ && cooler_online_)
       ESP_LOGD("jura_native", "Cool Control bridge enabled: reporting=%s, timeout=%u ms, coalesce=%u ms",
                cooler_reporting_.c_str(), unsigned(cooler_timeout_), unsigned(cooler_coalesce_));
@@ -411,6 +422,40 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
       number(std::string(prefix) + "_step", opt.valid() ? float(opt.step) : NAN);
     }
   }
+  void receive_coolcontrol_packet_(float value) {
+    std::string raw;
+    bool online = false;
+    bool valid = std::isfinite(value) && value >= 0 && value <= 16777215 && std::floor(value) == value;
+    if (valid) {
+      const auto packed = uint32_t(value);
+      const auto code = (packed >> 16) & 15U;
+      const auto payload = packed & 0xFFFFU;
+      valid = (packed & 0xF00000U) == 0xA00000U && code <= 6 && (code >= 5 || payload == 0);
+      if (valid && code >= 5) {
+        const auto level = (payload >> 8) & 255U;
+        valid = level <= 100 || level == 255;
+        raw = std::string(code == 5 ? "@mo:" : "@mn:") + hexbyte_(level) + hexbyte_(payload & 255U);
+      } else if (valid && code != 0) {
+        raw = code == 1 ? "@mo" : code == 2 ? "@mn" : code == 3 ? "@me" : "@me1";
+      }
+      online = valid && code != 0;
+    }
+    // This local receipt sequence never becomes a Home Assistant entity. Repeated
+    // values still refresh liveness; merely reading a retained state never does.
+    cooler_packet_sequence_ = (cooler_packet_sequence_ + 1U) & 0xFFFFFFU;
+    coolcontrol_snapshot(raw, float(cooler_packet_sequence_), online, millis());
+    if (!cooler_packet_logged_ || value != cooler_packet_logged_value_ ||
+        uint32_t(millis() - cooler_packet_logged_at_) >= 5000) {
+      trace(std::string("Cool Control direct packet: ") + (valid ? (online ? raw : "source UART offline") : "invalid; source unavailable"));
+      cooler_packet_logged_ = true;
+      cooler_packet_logged_value_ = value;
+      cooler_packet_logged_at_ = millis();
+    }
+  }
+  sensor::Sensor *cooler_packet_{nullptr};
+  uint32_t cooler_packet_sequence_{0}, cooler_packet_logged_at_{0};
+  bool cooler_packet_logged_{false};
+  float cooler_packet_logged_value_{NAN};
   std::string cooler_reporting_{"auto"};
   text_sensor::TextSensor *cooler_raw_{nullptr};
   sensor::Sensor *cooler_counter_{nullptr};
