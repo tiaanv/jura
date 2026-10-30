@@ -167,5 +167,12 @@ Host integration tests cover source/receiver packet round trips, repeated identi
 heartbeats, network expiry, UART expiry while the sender runs, unknown telemetry,
 malformed/fractional/non-finite values, recovery, override and clock rollover.
 Both encrypted UDP examples pass schema validation and ESPHome source generation
-on 2026.9.1. This does not establish a full firmware build or hardware acceptance;
-see [the hardware checklist](direct-coolcontrol.md#hardware-checks).
+on 2026.9.1. Owner-supplied ESPHome 2026.10.1 logs on the E8 EF533M V02.09
+show accepted direct packets and forwarding of `@mn`/`@mo`, with corresponding
+machine milk alerts changing. Paired broadcast logs showed approximately 34–37
+seconds between matching send/receive timestamps on that network. The owner
+confirmed very fast status updates with no noticeable delay after switching the
+cooler to unicast. This is network-specific evidence, not a universal broadcast
+limitation. Network/UART expiry, reboot order and HA-independent operation still
+need hardware acceptance; see [the checklist](direct-coolcontrol.md#hardware-checks)
+and [optional unicast workaround](direct-coolcontrol.md#optional-workaround-for-delayed-broadcasts).

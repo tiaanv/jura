@@ -40,6 +40,9 @@ jura_coolcontrol:
     internal: true
 udp:
   id: cooler_udp
+  # Optional if your network delays broadcasts; reserve the machine ESP's IP.
+  # addresses:
+  #   - 192.168.1.50  # Replace with your machine ESP's address.
 packet_transport:
   platform: udp
   udp_id: cooler_udp

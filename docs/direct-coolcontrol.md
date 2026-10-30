@@ -4,7 +4,8 @@ The optional direct bridge sends cooler snapshots between ESPHome devices over
 [ESPHome UDP packet transport](https://esphome.io/components/packet_transport/).
 Home Assistant and MQTT are not in the forwarding path. Both devices still use
 Wi-Fi and must be able to exchange local UDP traffic. This mode needs ESPHome
-2026.9.1 or later and is awaiting hardware testing.
+2026.9.1 or later. An E8 EF533M V02.09 owner has confirmed fast status updates
+using unicast; the remaining failure/recovery checks below still need hardware testing.
 
 ## Configure the two devices
 
@@ -35,8 +36,44 @@ Both examples use `ref: dev` for this trial.
 
 The examples use encrypted LAN broadcasts and enable rolling codes at the sender.
 A router or access point with client isolation, separate VLANs or blocked UDP
-broadcasts will prevent delivery. More specific UDP addressing can be configured
-using ESPHome's UDP options when needed. No port forwarding is required.
+broadcasts will prevent delivery. Broadcast remains the default and does not
+require reserved IP addresses. No port forwarding is required.
+
+### Optional workaround for delayed broadcasts
+
+Some networks may delay broadcast delivery. On one tested Wi-Fi network, paired
+logs showed an approximately 34–37 second timestamp gap between matching outgoing
+and received packets. The owner reported that changing to unicast made status
+updates very fast with no noticeable delay. This points to that network's
+broadcast delivery path; it does not establish a general problem with broadcast
+on all networks or identify the exact access-point behaviour.
+
+If the cooler changes status promptly but the machine receives older statuses
+for several seconds, try sending directly to the coffee-machine ESP's IP. In the
+**cooler device's existing** UDP block, add `addresses`:
+
+```yaml
+udp:
+  id: cooler_udp
+  addresses:
+    - 192.168.1.50  # Replace with your coffee-machine ESP's IPv4 address.
+```
+
+Leave the machine's UDP listener, provider name, encryption key and packet sensor
+IDs unchanged. Rebuild and flash the cooler after this change. The receiver does
+not need to transmit packets back for the supplied rolling-code configuration.
+
+The numeric destination must remain stable: reserve the coffee-machine ESP's
+address in your DHCP server, or use a correctly configured static address. Only
+the receiver needs a stable IP for this one-way setup; the cooler can keep normal
+DHCP. If the receiver's IP changes, update `addresses` and reflash the cooler.
+This is an optional workaround, not a requirement for broadcast installations.
+
+For troubleshooting, compare logs on both devices and observe the machine's
+actual response. Unchanged packet messages in the Jura DEBUG log are rate-limited
+to roughly once per five seconds; a missing DEBUG line alone does not prove a
+missed packet. Restore ordinary DEBUG/INFO logging after testing, since global
+VERY_VERBOSE logging can affect timing.
 
 Both examples set `api.reboot_timeout: 0s` so loss of Home Assistant does not cause
 an API-client watchdog reboot. Wi-Fi itself remains necessary. Normal temperature,
