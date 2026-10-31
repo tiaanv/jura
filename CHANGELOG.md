@@ -2,11 +2,18 @@
 
 ## Unreleased
 
+Changes after components-v1.1.0 will be recorded here.
+
+## Components 1.1.0 — 2026-10-31
+
+See [release notes](docs/releases/components-v1.1.0.md) for configuration,
+compatibility and validation details.
+
 - Add an optional direct Cool Control bridge using internal ESPHome packet-transport
   sensors over UDP. Atomic status/telemetry packets and local receipt freshness
   remove the HA counter dependency in this mode; the existing HA bridge remains supported.
 - Publish UART unavailability independently of network heartbeats, retain legacy
-  bare statuses and the healthy override, and add paired dev examples and tests.
+  bare statuses and the healthy override, and add paired examples and tests.
 - Document optional unicast with a reserved receiver IP for networks where
   broadcast delivery is delayed; broadcast remains the default.
 
