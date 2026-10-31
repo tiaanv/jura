@@ -10,7 +10,21 @@ A component release does not release a new card or change its version.
 
 ## Installing and updating
 
-Pin both devices to the same component release when using the cooler bridge:
+Pinning to a release tag is **optional**. Existing configurations using a branch
+can continue using it; creating releases does not require a YAML migration.
+Choose the source with `ref`:
+
+| Source | Behaviour |
+| --- | --- |
+| `ref: main` | Follows stable development, including changes between releases. |
+| `ref: dev` | Follows development features and hardware testing changes. |
+| `ref: components-v1.0.0` | Stays on the fixed 1.0.0 source snapshot until you change the tag. |
+
+For the direct UDP Cool Control bridge currently on dev, keep `ref: dev` on both
+devices: that feature is not included in components-v1.0.0. Prefer matching refs
+on the machine and cooler when using a bridge.
+
+The following example shows the optional fixed-release choice:
 
 ```yaml
 external_components:
@@ -21,14 +35,16 @@ external_components:
     components: [jura_native]
 ```
 
-On the cooler device, use `components: [jura_coolcontrol]` with the same tag.
+On the cooler device, use `components: [jura_coolcontrol]` with the same ref.
 Retain the rest of your existing configuration. Change the tag deliberately,
 validate the YAML and rebuild/upload each affected device to update. To roll
 back, restore the previous tag and its compatible YAML, then rebuild/upload.
 
 `main` follows stable development and can change between releases; `dev` is for
 new features and hardware testing. Tags provide reproducible source snapshots,
-not precompiled device firmware or a pinned ESPHome toolchain.
+not precompiled device firmware or a pinned ESPHome toolchain. Following a branch
+does not automatically update a running device: refresh the external component
+source as needed, then rebuild and upload to apply source changes.
 
 ## Version policy
 
