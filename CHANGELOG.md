@@ -1,5 +1,16 @@
 # Change log
 
+## Unreleased
+
+Changes after components-v1.0.0 will be recorded here.
+
+## Components 1.0.0 — 2026-10-31
+
+First tagged stable baseline for `jura_native` and `jura_coolcontrol` together.
+See [release notes](docs/releases/components-v1.0.0.md) for features, compatibility,
+upgrade guidance and validation limits. Earlier development entries below are
+historical; their Unreleased heading predates this baseline.
+
 ## 0.3.3 (dev)
 
 - Auto handshake response now uses challenge byte length: 3 bytes → `818000`,
