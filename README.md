@@ -3,6 +3,8 @@
 Monitor and prepare Jura drinks through Home Assistant using ESPHome's native
 API. MQTT is not required. The `main` branch contains both `jura_native` and legacy `jura`;
 its current component version is recorded in [VERSION](VERSION).
+For stable installations, pin a [component release](docs/releases.md) rather than
+following a moving branch. Component and card releases are independent.
 
 > **Unofficial project — use at your own risk.** This independent community
 > project is not affiliated with, endorsed by, sponsored by, or supported by
@@ -96,7 +98,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/tiaanv/jura
-      ref: main
+      ref: components-v1.0.0
     refresh: 0s
     components: [jura_native]
 ```
