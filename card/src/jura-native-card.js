@@ -119,7 +119,7 @@
   class JuraNativeCard extends HTMLElement {
     constructor(){ super();this.attachShadow({mode:'open'});this._timers=new Set();this._edits=new Map();this._selection=null;this._brewLock=false;this._writeError=''; }
     setConfig(config){
-      const defaults={my_recipes:'expanded',choose_a_drink:'expanded',more_drinks:'collapsed',brew:'expanded',maintenance:'collapsed',diagnostics:'collapsed'};
+      const defaults={machine:'expanded',my_recipes:'expanded',choose_a_drink:'expanded',more_drinks:'collapsed',brew:'expanded',maintenance:'collapsed',diagnostics:'collapsed'};
       if(config.sections!==undefined&&(!config.sections||typeof config.sections!=='object'||Array.isArray(config.sections)))throw new Error('sections must be a mapping');
       for(const [key,value]of Object.entries(config.sections||{}))if(!(key in defaults)||!['expanded','collapsed','hidden'].includes(value))throw new Error('Invalid section setting: '+key+' (use expanded, collapsed or hidden)');
       this._sections={...defaults,...config.sections};
@@ -172,7 +172,7 @@
       if(!this._visibilityObserver&&typeof IntersectionObserver!=='undefined'){this._visibilityObserver=new IntersectionObserver(entries=>{this._onScreen=entries[0]?.isIntersecting!==false;this._motion();});this._visibilityObserver.observe(this);}
       this._motion();
     }
-    _motion(){if(this._card){const mode=this._config.animations===false||document.hidden||this._onScreen===false?'paused':'running';if(this._card.dataset.motion!==mode)this._card.dataset.motion=mode;}}
+    _motion(){if(this._card){const machine=this._root.querySelector('#machine'),mode=this._config.animations===false||document.hidden||this._onScreen===false||machine&&(!machine.open||machine.hidden)?'paused':'running';if(this._card.dataset.motion!==mode)this._card.dataset.motion=mode;}}
     _later(fn,delay){const id=setTimeout(()=>{this._timers.delete(id);fn();},delay);this._timers.add(id);return id;}
     _entity(key){return this._hass?.states?.[this._entities[key]];}
     _state(key){return this._entity(key)?.state;}
@@ -182,12 +182,15 @@
     _info(key){const entityId=this._entities[key];if(this._hass?.states?.[entityId])this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId},bubbles:true,composed:true}));}
     _build(){
       this.shadowRoot.innerHTML=`<style>${STYLES}</style><ha-card class="jura-card">
+       <details id="machine" aria-label="Machine status"><summary aria-label="Machine status and display"><div class="machine-heading">
        <header><div><strong>${escapeHTML(this._config.name)}</strong><span class="subtitle">Coffee station</span></div><span class="status"><span class="dot"></span><span id="status">Connecting</span></span></header>
        <div id="detail" class="status-detail" role="status"></div><div id="alerts" class="alert-banner" hidden></div>
+       </div></summary><div class="machine-content">
        <div class="machine-stage">${GRAPHIC}</div>
        <section id="operation" class="operation" hidden aria-label="Observed machine operation"><div class="operation-heading"><strong id="actual-product"></strong><span id="overall"></span></div><div class="phase-row"><span id="phase"></span><span id="stage"></span></div><div id="progress-track" class="progress-track" role="progressbar" aria-label="Overall drink progress" aria-valuemin="0" aria-valuemax="100"><div id="progress-fill"></div></div></section>
        <div class="readings">${this._reading('water_tank_status','water-check','Water')}${this._reading('tray_status','tray','Tray')}${this._reading('empty_grounds','hockey-puck','Grounds')}${this._reading('no_beans','seed-outline','Beans')}${this._cooler?this._reading('milk_level','water-percent','Milk'):''}</div>
        <section id="cooler-override" class="cooler-override" hidden><div><strong id="cooler-override-label">Ignore milk cooler fault</strong><p id="cooler-override-help"></p></div><button id="cooler-override-toggle" type="button" role="switch" aria-label="Ignore milk cooler fault" aria-checked="false"><span></span></button></section>
+       </div></details>
        <details id="my-recipes" class="drink-section section-disclosure" hidden aria-label="My Recipes"><summary class="section-label">MY RECIPES<span>${this._config.hold_to_brew?'Tap or hold to brew':'Select, then brew'}</span></summary><div id="recipe-tiles" class="drink-tiles">${this._recipes.map((recipe,index)=>`<button class="drink-tile" data-recipe="${index}" aria-label="Select ${escapeHTML(recipe.name)}" aria-pressed="false">${cup(recipe.base_drink)}<span>${escapeHTML(recipe.name)}</span><small>Based on ${escapeHTML(pretty(recipe.base_drink))}</small></button>`).join('')}</div></details>
        <details id="choose-a-drink" class="drink-section section-disclosure" aria-label="Drink selection"><summary class="section-label">CHOOSE A DRINK<span>${this._config.hold_to_brew?'Tap or hold to brew':'Select, then brew'}</span></summary><div id="drink-tiles" class="drink-tiles"></div></details>
        <details id="more-drinks" class="more-drinks-section" aria-label="More drinks"><summary>More drinks<span id="more-count"></span></summary><div id="extra-tiles" class="drink-tiles"></div></details>
@@ -197,10 +200,11 @@
       </ha-card>`;
       this._root=this.shadowRoot;this._card=this._root.querySelector('ha-card');this._nodes=new Map();
       this._motion();
-      this._root.querySelectorAll('details').forEach(el=>el.addEventListener('toggle',()=>{if(el.open)this._update(true);}));
+      this._root.querySelectorAll('details').forEach(el=>el.addEventListener('toggle',()=>{this._motion();if(el.open)this._update(true);}));
       this._root.addEventListener('click',event=>{const node=event.target.closest('[data-info]');if(node)this._info(node.dataset.info);});
       this._root.querySelectorAll('[data-recipe]').forEach(button=>this._bindDrinkButton(button,'recipe',Number(button.dataset.recipe)));
-      for(const [key,id]of Object.entries({my_recipes:'my-recipes',choose_a_drink:'choose-a-drink',more_drinks:'more-drinks',brew:'recipe',maintenance:'maintenance',diagnostics:'diagnostics'})){const section=this._root.querySelector('#'+id);section.hidden=this._sections[key]==='hidden';section.open=this._sections[key]==='expanded';}
+      for(const [key,id]of Object.entries({machine:'machine',my_recipes:'my-recipes',choose_a_drink:'choose-a-drink',more_drinks:'more-drinks',brew:'recipe',maintenance:'maintenance',diagnostics:'diagnostics'})){const section=this._root.querySelector('#'+id);section.hidden=this._sections[key]==='hidden';section.open=this._sections[key]==='expanded';}
+      this._motion();
       this._root.querySelector('#cooler-override-toggle').addEventListener('click',()=>this._toggleCoolerOverride());
       this._root.querySelector('#brew').addEventListener('click',()=>this._brew());
       this._root.querySelector('#reset').addEventListener('click',()=>this._reset());
@@ -210,6 +214,7 @@
       if(!this._cooler)this._root.querySelectorAll('.cooler,.milk-part').forEach(el=>el.setAttribute('display','none'));
     }
     _screenText(value){
+      if(!this._visible('machine'))return;
       if(this._screenValue===value)return;this._screenValue=value;
       const el=this._root.querySelector('#jura-screen-status'),text=String(value||''),ns='http://www.w3.org/2000/svg';
       el.setAttribute('aria-label',text);

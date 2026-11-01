@@ -336,10 +336,11 @@ can persist across device restarts. See the [component override documentation](c
 
 ## Section visibility and initial state
 
-All six sections can start expanded, collapsed, or be completely hidden:
+All seven sections can start expanded, collapsed, or be completely hidden:
 
 ```yaml
 sections:
+  machine: expanded
   my_recipes: expanded
   choose_a_drink: expanded
   more_drinks: collapsed
@@ -349,6 +350,14 @@ sections:
 ```
 
 These are the defaults, so existing card configurations need no changes.
+`machine` controls the machine/status area. Expanded shows the current full
+display. Collapsed keeps the heading, connection/readiness badge, status message
+and alerts, while hiding the illustration, operation/progress panel, sensor
+readings and milk-cooler override control. Hidden removes the entire machine/status
+area. Click its heading to expand/collapse it. Brewing safeguards remain active
+in every mode; when collapsed, decorative machine animations pause and SVG text
+layout is deferred until expansion.
+
 `brew` controls the **Brew Settings** section, including the selected recipe,
 adjustments and Brew button. `maintenance` controls **Maintenance & totals**.
 My Recipes remains hidden when no custom recipes are configured. More drinks
@@ -370,7 +379,7 @@ the initial state; rebuilding the card or reloading the dashboard reapplies the
 configured defaults. Hidden sections have no visible heading or content.
 Hiding or collapsing a section sends no commands to the machine. It does not
 cancel a drink request already in progress. To display only machine monitoring,
-set all six sections to `hidden`.
+keep `machine: expanded` and set the other six sections to `hidden`.
 
 Only `expanded`, `collapsed` and `hidden` are accepted. Unknown section names,
 invalid values and non-mapping `sections` settings produce a configuration error.

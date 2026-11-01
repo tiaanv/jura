@@ -37,3 +37,4 @@ details{border-top:1px solid var(--line)}summary{list-style:none;display:flex;ju
 .screen-brand{fill:var(--text);stroke:none}
 .drink-tile[aria-invalid=true]{border-color:var(--warn)}.drink-tile [data-recipe-validation]{color:var(--warn);white-space:normal;overflow-wrap:anywhere}
 .jura-card[data-motion=paused] .machine-stage *{animation-play-state:paused!important}.jura-card[data-motion=paused] .machine-stage .shell>path,.jura-card[data-motion=paused] .machine-stage .coffee-part,.jura-card[data-motion=paused] .machine-stage .shell>rect{filter:none!important}
+#machine{border:0;margin:0;padding:0}#machine>summary{padding:0;align-items:flex-start;color:var(--text)}#machine>summary:after{margin-top:2px;flex-shrink:0;color:var(--muted)}.machine-heading{flex:1;min-width:0}.machine-content{padding-top:0}

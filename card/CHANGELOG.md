@@ -1,5 +1,12 @@
 # Card changelog
 
+## Unreleased
+
+- Add `sections.machine` with expanded (default), collapsed and hidden modes.
+  Collapsed keeps the machine heading, readiness and messages; hidden removes
+  the whole machine/status area. Drink controls and brewing safeguards remain
+  independent. Pause machine effects and defer SVG text layout while collapsed.
+
 ## 2.1.11 — faster dashboards and configurable hold-to-brew
 
 - Default hold-to-brew to 1 second, with configurable `hold_to_brew_seconds`
