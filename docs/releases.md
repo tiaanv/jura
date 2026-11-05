@@ -2,11 +2,18 @@
 
 `jura_native` and `jura_coolcontrol` share a release version, recorded in the root
 [VERSION](../VERSION). Stable releases have immutable `components-vX.Y.Z` tags
-and matching GitHub Releases. The legacy `jura` source remains available in the
+and release notes in [this release index](#releases). The legacy `jura` source remains available in the
 same repository snapshot; migration is optional.
 
 The card retains its own version in `card/VERSION`, changelog and release tags.
 A component release does not release a new card or change its version.
+
+**GitHub Releases are reserved for the card.** HACS selects the first eligible
+release in the repository release list, regardless of tag prefix or GitHub's
+Latest designation. Component versions use Git tags and repository release notes
+only, so they do not appear as card updates. `make_latest: false` does not prevent
+HACS from offering a release. The former component GitHub Release entries were
+removed; their immutable tags and release notes remain available.
 
 ## Installing and updating
 
@@ -67,12 +74,14 @@ major versions. Pre-release testing can use `components-v1.1.0-rc.1` tags.
 4. Run the relevant regression suites, schema/code-generation checks for changed
    schemas, documentation checks and checksum refresh. Preserve contributor
    notices and the disclaimer. Commit the reviewed release preparation to main.
-5. Tag that exact commit `components-vX.Y.Z`; never move a published tag. Publish
-   a GitHub Release using the reviewed notes. GitHub's source archives are enough
-   for external_components; no card bundle or generic firmware binary is needed.
-6. Publish component releases with `make_latest: false`. Keep the card release as
-   GitHub's Latest release for HACS. Publish card updates separately with their
-   existing tags/assets; do not reuse the component version for the card.
+5. Tag that exact commit `components-vX.Y.Z`; never move a published tag. Link the
+   reviewed notes from the release index below. Do not create a GitHub Release
+   entry for a component tag. Tags provide source snapshots for external_components;
+   no card bundle or generic firmware binary is needed.
+6. Publish card updates separately as GitHub Releases with their existing
+   tags/assets; do not reuse the component version for the card. Do not mark
+   component versions as prereleases to hide them: beta-enabled HACS users would
+   still see them.
 
 ## Releases
 

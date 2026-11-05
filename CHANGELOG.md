@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-Changes after components-v1.1.0 will be recorded here.
+- Reserve GitHub Releases for the card to prevent component versions appearing
+  as HACS card updates. Component tags and repository release notes remain
+  available; ESPHome source refs do not need to change.
 
 ## Components 1.1.0 — 2026-10-31
 
