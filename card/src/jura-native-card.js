@@ -389,7 +389,7 @@
         const errors=this._recipeValidationErrors(recipe);
         if(errors.length)throw new Error(errors.join(' '));
         for(const {key,value}of edits){
-          if(String(this._state(key))===value)continue;
+          if(this._sameValue(key,value))continue;
           await this._edit(key,value);
           if(this._editUnconfirmed||this._writeError)throw new Error(this._writeError||'Could not apply the recipe.');
           await this._waitRecipe(()=>!this._edits.has(key),run,11000);
@@ -453,6 +453,8 @@
       });
     }
     _bounds(key){const min=numeric(this._state(`${key}_min`)),max=numeric(this._state(`${key}_max`)),step=numeric(this._state(`${key}_step`));return min!==null&&max!==null&&step!==null&&step>0&&max>=min?{min,max,step}:null;}
+    // HA reports number entities as "100.0" while recipes and edits use "100".
+    _sameValue(key,value){const state=this._state(key),wanted=String(value);return String(state)===wanted||numeric(state)!==null&&numeric(wanted)!==null&&Number(state)===Number(wanted);}
     _choices(key){const spec=choiceControls.find(x=>x[0]===key);return spec?String(this._state(spec[2])||'').split('|').map(s=>s.trim()).filter(known):[];}
     async _edit(key,value){
       if(this._selection||this._state('recipe_loading')!=='off'||this._state('status')!=='ready'||this._state('connected')!=='on'||pendingCommand(this._state('command_result'))||this._brewLock)return;
@@ -464,7 +466,8 @@
       const expected=choice?value:String(number);this._edits.set(key,expected);this._writeError='';this._update(true);
       const ok=await this._service(choice?'select':'number',choice?'select_option':'set_value',key,choice?{option:value}:{value:number});
       if(!ok){this._edits.delete(key);this._editUnconfirmed=true;this._update(true);return;}
-      this._later(()=>{if(this._edits.get(key)===expected){this._edits.delete(key);this._editUnconfirmed=true;this._writeError='Setting change unconfirmed. Reset the recipe before brewing.';this._update(true);}},10000);
+      // A write that matches the current value produces no state change, so re-read before failing.
+      this._later(()=>{if(this._edits.get(key)===expected&&this._sameValue(key,expected)){this._edits.delete(key);this._update(true);return;}if(this._edits.get(key)===expected){this._edits.delete(key);this._editUnconfirmed=true;this._writeError='Setting change unconfirmed. Reset the recipe before brewing.';this._update(true);}},10000);
     }
     async _toggleCoolerOverride(){
       const state=this._state('coolcontrol_override');
@@ -524,7 +527,7 @@
         if(this._state('recipe_loading')==='on')this._selection.sawLoading=true;
         if(this._state('drink')===this._selection.name&&this._state('recipe_loading')==='off'&&(this._selection.sawLoading||!this._selection.requireFresh&&this._text('recipe_status','')===`Saved recipe loaded for ${this._selection.name}`||this._stamp('recipe_status')!==this._selection.recipeStamp))this._selection=null;
       }
-      for(const [key,expected]of this._edits){if(String(this._state(key))===expected||numeric(this._state(key))!==null&&String(Number(this._state(key)))===expected)this._edits.delete(key);}
+      for(const [key,expected]of this._edits){if(this._sameValue(key,expected))this._edits.delete(key);}
       const observedProduct=this._text('current_product','');
       if(!active||this._phaseProduct!==observedProduct||/grinding/i.test(phase))this._coffeeBeforeMilk=false;
       if(active&&phase==='Dispensing water (milk drink)')this._coffeeBeforeMilk=true;
@@ -580,7 +583,7 @@
       const level=numeric(this._state('milk_level')),height=level===null?0:43*Math.min(100,level)/100;this._setAttr($('#jura-milk-fill'),'height',height);this._setAttr($('#jura-milk-fill'),'y',231-height);
       this._card.classList.toggle('tank-alert',connected&&!stale&&this._state('fill_water')==='on');this._card.classList.toggle('tray-alert',connected&&!stale&&(this._state('insert_tray')==='on'||this._state('empty_tray')==='on'));this._card.classList.toggle('beans-alert',connected&&!stale&&this._state('no_beans')==='on');
       this._renderTiles();const selected=this._state('drink');
-      if(this._customRecipe&&!this._recipeRun&&!this._selection&&!this._recipeError&&(selected!==this._customRecipe.base_drink||this._state('recipe_modified')==='off'&&Object.entries(this._customRecipe.overrides).some(([field,value])=>String(this._state(recipeKeys[field]))!==String(value)))){this._customRecipe=null;this._recipeError='';}
+      if(this._customRecipe&&!this._recipeRun&&!this._selection&&!this._recipeError&&(selected!==this._customRecipe.base_drink||this._state('recipe_modified')==='off'&&Object.entries(this._customRecipe.overrides).some(([field,value])=>!this._sameValue(recipeKeys[field],value)))){this._customRecipe=null;this._recipeError='';}
       if(this._hold&&(active||!connected||stale||status!=='ready'))this._cancelHold();
       const controlsBlocked=!!this._holdBrewPending||!!this._recipeRun||shuttingDown||!connected||status!=='ready'||this._brewLock||pendingCommand(this._state('command_result'));
       const controlsDirty=this._dirty('controls',recipeRenderKeys,force);
