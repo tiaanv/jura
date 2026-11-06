@@ -48,6 +48,7 @@ setup({}, {hold_to_brew_seconds:1.8});b=$('[data-drink="Espresso"]');start=calls
 setup({}, {hold_to_brew_seconds:0.4});b=$('[data-recipe="0"]');check('Custom recipe tiles share the configured fractional duration',b.style.getPropertyValue('--jura-hold-duration')==='0.4s'&&b.title.includes('0.4 seconds'));start=calls.length;fire(b,'pointerdown');await pause(150);fire(b,'pointercancel');await pause(400);check('Cancellation also works with a fractional duration',calls.length===start);
 let badDuration=0;for(const hold_to_brew_seconds of [0,-1,61,null,'2',NaN,Infinity]){try{card.setConfig({hold_to_brew_seconds});}catch{badDuration++;}}check('Invalid hold durations are rejected',badDuration===7);
 card.setConfig({hold_to_brew_seconds:2});machine();check('Duration alone never enables hold-to-brew',!$('[data-drink="Espresso"]').classList.contains('hold-enabled'));
+const savedFlat={water:flat.water,milk:flat.milk};Object.assign(flat,{water:'100.0',milk:'22.0'});setup();b=$('[data-recipe="0"]');start=calls.length;fire(b,'pointerdown');await pause(1800);fire(b,'pointerup');b.click();const same=calls.slice(start);check('Recipe equal to HA float-formatted baseline skips writes and brews once',!same.some(c=>c.domain==='number')&&same.filter(c=>c.data.entity_id===card._entities.brew).length===1&&!card._editUnconfirmed);Object.assign(flat,savedFlat);
 setup();report.textContent=checks.join('\n');
 }catch(error){report.textContent=checks.join('\n')+'\nFAIL '+error.stack;}}
 holdTests();
