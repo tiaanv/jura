@@ -453,8 +453,13 @@
       });
     }
     _bounds(key){const min=numeric(this._state(`${key}_min`)),max=numeric(this._state(`${key}_max`)),step=numeric(this._state(`${key}_step`));return min!==null&&max!==null&&step!==null&&step>0&&max>=min?{min,max,step}:null;}
-    // HA reports number entities as "100.0" while recipes and edits use "100".
-    _sameValue(key,value){const state=this._state(key),wanted=String(value);return String(state)===wanted||numeric(state)!==null&&numeric(wanted)!==null&&Number(state)===Number(wanted);}
+    _sameValue(key,value){
+      const state=this._state(key),wanted=String(value);
+      if(String(state)===wanted)return true;
+      if(!numberControls.some(([control])=>control===key))return false;
+      const current=numeric(state);
+      return current!==null&&current===numeric(wanted);
+    }
     _choices(key){const spec=choiceControls.find(x=>x[0]===key);return spec?String(this._state(spec[2])||'').split('|').map(s=>s.trim()).filter(known):[];}
     async _edit(key,value){
       if(this._selection||this._state('recipe_loading')!=='off'||this._state('status')!=='ready'||this._state('connected')!=='on'||pendingCommand(this._state('command_result'))||this._brewLock)return;
@@ -463,11 +468,20 @@
         const input=this._root.querySelector(`[data-input="${key}"]`);if(input)input.value=this._state(key);
         this._writeError='Choose a supported value within this drink’s range and step.';this._update(true);return;
       }
-      const expected=choice?value:String(number);this._edits.set(key,expected);this._writeError='';this._update(true);
+      const expected=choice?value:String(number);
+      if(this._sameValue(key,expected))return;
+      this._edits.set(key,expected);this._writeError='';this._update(true);
       const ok=await this._service(choice?'select':'number',choice?'select_option':'set_value',key,choice?{option:value}:{value:number});
       if(!ok){this._edits.delete(key);this._editUnconfirmed=true;this._update(true);return;}
-      // A write that matches the current value produces no state change, so re-read before failing.
-      this._later(()=>{if(this._edits.get(key)===expected&&this._sameValue(key,expected)){this._edits.delete(key);this._update(true);return;}if(this._edits.get(key)===expected){this._edits.delete(key);this._editUnconfirmed=true;this._writeError='Setting change unconfirmed. Reset the recipe before brewing.';this._update(true);}},10000);
+      this._later(()=>{
+        if(this._edits.get(key)!==expected)return;
+        this._edits.delete(key);
+        if(!this._sameValue(key,expected)){
+          this._editUnconfirmed=true;
+          this._writeError='Setting change unconfirmed. Reset the recipe before brewing.';
+        }
+        this._update(true);
+      },10000);
     }
     async _toggleCoolerOverride(){
       const state=this._state('coolcontrol_override');
