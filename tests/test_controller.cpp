@@ -825,8 +825,10 @@ static void test_saved_selected_recipes() {
   assert(m.dev.texts["recipe_source"] == "Machine");
   assert(m.dev.selected_values()[STRENGTH] == 6 && m.dev.selected_values()[WATER] == 45);
   assert(m.dev.bins["recipe_loading"] == 0 && m.dev.bins["recipe_modified"] == 0);
+  const auto initial_reads = m.count("@TM:41,02");
   assert(m.dev.choose("Espresso"));
-  assert(!m.dev.brew_selected());  // Don't silently brew defaults while loading.
+  assert(m.dev.bins["recipe_loading"] == 0);
+  assert(m.count("@TM:41,02") == initial_reads);
   assert(m.dev.set_parameter(WATER, 60));
   m.tick(2000);
   assert(m.dev.selected_values()[WATER] == 60 && m.dev.selected_values()[STRENGTH] == 6);
@@ -854,7 +856,7 @@ static void test_saved_selected_recipes() {
   assert(drinks.dev.selected_values()[TEMPERATURE] == 1);
   assert(drinks.dev.set_parameter(MILK, 20));
   drinks.dev.reset_recipe();
-  assert(drinks.dev.bins["recipe_modified"] == 0 && drinks.dev.bins["recipe_loading"] == 1);
+  assert(drinks.dev.bins["recipe_modified"] == 0 && drinks.dev.bins["recipe_loading"] == 0);
   drinks.tick(2000);
   assert(drinks.dev.selected_values()[MILK] == 14 && drinks.dev.texts["recipe_source"] == "Machine");
 
@@ -873,6 +875,7 @@ static void test_saved_selected_recipes() {
     assert(fallback.count("@TM:41,02") == requests);  // No retry loop.
   }
   Machine late;
+  late.probe_reply.clear();
   late.begin();
   late.tick(16000);
   late.probe_reply.clear();
@@ -930,7 +933,7 @@ static void test_api_saved_defaults() {
   named.begin();
   named.tick(16000);
   named.probe_reply = "@tm:41,0200060C0000020000000000D1";  // Saved water changed at screen.
-  assert(named.dev.brew_named("Espresso"));
+  assert(named.dev.brew_named("Espresso", true));
   assert(!named.dev.brew_named("Coffee"));
   named.dev.choose("Coffee");  // UI selection cannot change the reserved API product.
   named.tick(2500);
@@ -944,9 +947,11 @@ static void test_api_saved_defaults() {
   custom.tick(16000);
   custom.dev.set_parameter(WATER, 80);  // API must not take or consume unrelated UI overrides.
   const auto ui = custom.dev.selected_values();
+  const auto custom_reads = custom.count("@TM:41,02");
   assert(custom.dev.brew_custom("Espresso", "", 60, -1, -1, "default", -1, -1, ""));
   custom.tick(2500);
   assert(custom.count("@TP:0200060C000002000100000000000000") == 1);
+  assert(custom.count("@TM:41,02") == custom_reads);
   assert(custom.dev.selected_values() == ui && custom.dev.bins["recipe_modified"] == 1);
 
   Machine coffee;
@@ -961,7 +966,7 @@ static void test_api_saved_defaults() {
   for (const auto &bad : {"@tm:C1", "@tm:41,0200040A0000020001000000000000000000",
                           "@tm:41,0300040A00000200010000000000000000F3", "@tm:41,020C", ""}) {
     Machine fallback;
-    fallback.probe_reply = actual;
+    fallback.probe_reply = "@tm:C1";
     fallback.begin();
     fallback.tick(16000);
     fallback.probe_reply = bad;
@@ -970,10 +975,40 @@ static void test_api_saved_defaults() {
     assert(fallback.count("@TP:02000409000002000100000000000000") == 1);
     assert(fallback.dev.texts["command_recipe_source"] == "Profile defaults");
     assert(fallback.dev.texts["command_recipe_status"].find("Profile defaults:") == 0);
-    assert(fallback.dev.texts["recipe_source"] == "Machine");
+    assert(fallback.dev.texts["recipe_source"] == "Profile defaults");
     fallback.tick(20000);
     assert(brew_count(fallback) == 1);
   }
+  Machine refreshed;
+  refreshed.probe_reply = actual;
+  refreshed.begin();
+  refreshed.tick(16000);
+  refreshed.probe_reply = "@tm:41,0200060C0000020000000000D1";
+  assert(refreshed.dev.refresh_recipe("Espresso"));
+  refreshed.tick(2500);
+  assert(brew_count(refreshed) == 0 && refreshed.dev.selected_values()[WATER] == 60);
+  refreshed.probe_reply = "@tm:C1";
+  assert(refreshed.dev.brew_named("Espresso", true));
+  refreshed.tick(2500);
+  assert(brew_count(refreshed) == 0);
+  assert(refreshed.dev.texts["command_recipe_status"].find("Cancelled:") == 0);
+  const auto refreshed_reads = refreshed.count("@TM:41,02");
+  assert(refreshed.dev.brew_named("Espresso"));
+  refreshed.tick(2500);
+  assert(refreshed.count("@TM:41,02") == refreshed_reads);
+  assert(refreshed.count("@TP:0200060C000002000100000000000000") == 1);
+
+  Machine shared;
+  shared.probe_reply.clear();
+  shared.begin();
+  shared.tick(5000);
+  assert(shared.dev.waiting() && shared.dev.active() == "@TM:41,02");
+  assert(shared.dev.brew_named("Espresso"));
+  shared.inject(actual);
+  shared.tick(2500);
+  assert(shared.count("@TM:41,02") == 1);
+  assert(shared.count("@TP:02000609000002000100000000000000") == 1);
+
   Machine fallback_custom;
   fallback_custom.begin();
   fallback_custom.tick(16000);
@@ -987,7 +1022,7 @@ static void test_api_saved_defaults() {
     interrupted.begin();
     interrupted.tick(16000);
     interrupted.probe_reply.clear();
-    assert(interrupted.dev.brew_named("Espresso"));
+    assert(interrupted.dev.brew_named("Espresso", true));
     interrupted.tick(1200);
     interrupted.inject(busy);
     interrupted.inject("@TF:000400000000");
@@ -999,7 +1034,7 @@ static void test_api_saved_defaults() {
   Machine before_read;
   before_read.begin();
   before_read.tick(16000);
-  assert(before_read.dev.brew_named("Espresso"));
+  assert(before_read.dev.brew_named("Espresso", true));
   before_read.inject("@TF:400400000000");
   before_read.tick(3000);
   assert(brew_count(before_read) == 0 && before_read.count("@TM:41,02") == 1);
@@ -1028,7 +1063,7 @@ static void test_api_saved_defaults() {
   disconnected.begin();
   disconnected.tick(16000);
   disconnected.probe_reply.clear();
-  assert(disconnected.dev.brew_named("Espresso"));
+  assert(disconnected.dev.brew_named("Espresso", true));
   disconnected.tick(1200);
   disconnected.inject("ty:EF536M V02.09", false);
   disconnected.tick(12000);
@@ -1038,7 +1073,7 @@ static void test_api_saved_defaults() {
   stray_ack.begin();
   stray_ack.tick(16000);
   stray_ack.probe_reply.clear();
-  assert(stray_ack.dev.brew_named("Espresso"));
+  assert(stray_ack.dev.brew_named("Espresso", true));
   stray_ack.tick(1200);
   stray_ack.inject("@tp:00");
   stray_ack.inject("@tp");

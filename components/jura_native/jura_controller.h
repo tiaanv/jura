@@ -4,7 +4,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <deque>
+#include <map>
 #include <set>
+#include <utility>
 
 #include "jura_profiles.h"
 #include "jura_progress.h"
@@ -170,7 +172,7 @@ class JuraController : public TransportSink {
         reject_("AN:01 test cancelled: connection or operation changed");
         return;
       }
-      if (r.kind == Kind::API_RECIPE && (!api_recipe_pending_ || !ready_for_brew_(api_recipe_code_))) {
+      if (r.kind == Kind::API_RECIPE && (!api_recipe_pending_ || !can_finish_api_recipe_())) {
         cancel_api_recipe_("Machine no longer ready before settings read");
         return;
       }
@@ -190,7 +192,7 @@ class JuraController : public TransportSink {
       if (r.kind == Kind::TEST_AN01)
         text("command_result", "AN:01 test sent; waiting for reply; effect unverified");
       if (r.kind == Kind::API_RECIPE) {
-        text("command_result", "Reading saved settings before brew");
+        if (!api_recipe_refresh_only_) text("command_result", "Reading saved settings before brew");
         text("command_recipe_status", "Reading machine settings");
       }
       if (r.kind == Kind::RECIPE_PROBE) text("espresso_probe_result", "Sent @TM:41,02; waiting for response");
@@ -278,6 +280,13 @@ class JuraController : public TransportSink {
                                              : "Profile defaults: saved recipe reads disabled";
     recipe_read_requested_ = recipe_loading_ = read_saved_recipes_ && selection() != nullptr;
     text("saved_recipe_raw", "");
+    if (recipe_loading_) {
+      const auto entry = recipe_cache_.find(selection()->code);
+      if (entry != recipe_cache_.end()) {
+        apply_saved_recipe_(entry->second);
+        return;
+      }
+    }
     publish_recipe_state_();
     recipe_changed();
   }
@@ -304,12 +313,12 @@ class JuraController : public TransportSink {
     recipe_changed();
     return true;
   }
-  bool brew_named(const std::string &name) {
+  bool brew_named(const std::string &name, bool fresh = false) {
     std::array<int32_t, ATTRIBUTE_COUNT> values;
     values.fill(-1);
-    return brew_recipe(name, values);
+    return brew_recipe(name, values, fresh);
   }
-  bool brew_recipe(const std::string &name, const std::array<int32_t, ATTRIBUTE_COUNT> &values) {
+  bool brew_recipe(const std::string &name, const std::array<int32_t, ATTRIBUTE_COUNT> &values, bool fresh = false) {
     const auto *p = profiles_.find(name);
     if (!p) return reject_("Unknown drink");
     if (!allow_brew_) return reject_("Brewing control disabled");
@@ -327,28 +336,39 @@ class JuraController : public TransportSink {
         return reject_("Unsupported override for requested drink");
     }
     if (!read_saved_recipes_) {
+      if (fresh) return reject_("Saved recipe reads disabled");
       if (!submit_(*p, values.data())) return false;
       text("command_recipe_source", "Profile defaults");
       text("command_recipe_status", "Profile defaults: saved recipe reads disabled");
       text("command_recipe_raw", "");
       return true;
     }
-    api_recipe_code_ = p->code;
-    api_overrides_ = values;
-    api_recipe_response_.clear();
-    api_recipe_pending_ = brew_pending_ = true;
-    brew_sent_ = brew_started_ = false;
-    text("requested_product", p->name);
-    text("command_recipe_source", "Pending");
-    text("command_recipe_status", "Queued saved-settings read for " + p->name);
-    text("command_recipe_raw", "");
-    text("command_result", "Queued settings read before brew");
-    control_.push_back({"@TM:41," + hexbyte_(p->code), Kind::API_RECIPE, true});
-    return true;
+    const auto entry = recipe_cache_.find(p->code);
+    if (!fresh && entry != recipe_cache_.end()) {
+      auto recipe = entry->second.values;
+      overlay_recipe_(recipe, values);
+      if (!submit_(*p, recipe.data())) return false;
+      text("command_recipe_source", "Machine");
+      text("command_recipe_status", "Cached saved settings for " + p->name);
+      text("command_recipe_raw", entry->second.raw);
+      return true;
+    }
+    return queue_recipe_read_(*p, values, fresh, false);
+  }
+  bool refresh_recipe(const std::string &name) {
+    const auto *p = profiles_.find(name);
+    if (!p) return reject_("Unknown drink");
+    if (!read_saved_recipes_) return reject_("Saved recipe reads disabled");
+    if (!can_read_recipe_() || brew_pending_ || api_recipe_pending_ || probe_pending_ ||
+        active_ == Kind::API_RECIPE || !control_.empty())
+      return reject_("Machine unavailable or another command is pending");
+    std::array<int32_t, ATTRIBUTE_COUNT> values;
+    values.fill(-1);
+    return queue_recipe_read_(*p, values, true, true);
   }
   bool brew_custom(const std::string &name, const std::string &strength, int water_ml, int milk_seconds,
                    int foam_seconds, const std::string &temperature, int bypass_ml, int pause_seconds,
-                   const std::string &grinder_ratio) {
+                   const std::string &grinder_ratio, bool fresh = false) {
     const auto *p = profiles_.find(name);
     if (!p) return reject_("Unknown drink");
     std::array<int32_t, ATTRIBUTE_COUNT> values{
@@ -367,7 +387,7 @@ class JuraController : public TransportSink {
         }
       if (!found) return reject_("Unknown strength, temperature or grinder choice for selected drink");
     }
-    return brew_recipe(name, values);
+    return brew_recipe(name, values, fresh);
   }
   // Manual diagnostic only. Does not require a ready TF state: the intended
   // experiment is during SwitchOff Delay. Never send during an observed operation.
@@ -519,27 +539,39 @@ class JuraController : public TransportSink {
     publish_recipe_state_();
     trace("Saved recipe fallback: " + why);
   }
-  void receive_saved_recipe_(const std::string &frame) {
-    if (active_recipe_epoch_ != recipe_epoch_) {
-      trace("Ignoring saved recipe response for previous selection/reset");
-      return;
-    }
-    text("saved_recipe_raw", frame);
+  struct SavedRecipe {
     std::array<int32_t, ATTRIBUTE_COUNT> values;
-    std::string summary, error;
-    if (!decode_saved_recipe_(frame, active_recipe_code_, values, summary, error)) {
-      saved_recipe_fallback_(error);
-      return;
-    }
-    baseline_ = values;
+    std::string raw;
+  };
+  void apply_saved_recipe_(const SavedRecipe &recipe) {
+    baseline_ = recipe.values;
     for (uint8_t attr = 0; attr < ATTRIBUTE_COUNT; ++attr)
       if (!(edited_mask_ & (1u << attr))) selected_[attr] = baseline_[attr];
+    text("saved_recipe_raw", recipe.raw);
     recipe_source_ = "Machine";
     recipe_loading_ = recipe_read_requested_ = false;
     recipe_read_status_ = "Saved recipe loaded for " + selection()->name;
-    publish_recipe_state_();
+    // Publish the controls before signaling completion to the card.
     recipe_changed();
+    publish_recipe_state_();
+  }
+  void receive_saved_recipe_(const std::string &frame) {
+    if (api_recipe_pending_ && api_recipe_joined_) api_recipe_response_ = frame;
+    if (active_recipe_epoch_ != recipe_epoch_) return;
+    text("saved_recipe_raw", frame);
+    SavedRecipe recipe{{}, frame};
+    std::string summary, error;
+    if (!decode_saved_recipe_(frame, active_recipe_code_, recipe.values, summary, error)) {
+      saved_recipe_fallback_(error);
+      return;
+    }
+    apply_saved_recipe_(recipe_cache_.insert_or_assign(active_recipe_code_, std::move(recipe)).first->second);
     trace("Saved recipe " + selection()->name + ": " + summary);
+  }
+  static void overlay_recipe_(std::array<int32_t, ATTRIBUTE_COUNT> &recipe,
+                              const std::array<int32_t, ATTRIBUTE_COUNT> &overrides) {
+    for (uint8_t attr = 0; attr < ATTRIBUTE_COUNT; ++attr)
+      if (overrides[attr] >= 0) recipe[attr] = overrides[attr];
   }
   bool flag_(unsigned bit) const { return bit / 8 < tf_.size() && (tf_[bit / 8] & (0x80u >> (bit % 8))); }
   // Only the observed five-byte EF533 format may omit the sixth alert byte.
@@ -583,12 +615,36 @@ class JuraController : public TransportSink {
     api_recipe_pending_ = brew_pending_ = brew_sent_ = false;
     text("command_recipe_source", "Not used");
     text("command_recipe_status", "Cancelled: " + why);
-    text("command_result", "Cancelled: " + why);
+    if (!api_recipe_refresh_only_) text("command_result", "Cancelled: " + why);
     trace("API recipe cancelled: " + why);
+  }
+  bool queue_recipe_read_(const Product &product, const std::array<int32_t, ATTRIBUTE_COUNT> &values,
+                          bool fresh, bool refresh_only) {
+    api_recipe_code_ = product.code;
+    api_recipe_fresh_ = fresh;
+    api_recipe_refresh_only_ = refresh_only;
+    api_recipe_joined_ = !fresh && active_ == Kind::SAVED_RECIPE &&
+                         active_recipe_code_ == product.code && active_recipe_epoch_ == recipe_epoch_;
+    api_overrides_ = values;
+    api_recipe_response_.clear();
+    api_recipe_pending_ = true;
+    brew_pending_ = !refresh_only;
+    brew_sent_ = brew_started_ = false;
+    if (!refresh_only) text("requested_product", product.name);
+    text("command_recipe_source", "Pending");
+    text("command_recipe_status", "Queued saved-settings read for " + product.name);
+    text("command_recipe_raw", "");
+    if (!refresh_only) text("command_result", "Queued settings read before brew");
+    if (!api_recipe_joined_)
+      control_.push_back({"@TM:41," + hexbyte_(product.code), Kind::API_RECIPE, true});
+    return true;
+  }
+  bool can_finish_api_recipe_() const {
+    return api_recipe_refresh_only_ ? can_read_recipe_() : ready_for_brew_(api_recipe_code_);
   }
   void resolve_api_recipe_(bool received_response) {
     if (!api_recipe_pending_) return;
-    if (!ready_for_brew_(api_recipe_code_)) {
+    if (!can_finish_api_recipe_()) {
       cancel_api_recipe_("Machine no longer ready after settings read");
       return;
     }
@@ -605,20 +661,28 @@ class JuraController : public TransportSink {
     if (!loaded) {
       values.fill(-1);  // All-or-nothing fallback; never use partially decoded values.
       if (!received_response) error = "Settings read timed out";
+      if (selection() == p && recipe_loading_) saved_recipe_fallback_(error);
+      if (api_recipe_fresh_) {
+        cancel_api_recipe_(error);
+        return;
+      }
+    } else {
+      const auto &cached = recipe_cache_.insert_or_assign(
+          p->code, SavedRecipe{values, api_recipe_response_}).first->second;
+      if (selection() == p && (recipe_loading_ || api_recipe_fresh_)) apply_saved_recipe_(cached);
     }
     text("command_recipe_source", loaded ? "Machine" : "Profile defaults");
     text("command_recipe_status",
          loaded ? "Saved settings loaded for " + p->name : "Profile defaults: " + error);
     text("command_recipe_raw", received_response ? api_recipe_response_ : "");
-    for (uint8_t attr = 0; attr < ATTRIBUTE_COUNT; ++attr)
-      if (api_overrides_[attr] >= 0) values[attr] = api_overrides_[attr];
     api_recipe_pending_ = brew_pending_ = false;
+    if (api_recipe_refresh_only_) return;
+    overlay_recipe_(values, api_overrides_);
     submit_(*p, values.data());  // Rechecks readiness, validates/encodes, freezes one brew.
   }
   bool submit_(const Product &product, const int32_t *values) {
     if (!allow_brew_) return reject_("Brewing control disabled");
-    if (brew_pending_ || api_recipe_pending_ || probe_pending_ || active_ == Kind::SAVED_RECIPE ||
-        active_ == Kind::API_RECIPE || !control_.empty())
+    if (brew_pending_ || api_recipe_pending_ || probe_pending_ || active_ == Kind::API_RECIPE || !control_.empty())
       return reject_("Another command is pending");
     if (!ready_for_brew_()) return reject_("Machine not ready or status unavailable");
     const auto milk_reason = milk_block_reason_(product.code);
@@ -643,6 +707,10 @@ class JuraController : public TransportSink {
   void identify_(const std::string &model) {
     text("detected_model", model);
     if (!detected_.empty() && model == detected_) return;
+    if (!detected_.empty()) {
+      recipe_cache_.clear();
+      reset_recipe();
+    }
     detected_ = model;
     if (discovery_done_) {
       Profiles candidate;
@@ -772,6 +840,10 @@ class JuraController : public TransportSink {
     if (kind == Kind::RECIPE_PROBE) {
       probe_pending_ = false;
       if (!success) text("espresso_probe_result", "Timeout: no settings response; not retried");
+    }
+    if (kind == Kind::SAVED_RECIPE && api_recipe_joined_) {
+      api_recipe_joined_ = false;
+      resolve_api_recipe_(success);
     }
     if (!success) {
       trace("Timeout: " + active_command_);
@@ -976,7 +1048,7 @@ class JuraController : public TransportSink {
       if (rinse_done) trace("Coffee rinse complete: fresh TF reports coffee ready with rinsing cleared");
       clear_operation_("Idle", "None", 0);
     }
-    if (api_recipe_pending_ && !ready_for_brew_(api_recipe_code_))
+    if (api_recipe_pending_ && !can_finish_api_recipe_())
       cancel_api_recipe_("Machine reported not ready during settings read");
     update_status_();
     return true;
@@ -1333,7 +1405,9 @@ class JuraController : public TransportSink {
   std::array<int32_t, ATTRIBUTE_COUNT> api_overrides_;
   std::string api_recipe_response_;
   uint8_t api_recipe_code_{0};
-  bool api_recipe_pending_{false};
+  bool api_recipe_pending_{false}, api_recipe_fresh_{false}, api_recipe_refresh_only_{false},
+      api_recipe_joined_{false};
+  std::map<uint8_t, SavedRecipe> recipe_cache_;
   std::string recipe_source_{"Profile defaults"}, recipe_read_status_;
   uint32_t recipe_epoch_{0}, active_recipe_epoch_{0};
   uint8_t edited_mask_{0}, active_recipe_code_{0};

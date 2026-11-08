@@ -105,14 +105,14 @@ A later incompatible model requires restarting the ESP to rebuild discovery.
 
 | Entity | Purpose |
 | --- | --- |
-| Jura Drink | Select a named product and read its saved recipe |
+| Jura Drink | Select a named product and load its saved recipe |
 | Jura Coffee Strength | Displayed profile label; not grams or a raw byte |
 | Jura Temperature | Displayed level such as Normal/High; not an exact °C target |
 | Jura Grinder Ratio | Only exposed where the model profile supports it |
 | Jura Water Amount / Bypass Amount | Millilitres of that recipe parameter |
 | Jura Milk Amount / Milk Foam Amount / Milk Pause | Seconds, where supported |
 | Jura Brew | Send the loaded recipe plus HA overrides once |
-| Jura Reset Recipe | Discard overrides and reload the saved recipe |
+| Jura Reset Recipe | Discard overrides and restore the saved baseline |
 | Jura Refresh | Request counters and maintenance readings |
 | Turn Off | Power-off command when enabled; no power-on action is implemented |
 

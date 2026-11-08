@@ -16,7 +16,7 @@ jura_native:
   read_saved_recipes: false
 ```
 
-The default is `true`, retaining existing behaviour. When disabled, startup,
+The default is `true`. When disabled, startup,
 selection, Reset Recipe, `brew_drink` and `brew_custom` skip the saved-settings
 request. Controls and API brews use profile defaults plus explicit one-shot
 overrides. Recipe Loading stays off; Recipe Status and Command Recipe Status
@@ -31,8 +31,9 @@ are written back to the machine. Machine-customised recipes are not available
 when reads are disabled. Readiness checks and duplicate/busy guards still apply.
 
 ## Normal use
-Select a drink in Jura Drink. The component schedules `@TM:41,<product code>`,
-waits for an idle connected machine/fresh status, and reads its saved settings.
+Select a drink in Jura Drink. A cached recipe loads immediately. On a cache miss
+the component schedules `@TM:41,<product code>` and reads it when the machine
+is connected and idle with fresh status.
 Jura Recipe Loading stays on until that read succeeds or fails. While waiting,
 the controls show provisional profile defaults; Brew rejects rather than silently
 using them. Changing another control while loading is allowed and that explicit
@@ -54,10 +55,16 @@ Edits are consumed when queued, including if the eventual command is rejected
 or unconfirmed; a brew is never retried automatically. Changing controls while
 a prior brew is pending cannot alter that prior command's frozen payload.
 
-Reset Recipe discards overrides and requests a fresh read. Selecting even the
-same drink also reloads it. The baseline stays in RAM until a selection/reset;
-it is not a continuous mirror of changes made at the machine screen. After a
-screen edit, leave Expert Mode, return to idle, then select/reset in HA to reload.
+Reset Recipe discards overrides and restores the cached baseline when available.
+The cache holds complete validated machine replies per drink in RAM. It clears
+on component restart or a change in reported machine identity. Defaults and
+one-shot overrides stay separate from the cache.
+
+After editing a recipe on the machine, leave Expert Mode and return to idle.
+Call the optional `refresh_recipe` action with that drink's exact name to replace
+its cached recipe without brewing. If that drink is selected, its baseline also
+updates and any pending one-shot edits are preserved. A failed refresh reports
+the error in Command Recipe Status and retains the last successful cache entry.
 
 ## Read validation and fallback
 The reply must have a valid ASCII checksum, echo the requested product, contain
@@ -82,23 +89,28 @@ The component also exposes **Jura Recipe Capabilities**, a versioned catalogue o
 all selectable drinks and their supported settings for the detected profile.
 This comes from the profile database and needs no additional machine requests.
 The card uses it to validate custom recipes when the dashboard loads; machine-saved
-values are still read only when a drink is selected. See the
+values are read on demand for selection, API brewing or explicit refresh. See the
 [capability transport and fallback behaviour](card-recipes.md#capability-transport-component-and-card-developers).
 Use button.press on the native Jura Brew entity, or brew_selected(), to use the
 selected controls. The example's optional API action is normally exposed as
 esphome.jura_e8_brew_selected for the existing device name jura-e8.
 
-brew_drink(name)/brew_named(name) now read the requested product's current
-saved settings and brew them. brew_custom(...) reads the same saved baseline
-and then overlays the explicit arguments. Numeric -1 and empty/"default" choice
+`brew_drink` and `brew_custom` use the requested drink's cached settings or read
+them on a cache miss. Custom brews overlay explicit arguments on a copy. Numeric -1 and empty/"default" choice
 strings use the saved values. If the read is unsupported, invalid or times out,
 the full baseline falls back to profile defaults; explicit overrides still apply.
 
 Each API call snapshots its requested product and overrides. Changing the native
 Drink selection or editing its controls cannot change the pending API request.
 The API actions do not use or consume native UI edits. Use brew_selected for
-those. They read the requested product afresh, even if a different one is selected.
-Existing API names, fields and YAML lambdas do not need changing.
+those. A normal API brew can share an in-flight selection read for the same
+drink. Existing API names and fields continue to work.
+
+To require a fresh read before brewing, use the example
+`brew_drink_with_refresh` action with `refresh_recipe: true`. A failed fresh read
+cancels that brew. Custom YAML actions can pass the same boolean as the final
+argument to `brew_custom(...)`. The [action examples](../examples/ha-actions.yaml)
+show how to refresh with and without brewing.
 
 Jura Command Recipe Source reports Pending, Machine, Profile defaults or Not used
 (for cancellation). Jura Command Recipe Status explains the read or fallback and
@@ -127,7 +139,7 @@ EEPROM write, @TS lock/unlock or screen-navigation command has been added.
 3. Edit water in HA and press Brew once. Verify the edited command/drink, then
    confirm the controls returned to the saved baseline and the screen recipe
    remains unchanged. Compare progress/command result as in previous tests.
-4. Change one setting at the screen, exit menus, press Reset Recipe in HA, and
+4. Change one setting at the screen, exit menus, call `refresh_recipe`, and
    verify the refreshed controls. Test a milk drink's duration separately.
 5. If Source says Profile defaults, inspect Recipe Status and Saved Recipe Raw;
    the firmware may not expose saved settings for that product.

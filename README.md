@@ -26,7 +26,7 @@ tag for a fixed version. Component and card releases are independent.
   supported settings apply to the next accepted Brew request; the machine's
   saved recipe is never overwritten.
 - **Native API actions:** `brew_drink`, `brew_custom` and `brew_selected`.
-  Named/custom actions use freshly read saved settings as their defaults.
+  Named/custom actions reuse saved settings from the in-memory recipe cache.
 - **Nonblocking UART:** serialised transactions, bounded reception, readiness
   checks, timeout recovery and no automatic brew retry.
 - **Optional Cool Control receiver:** a separate `jura_coolcontrol` component
@@ -114,7 +114,7 @@ Only one component may consume the Jura UART.
 3. Check **Jura Recipe Source** (`Machine` or `Profile defaults`).
 4. Adjust supported settings and press **Jura Brew**.
 
-**Reset Recipe** discards HA edits and reloads the selected drink. Edits are
+**Reset Recipe** discards HA edits and restores the selected drink’s saved baseline. Edits are
 consumed when a Brew request is accepted into the queue; rejected requests
 retain them. See [saved recipes](docs/saved-recipes.md) for the exact behaviour.
 

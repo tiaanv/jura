@@ -154,7 +154,7 @@ hold-to-brew browser suites before deployment.
 1. Confirm model, connected/ready states, alerts and plausible AT counts.
 2. Select each drink you intend to use; compare every supported saved setting
    with the machine screen and inspect source/status/raw on fallback.
-3. Change a single saved screen value, leave menus, reload and verify the field.
+3. Change a single saved screen value, leave menus, call `refresh_recipe` and verify the field.
 4. Test one native one-shot override and verify the controls return to baseline
    and the machine's saved recipe is unchanged.
 5. Test saved/custom API actions separately, following Command Recipe Source,

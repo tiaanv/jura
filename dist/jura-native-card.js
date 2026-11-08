@@ -305,7 +305,7 @@
       button.addEventListener('contextmenu',event=>event.preventDefault());
       button.addEventListener('pointerdown',event=>{
         this._heldClicks.delete(button);
-        if(!event.isPrimary||event.button!==0||button.disabled||this._holdBrewPending||this._brewReason())return;
+        if(!event.isPrimary||event.button!==0||button.disabled||this._holdBrewPending||this._brewReason(kind==='drink'&&this._state('drink')===value&&!this._customRecipe))return;
         this._cancelHold();
         const hold={button,kind,value,pointerId:event.pointerId};this._hold=hold;
         button.classList.add('holding');
@@ -324,14 +324,14 @@
       window.removeEventListener('scroll',hold.cancel,true);window.removeEventListener('blur',hold.cancel);this._hold=null;
     }
     async _holdAndBrew(kind,value){
-      if(this._holdBrewPending||this._brewReason())return;
+      if(this._holdBrewPending||this._brewReason(kind==='drink'&&this._state('drink')===value&&!this._customRecipe))return;
       if(this._milkReason(kind==='recipe'?this._recipes[value]?.base_drink:value))return;
       const job={};this._holdJob=job;this._holdBrewPending=true;this._writeError='';this._update(true);
       const valid=()=>this._holdJob===job&&this.isConnected&&this._state('connected')==='on'&&this._state('status')==='ready'&&this._state('alerts_stale')==='off'&&!pendingCommand(this._state('command_result'));
       try{
-        if(kind==='recipe')await this._selectRecipe(value);
-        else if(this._state('drink')===value)await this._reset();
-        else await this._selectDrink(value);
+        if(kind==='recipe'){if(this._customRecipe?.index!==value)await this._selectRecipe(value);}
+        else if(this._state('drink')!==value)await this._selectDrink(value);
+        else if(this._customRecipe||(this._state('recipe_loading')==='off'&&this._state('recipe_source')!=='Machine'))await this._reset();
         const started=Date.now();
         while(this._selection||this._recipeRun||this._state('recipe_loading')!=='off'||this._edits.size){
           if(!valid()||this._editUnconfirmed||this._recipeError||this._writeError||Date.now()-started>18000)throw new Error('Hold-to-brew cancelled: recipe or machine state was not confirmed.');
@@ -357,6 +357,7 @@
       if(this._recipeRun&&!fromRecipe)return;
       if(!fromRecipe){this._customRecipe=null;this._recipeError='';}
       if(this._state('connected')!=='on'||this._state('status')!=='ready'||pendingCommand(this._state('command_result'))||this._brewLock)return;
+      if(!this._editUnconfirmed&&!this._selection&&!this._edits.size&&this._state('recipe_loading')==='off'&&this._state('recipe_modified')==='off'&&this._state('recipe_source')==='Machine'){this._writeError='';this._update(true);return;}
       this._writeError='';this._editUnconfirmed=false;this._edits.clear();this._selection={name:this._state('drink'),sawLoading:false,recipeStamp:this._stamp('recipe_status'),requireFresh:true};this._update(true);
       if(!await this._service('button','press','reset_recipe')){this._selection=null;this._editUnconfirmed=true;this._update(true);return;}this._selectionTimeout();
     }
@@ -377,10 +378,11 @@
       if(preflight.length){this._recipeError=preflight.join(' ');this._update(true);return;}
       if(this._milkReason(recipe.base_drink))return;
       if(!this._options().includes(recipe.base_drink)){this._recipeError=`Base drink "${recipe.base_drink}" is unavailable. Use the component's exact drink label.`;this._update(true);return;}
-      const run={};this._recipeRun=run;this._editUnconfirmed=false;this._update(true);
+      const run={};this._recipeRun=run;this._update(true);
       try{
-        // Always reload the saved baseline, including when the same drink is selected.
-        if(this._state('drink')===recipe.base_drink)await this._reset(true);else await this._selectDrink(recipe.base_drink,true);
+        // Restore the baseline if a previous recipe left overrides on the same drink.
+        if(this._state('drink')!==recipe.base_drink)await this._selectDrink(recipe.base_drink,true);
+        else if(this._editUnconfirmed||this._state('recipe_modified')!=='off'||this._state('recipe_source')!=='Machine')await this._reset(true);
         if(this._writeError)throw new Error(this._writeError);
         await this._waitRecipe(()=>!this._selection&&this._state('recipe_loading')==='off'&&this._state('drink')===recipe.base_drink,run);
         if(this._state('recipe_source')!=='Machine')throw new Error('Saved machine recipe unavailable. Custom recipes require a confirmed machine-saved baseline.');
@@ -500,7 +502,7 @@
         if(labels.includes(label))return friendlyAlert(label);
       return '';
     }
-    _brewReason(){
+    _brewReason(waitForCurrentRecipe=false){
       if(this._state('connected')!=='on')return 'Machine disconnected';
       if(this._state('brew_active')==='on')return 'Machine operation in progress';
       if(this._state('status')!=='ready')return friendlyAlert(this._text('status_detail','Waiting for the machine to be ready'));
@@ -508,7 +510,7 @@
       if(this._milkReason(this._state('drink')))return this._milkReason(this._state('drink'));
       if(this._recipeRun)return 'Preparing your custom recipe…';
       if(this._recipeError||this._customRecipe&&this._catalogueErrors(this._customRecipe).length)return 'Custom recipe not ready — reset or choose a recipe';
-      if(this._selection||this._state('recipe_loading')!=='off')return 'Loading the saved recipe…';
+      if(!waitForCurrentRecipe&&(this._selection||this._state('recipe_loading')!=='off'))return 'Loading the saved recipe…';
       if(this._edits.size)return 'Applying your settings…';
       if(this._editUnconfirmed)return 'Reset the recipe to verify its settings';
       if(this._brewLock||pendingCommand(this._state('command_result')))return this._localUncertain?'Check the machine before another request':'Request in progress…';

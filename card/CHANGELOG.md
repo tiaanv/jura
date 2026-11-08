@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Hold-to-brew reuses confirmed settings for the current standard drink, including one-shot edits.
+
 - Add `sections.machine` with expanded (default), collapsed and hidden modes.
   Collapsed keeps the machine heading, readiness and messages; hidden removes
   the whole machine/status area. Drink controls and brewing safeguards remain

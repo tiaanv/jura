@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Cache validated saved recipes per drink, share selection reads with API brews, and add explicit refresh controls.
+
 - Reserve GitHub Releases for the card to prevent component versions appearing
   as HACS card updates. Component tags and repository release notes remain
   available; ESPHome source refs do not need to change.

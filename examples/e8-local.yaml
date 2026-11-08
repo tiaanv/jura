@@ -57,6 +57,21 @@ api:
         - lambda: |-
             id(jura_coffee).brew_named(drink);
 
+    - action: refresh_recipe
+      variables:
+        drink: string
+      then:
+        - lambda: |-
+            id(jura_coffee).refresh_recipe(drink);
+
+    - action: brew_drink_with_refresh
+      variables:
+        drink: string
+        refresh_recipe: bool
+      then:
+        - lambda: |-
+            id(jura_coffee).brew_named(drink, refresh_recipe);
+
     - action: brew_custom
       variables:
         drink: string

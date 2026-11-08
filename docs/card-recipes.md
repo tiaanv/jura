@@ -119,9 +119,9 @@ to expose these sensors. This catalogue describes profile capabilities, not a
 guarantee that a machine will accept a brew; existing readiness and live validation
 checks still apply.
 
-Selecting a custom tile always reloads the **machine-saved base recipe**, even
-when the same base is selected. Unspecified settings therefore do not inherit
-overrides from the previous custom recipe. All overrides are validated before
+Selecting a custom tile starts from the **machine-saved base recipe**. The
+component reuses a cached baseline when available. Unspecified settings do not
+inherit overrides from the previous custom recipe. All overrides are validated before
 any are written, then applied sequentially with confirmation. A profile-default
 fallback cannot silently enable a custom recipe: a saved baseline is required.
 
@@ -157,8 +157,9 @@ The tile section then displays **Tap or hold to brew**:
   the tile, scrolling, window blur or touch cancellation cancels an unfinished hold.
 
 After the bar completes, the hold is committed: releasing then does not cancel
-preparation. Place a suitable cup before holding. A standard-drink hold reloads
-its saved recipe; use the separate Brew button to brew manual adjustments instead.
+preparation. Place a suitable cup before holding. Holding the currently selected drink or custom recipe uses its confirmed settings,
+including any pending one-shot adjustments. Holding a different drink selects
+it and uses its cached baseline or waits for the first machine read.
 Keyboard activation remains normal selection.
 
 Machine readiness, fresh alerts, confirmed settings and duplicate-command checks

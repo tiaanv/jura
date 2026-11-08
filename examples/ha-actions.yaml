@@ -22,3 +22,15 @@ data:
 ---
 # The currently loaded native controls and their pending one-shot edits.
 action: esphome.jura_e8_brew_selected
+
+---
+# Refresh a recipe after editing it on the machine, without brewing.
+action: esphome.jura_e8_refresh_recipe
+data:
+  drink: "1 Flat White"
+---
+# Brew only after a successful fresh recipe read.
+action: esphome.jura_e8_brew_drink_with_refresh
+data:
+  drink: "1 Flat White"
+  refresh_recipe: true

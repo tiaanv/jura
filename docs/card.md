@@ -204,7 +204,7 @@ The steps below describe ordinary taps. With `hold_to_brew: true`, a completed
 4. Wait for recipe loading to finish, then press **Brew** explicitly.
 
 If the saved-recipe read fails, the card labels profile defaults clearly. Inspect
-the settings before brewing. **Reset to saved recipe** reloads machine settings.
+the settings before brewing. **Reset to saved recipe** restores the saved baseline.
 The card does not overwrite the machine's saved recipe.
 
 During operation, the panel uses the **observed product**, even if someone started
