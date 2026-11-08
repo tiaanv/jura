@@ -6,6 +6,11 @@
   Collapsed keeps the machine heading, readiness and messages; hidden removes
   the whole machine/status area. Drink controls and brewing safeguards remain
   independent. Pause machine effects and defer SVG text layout while collapsed.
+- Fix custom recipes whose overrides equal the saved machine recipe: compare
+  values numerically (Home Assistant reports numbers as `100.0`), so matching
+  overrides are skipped instead of rewritten, and re-read the value before
+  reporting "Setting change unconfirmed". Previously such a recipe sent a
+  no-op write that never produced a state change, and hold-to-brew cancelled.
 
 ## 2.1.11 — faster dashboards and configurable hold-to-brew
 
