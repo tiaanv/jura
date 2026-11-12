@@ -18,6 +18,7 @@ class CoolcontrolBridge {
     coalesce_ = coalesce;
   }
   bool enabled() const { return enabled_; }
+  bool status_requested() const { return enabled_ && requested_; }
   bool overridden() const { return override_; }
   void set_override(bool value) {
     if (!enabled_ || override_ == value) return;

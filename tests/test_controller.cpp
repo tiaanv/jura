@@ -47,6 +47,7 @@ struct Fake : public JuraController {
   bool backoff() const { return session_ == Session::BACKOFF; }
   size_t queued_polls() const { return polls_.size(); }
   bool waiting() const { return transport_.waiting(); }
+  void request_tf() { tf_requested_ = true; }
   std::string active() const { return active_command_; }
 };
 struct Machine {
@@ -1329,25 +1330,113 @@ static void test_coolcontrol_request_priority() {
   for (unsigned i = 0; i < 2000 && !m.dev.waiting(); ++i) m.tick();
   assert(m.dev.waiting() && m.dev.active() == "@TR:32,00");
   const auto sent = m.commands.size();
-  // A request during an outstanding poll must not interrupt the current transaction.
+  // An explicit request interrupts an outstanding poll without recording a timeout.
   m.inject("@HM", false);
-  m.tick(150);
-  assert(m.dev.waiting() && m.dev.active() == "@TR:32,00");
-  assert(m.commands.size() == sent);
-  // New HA inputs are settling when the poll completes: use the coherent cache.
-  m.dev.coolcontrol_snapshot("@mn:0028", 2, true, m.clock);
-  m.inject("@tr:32,00,0001000200030004");
-  m.tick(200);
+  m.tick(280);
   assert(m.commands.size() == sent + 1 && m.commands[sent] == "@mo");
   assert(m.count("@mn") == 0);
+  assert(m.dev.nums["timeouts"] == 0);
+  // An eventual reply to the interrupted poll cannot complete or replace the cooler reply.
+  m.inject("@tr:32,00,0001000200030004");
+  m.dev.coolcontrol_snapshot("@mn:0028", 2, true, m.clock);
+  m.tick(300);
   // A second request shortly after that response bypasses the one-second throttle.
   m.inject("@HM:00", false);
   m.tick(300);
   assert(m.count("@mn") == 1);
-  assert(m.commands[sent + 1] == "@mn");
+  assert(m.commands.back() == "@mn");
   // The next routine query is allowed once requested responses have drained.
   m.tick(1000);
   assert(m.count("@TR:32,01") >= 1);
+}
+
+static void test_reply_wait_interrupt_boundaries() {
+  struct Sink : TransportSink {
+    unsigned completions = 0;
+    uint32_t now = 0;
+    uint32_t transmit(const uint8_t *, size_t) override { return now; }
+    void received(const std::string &, bool) override {}
+    void completed(bool) override { ++completions; }
+    void framing_error() override {}
+  } sink;
+  JuraTransport transport(sink);
+  assert(!transport.interrupt_reply_wait(0));
+  assert(transport.start("@TF:", false, true, 0));
+  for (sink.now = 0; sink.now < 70; ++sink.now) {
+    assert(!transport.interrupt_reply_wait(sink.now));
+    transport.tick(sink.now);
+  }
+  sink.now = 70;
+  transport.tick(sink.now);  // Final encoded character has just been transmitted.
+  assert(transport.waiting() && !transport.interrupt_reply_wait(74));
+  transport.feed(encode("@")[0], 80);  // Partial received character.
+  assert(!transport.interrupt_reply_wait(179));
+  transport.tick(180);
+  assert(transport.interrupt_reply_wait(180));
+  assert(sink.completions == 0 && transport.can_start(180));
+}
+
+static void test_coolcontrol_interrupt_wait() {
+  for (const std::string hm : {"@HM", "@HM:00", "@HM:80"}) {
+    Machine m;
+    m.dev.configure_coolcontrol(15000, 0, "negotiated");
+    m.begin(); m.tick(16000);
+    m.dev.coolcontrol_snapshot("@mo", 1, true, m.clock);
+    m.tick(1000);
+    m.auto_tf = false;
+    m.inject("@TF:000400000000");
+    m.dev.request_tf();
+    for (unsigned i = 0; i < 3000 && !(m.dev.waiting() && m.dev.active() == "@TF:"); ++i) m.tick();
+    assert(m.dev.waiting() && m.dev.active() == "@TF:");
+    m.dev.coolcontrol_snapshot("@mo", 2, true, m.clock);
+    const auto replies = m.count("@mo");
+    const auto timeouts = m.dev.nums["timeouts"];
+    m.inject(hm, false);
+    m.tick(30);
+    m.inject("@TB");
+    m.tick(250);
+    assert(m.count("@mo") == replies + 1);
+    assert(m.dev.nums["timeouts"] == timeouts);
+    m.inject("@TV:320AFFFFFFFF0014FFFFFFFFFF1100FF");
+    m.tick(5200);
+    assert(m.dev.nums["timeouts"] == timeouts);
+  }
+  for (bool api : {false, true}) {
+    Machine settings;
+    settings.dev.configure_coolcontrol(15000, 0, "negotiated");
+    settings.begin(); settings.tick(16000);
+    settings.dev.coolcontrol_snapshot("@mo", 1, true, settings.clock);
+    settings.tick(1000);
+    if (api) assert(settings.dev.brew_named("Coffee"));
+    else assert(settings.dev.choose("Coffee"));
+    for (unsigned i = 0; i < 3000 && !(settings.dev.waiting() && settings.dev.active() == "@TM:41,03"); ++i)
+      settings.tick();
+    assert(settings.dev.waiting() && settings.dev.active() == "@TM:41,03");
+    settings.inject("@HM:80", false);
+    settings.tick(250);
+    assert(settings.count("@mo") == 1);
+    settings.inject("@tm:41,030006100000020000000000E2");
+    settings.tick(5500);
+    assert(brew_count(settings) == 0 && settings.dev.nums["timeouts"] == 0);
+    if (api) assert(settings.dev.texts["command_recipe_status"].find("Cancelled:") == 0);
+    else assert(settings.dev.bins["recipe_loading"] == 0);
+  }
+  Machine brew;
+  brew.dev.configure_coolcontrol(15000, 0, "negotiated");
+  brew.begin(); brew.tick(16000);
+  brew.dev.coolcontrol_snapshot("@mo", 1, true, brew.clock);
+  brew.tick(1000);
+  brew.answer_brew = false;
+  assert(brew.dev.brew_named("Espresso"));
+  for (unsigned i = 0; i < 3000 && !(brew.dev.waiting() && brew.dev.active().find("@TP:") == 0); ++i) brew.tick();
+  assert(brew.dev.waiting());
+  brew.inject("@HM:80", false);
+  brew.tick(250);
+  assert(brew.count("@mo") == 1 && brew_count(brew) == 1);
+  brew.inject("@TB");
+  brew.inject("@TV:390206060009FFFFFFFF22FFFF1100FF");
+  brew.tick(6000);
+  assert(brew_count(brew) == 1 && brew.dev.texts["command_result"] == "Started");
 }
 
 static void test_coolcontrol_forwarding() {
@@ -1448,6 +1537,8 @@ int main() {
   test_milk_error_progress();
   test_no_milk_progress();
   test_coolcontrol_request_priority();
+  test_coolcontrol_interrupt_wait();
+  test_reply_wait_interrupt_boundaries();
   test_coolcontrol_forwarding();
   test_rinse_ready_status();
   test_current_product_lifecycle();

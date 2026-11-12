@@ -27,6 +27,17 @@ class JuraTransport {
            (!have_rx_ || uint32_t(now - last_rx_) >= 100) &&
            (!have_finished_ || uint32_t(now - finished_) >= cooldown_);
   }
+  // Abandon only a completed transmission's reply wait, after RX has gone quiet.
+  // No completion callback: the controller handles cancellation separately from timeout.
+  bool interrupt_reply_wait(uint32_t now) {
+    if (!waiting() || uint32_t(now - last_tx_) < 5 || !frame_.empty() || bits_ || discard_ ||
+        (have_rx_ && uint32_t(now - last_rx_) < 100)) return false;
+    state_ = State::IDLE;
+    finished_ = now;
+    have_finished_ = true;
+    cooldown_ = 0;
+    return true;
+  }
   bool start(const std::string &command, bool encrypted, bool expect_reply, uint32_t now) {
     if (!can_start(now)) return false;
     tx_ = encrypted ? jura_protocol::atproto::build_frame(command + "\r\n", 0x2A) : command + "\r\n";

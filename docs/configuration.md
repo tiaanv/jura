@@ -299,9 +299,8 @@ cannot postpone forwarding indefinitely.
 Unchanged cached Home Assistant states do not keep the bridge alive. The local
 `timeout` protects against a failed network or Home Assistant as well as a silent
 cooler. A false/unavailable online state or invalid input withdraws cooler status.
-Raw and counter import states must both be available. Entity updates do not
-interrupt an active UART transaction and at most one cooler status is sent per
-second; control commands retain priority and repeated pending states coalesce.
+Raw and counter import states must both be available. Automatic entity updates wait for the active UART transaction and send at most
+one cooler status per second. Repeated pending states coalesce.
 
 With `handshake_response: auto`, bridge-enabled sessions use the protocol's
 T2 response rule for supported challenge lengths: first byte OR 0x80; second byte
@@ -325,9 +324,15 @@ command is sent to the machine to manufacture its settings.
 
 Bare `@HM` requests one cached status reply without changing the reporting
 settings. `@HM:00` requests one reply and disables automatic reporting. Other
-valid `@HM:XX` settings also request a reply. Requests use the same coalescing
-and one-message-per-second limit as notifications; repeated requests can receive
-the same status again, including `@me1` when the source is unavailable or stale.
+valid `@HM:XX` settings also request a reply. Explicit requests bypass the automatic transmission limit and use the last
+coherent fresh snapshot while newer inputs settle. Once transmission and the
+receive quiet interval finish, a request interrupts an outstanding reply wait
+and takes priority over queued commands and polls. Logs identify the interrupted
+command with `Cool Control priority: interrupted reply wait for ...`.
+An interrupted settings-based API brew is cancelled. A brew already transmitted
+continues waiting for machine start confirmation and is never resent. Interrupted
+reply waits do not increment UART Timeouts. Repeated requests receive the current
+cached status, including `@me1` when the source is unavailable or stale.
 
 When fresh cooler data is available, the bridge sends plaintext `@H1` once per
 machine session, before forwarding status. A cooler returning after an offline

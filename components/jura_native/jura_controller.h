@@ -134,6 +134,25 @@ class JuraController : public TransportSink {
       refresh_after_finish_ = false;
       refresh();
     }
+    if (session_ == Session::READY && cooler_.status_requested() &&
+        transport_.interrupt_reply_wait(now)) {
+      trace("Cool Control priority: interrupted reply wait for " + active_command_);
+      const Kind interrupted = active_;
+      active_ = Kind::NONE;
+      // A settings read must never fall back into brewing after preemption.
+      if (interrupted == Kind::API_RECIPE || api_recipe_joined_)
+        cancel_api_recipe_("Cooler status request interrupted settings read");
+      api_recipe_joined_ = false;
+      if (interrupted == Kind::SAVED_RECIPE && active_recipe_epoch_ == recipe_epoch_ && recipe_loading_)
+        saved_recipe_fallback_("Cooler status request interrupted settings read; select/reset to retry");
+      if (interrupted == Kind::RECIPE_PROBE) {
+        probe_pending_ = false;
+        text("espresso_probe_result", "Interrupted by cooler status request; not retried");
+      }
+      if (interrupted == Kind::POWER || interrupted == Kind::TEST_AN01)
+        text("command_result", "Reply wait interrupted by cooler status request; effect unconfirmed; not retried");
+      // BREW keeps its start-confirmation deadline. Never resend the transmitted command.
+    }
     if (!transport_.can_start(now)) return;
     if (!handshake_command_.empty()) {
       auto command = handshake_command_;
@@ -161,7 +180,7 @@ class JuraController : public TransportSink {
       start_(command, Kind::COOLER, false, false);
       return true;
     };
-    // Finish active transport first, then answer the machine before queued work.
+    // Finish transmitted bytes, then answer the machine before queued work.
     if (session_ == Session::READY && send_cooler(true)) return;
     if (!control_.empty()) {
       const Request r = control_.front();

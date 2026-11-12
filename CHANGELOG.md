@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Answer explicit cooler status requests after the UART quiet interval by
+  interrupting outstanding reply waits. Prevent routine TF timeouts from delaying
+  milk-status replies, log preemption separately, cancel interrupted recipe
+  preparation and preserve start confirmation without resending transmitted brews.
+
 - Cache validated saved recipes per drink, share selection reads with API brews, and add explicit refresh controls.
 
 - Reserve GitHub Releases for the card to prevent component versions appearing
