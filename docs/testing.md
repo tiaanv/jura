@@ -2,6 +2,12 @@
 
 ## Current evidence
 
+On 2026-11-13, the owner confirmed the cooler reply-priority fix on their E8 EF533
+hardware. The fix interrupts an unanswered UART reply wait to answer a machine
+milk-status request from the cached cooler snapshot. This confirms the fix for
+the reported intermittent milk-cooler connection failure on that machine.
+The report did not provide measured response times or a test-attempt count.
+
 Reference environment: ESPHome **2026.9.1**, ESP32-C3 / ESP-IDF,
 Jura E8 **EF533M V02.09**. Validation was performed during the 0.1–0.3 development
 on 2026-10-18. The later legacy documentation correction adds example validation

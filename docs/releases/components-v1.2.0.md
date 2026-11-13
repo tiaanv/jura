@@ -71,12 +71,17 @@ prevention of duplicate brews.
 
 The card fixture passed 50 browser checks. ESPHome 2026.9.1 schema validation
 and C++ generation passed during cache implementation. These checks include
-generated example API actions. A complete device firmware build and hardware
-verification of the cooler priority fix remain outstanding.
+generated example API actions. A complete device firmware build was not performed
+as part of local release validation.
+
+Post-release confirmation on 2026-11-13: the owner confirmed the cooler priority
+fix on their E8 EF533 hardware. This confirmation covers the reported intermittent
+cooler connection failure. Measured response times and a test-attempt count were
+not supplied.
 
 The observed hardware failure that motivated the fix had a 4.84-second delay
 between the cooler request and cached reply dispatch. The new host regression
-expects a complete bare reply within 280 ms under its simulated timing. Actual
-hardware timing and perceived recipe responsiveness still require confirmation.
+expects a complete bare reply within 280 ms under its simulated timing. Measured hardware timing and perceived recipe responsiveness still require
+confirmation.
 
 Read the [disclaimer](../disclaimer.md) and [contributor notices](../notices.md).
