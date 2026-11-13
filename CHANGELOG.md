@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## Components 1.2.0 — 2026-11-13
+
+See [release notes](docs/releases/components-v1.2.0.md) for cache refresh actions,
+cooler reply priority, compatibility and validation limits.
+
 - Answer explicit cooler status requests after the UART quiet interval by
   interrupting outstanding reply waits. Prevent routine TF timeouts from delaying
   milk-status replies, log preemption separately, cancel interrupted recipe

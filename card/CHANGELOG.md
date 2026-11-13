@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.1.12 — 2026-11-13
+
 - Hold-to-brew reuses confirmed settings for the current standard drink, including one-shot edits.
 
 - Add `sections.machine` with expanded (default), collapsed and hidden modes.

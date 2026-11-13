@@ -25,7 +25,7 @@ Choose the source with `ref`:
 | --- | --- |
 | `ref: main` | Follows stable development, including changes between releases. |
 | `ref: dev` | Follows development features and hardware testing changes. |
-| `ref: components-v1.1.0` | Stays on the fixed 1.1.0 source snapshot until you change the tag. |
+| `ref: components-v1.2.0` | Stays on the fixed 1.2.0 source snapshot until you change the tag. |
 
 The direct UDP Cool Control bridge is available on `main` and in
 `components-v1.1.0` and later; it is not included in `components-v1.0.0`. Prefer
@@ -38,7 +38,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/tiaanv/jura
-      ref: components-v1.1.0
+      ref: components-v1.2.0
     components: [jura_native]
 ```
 
@@ -84,6 +84,8 @@ major versions. Pre-release testing can use `components-v1.1.0-rc.1` tags.
    still see them.
 
 ## Releases
+
+- [Components 1.2.0](releases/components-v1.2.0.md)
 
 - [Components 1.1.0](releases/components-v1.1.0.md)
 

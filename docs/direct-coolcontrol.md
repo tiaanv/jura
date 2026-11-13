@@ -13,7 +13,7 @@ Use [the cooler example](../examples/coolcontrol-direct.yaml) and
 [the coffee-machine example](../examples/e8-coolcontrol-direct.yaml) as additions
 to your existing device configurations. Keep your working UART pins, API
 security, OTA settings, machine permissions and any required startup probe.
-Both examples pin `ref: components-v1.1.0`. Release pinning is optional: use
+Both examples pin `ref: components-v1.2.0`. Release pinning is optional: use
 `ref: main` to follow stable development or `ref: dev` for development testing.
 This feature requires components 1.1.0 or later on both devices.
 
