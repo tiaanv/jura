@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## Components 1.2.1 — 2026-11-19
+
+See [release notes](docs/releases/components-v1.2.1.md) for ESPHome 2026.11
+compatibility and the full ESP8266 build results.
+
 - Fix ESPHome 2026.11 compilation of runtime profile sensor and alert names.
   Construct the underlying name reference from the owned string pointer and
   length, supporting both earlier StringRef and newer ProgmemStringRef storage.
