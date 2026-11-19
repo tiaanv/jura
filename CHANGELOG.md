@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fix ESPHome 2026.11 compilation of runtime profile sensor and alert names.
+  Construct the underlying name reference from the owned string pointer and
+  length, supporting both earlier StringRef and newer ProgmemStringRef storage.
+  Add native adapter coverage for both reference types and name lifetimes.
+
 ## Components 1.2.0 — 2026-11-13
 
 See [release notes](docs/releases/components-v1.2.0.md) for cache refresh actions,

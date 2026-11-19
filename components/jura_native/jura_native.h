@@ -24,7 +24,7 @@ class ProfileEntity : public Base {
  public:
   void describe(const std::string &name, bool show) {
     owned_name_ = name;
-    this->name_ = StringRef(owned_name_.c_str(), owned_name_.size());
+    this->name_ = {owned_name_.c_str(), owned_name_.size()};
     this->flags_.has_own_name = true;
     this->set_internal(!show);
   }

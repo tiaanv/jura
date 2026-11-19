@@ -23,6 +23,7 @@ and queue tests without changing either component's firmware.
 | Legacy queue tests | FIFO, limits, poll coalescing, wire encoding, split RX, publishing, timeouts, recovery, invalid input and rollover |
 | Invalid configs | Bad baud, handshake hex and unknown profile rejected |
 | C++ generation | Complete E8 actions/entities and Cool Control example |
+| ESPHome 2026.11 name storage compatibility | Native adapter tests pass with both StringRef and explicit ProgmemStringRef name storage, including temporary names and reassignment. The patched adapter and both profile-entity instantiations pass GCC 14.2.0 `-fsyntax-only` against the actual failing ESP32-C3 build's ESPHome 2026.11.0 / ESP-IDF 5.5.6 headers and compiler flags. This is a syntax check rather than a full firmware link or upload |
 | Real C3 compiler check | Generated source checked with riscv32-esp-elf GCC 14.2.0 and actual ESP-IDF/ESPHome headers using `-fsyntax-only` |
 | Legacy C3 compiler check | Generated legacy E8 configuration and queued button lambdas pass the same real ESP-IDF compiler syntax check |
 | Physical E8 observations | Successful AT startup, TF ready/alerts, product/maintenance reads and TV espresso stage/progress logs |

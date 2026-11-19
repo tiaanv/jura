@@ -12,8 +12,11 @@ build = root / "tests/build"
 build.mkdir(exist_ok=True)
 compiler = os.environ.get("CXX", "g++")
 for name, defines in [("test_direct_coolcontrol", []), ("test_capabilities", []), ("test_coolcontrol_bridge", []), ("test_coolcontrol", []), ("test_controller", []), ("test_native", []), ("test_legacy", []),
-                      ("test_controller", ["-DUSE_ESP8266"])]:
+                      ("test_controller", ["-DUSE_ESP8266"]),
+                      ("test_native", ["-DTEST_PROGMEM_ENTITY_NAMES"])]:
     suffix = "-flash" if defines else ""
+    if "-DTEST_PROGMEM_ENTITY_NAMES" in defines:
+        suffix = "-progmem-names"
     binary = build / (name + suffix + (".exe" if os.name == "nt" else ""))
     subprocess.run([compiler, "-std=c++17", "-Wall", "-Wextra", "-Werror",
                     "-I" + str(root / "tests"), *defines,

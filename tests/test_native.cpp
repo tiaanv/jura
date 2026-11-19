@@ -31,6 +31,17 @@ struct CoolerLogProbe : public JuraNative {
   uint32_t logged_at() const { return cooler_inputs_logged_at_; }
 };
 int main() {
+  ProfileSensor named_sensor;
+  ProfileBinarySensor named_alert;
+  named_sensor.describe(std::string("Temporary profile label") + " Count", true);
+  named_alert.describe(std::string("Temporary alert label"), true);
+  assert(named_sensor.name() == "Temporary profile label Count" && !named_sensor.is_internal());
+  assert(named_alert.name() == "Temporary alert label" && !named_alert.is_internal());
+  named_sensor.describe(std::string(100, 'x') + " Count", false);
+  named_alert.describe("Replacement alert", false);
+  assert(named_sensor.name() == std::string(100, 'x') + " Count" && named_sensor.is_internal());
+  assert(named_alert.name() == "Replacement alert" && named_alert.is_internal());
+
   CoolerLogProbe logging;
   esphome::text_sensor::TextSensor imported_raw;
   esphome::sensor::Sensor imported_counter;
