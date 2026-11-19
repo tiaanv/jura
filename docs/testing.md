@@ -23,6 +23,7 @@ and queue tests without changing either component's firmware.
 | Legacy queue tests | FIFO, limits, poll coalescing, wire encoding, split RX, publishing, timeouts, recovery, invalid input and rollover |
 | Invalid configs | Bad baud, handshake hex and unknown profile rejected |
 | C++ generation | Complete E8 actions/entities and Cool Control example |
+| ESP8266 full firmware build | Pass on 2026-11-19 with ESPHome 2026.11.0, NodeMCU `nodemcuv2`, Arduino framework 3.1.2-esphome.4 and component commit `d8e2dda`. Full compilation, ELF link and BIN generation succeeded. RAM 53,924 / 81,920 B (65.8%); flash 535,276 / 1,044,464 B (51.2%). Configuration includes native profile entities, `profile_hint: EF533`, `raw_extras: true`, Wi-Fi and brewing/refresh API actions. No physical ESP8266 flash or runtime test performed |
 | ESPHome 2026.11 name storage compatibility | Native adapter tests pass with both StringRef and explicit ProgmemStringRef name storage, including temporary names and reassignment. The patched adapter and both profile-entity instantiations pass GCC 14.2.0 `-fsyntax-only` against the actual failing ESP32-C3 build's ESPHome 2026.11.0 / ESP-IDF 5.5.6 headers and compiler flags. This is a syntax check rather than a full firmware link or upload |
 | Real C3 compiler check | Generated source checked with riscv32-esp-elf GCC 14.2.0 and actual ESP-IDF/ESPHome headers using `-fsyntax-only` |
 | Legacy C3 compiler check | Generated legacy E8 configuration and queued button lambdas pass the same real ESP-IDF compiler syntax check |
@@ -35,7 +36,7 @@ and queue tests without changing either component's firmware.
 | Physical EF533M V01.18 follow-up | Owner reports on issue #31 confirm automatic handshake, five-byte status opt-in, disabled automatic saved-recipe reads, drink selection/reset, dispensing-stage progress, HA Coffee brewing and `AN:02` power-off on classic ESP32 / Arduino using `dirthvader` @ `b5082d4`. Power-off starts without an `an:` reply and reports `@TV:4A02` before rinsing. That older build incurs a post-finish TF timeout while Finished frames repeat; the dev reporting fixes still need hardware confirmation. One-shot override consumption has not been explicitly confirmed |
 | Dev AN:01 diagnostic | Host-tested blocked-TF dispatch, offline/busy/duplicate rejection, replies, cancellation and no retry; generated YAML checked with the C3 IDF compiler; physical effect unverified |
 | Other models/parameters | Not established by their presence in the database |
-| Arduino/ESP8266 firmware and RAM usage | Classic ESP32 (`esp32dev`) Arduino: complete build, OTA flash and run on the EF533M V01.18 above — RAM 59,776 B (33.1%), flash 1,128,455 B (61.5%) with `raw_extras: true`. ESP8266 and C3 Arduino not established |
+| Arduino/ESP8266 firmware and RAM usage | Classic ESP32 (`esp32dev`) Arduino: complete build, OTA flash and run on the EF533M V01.18 above — RAM 59,776 B (33.1%), flash 1,128,455 B (61.5%) with `raw_extras: true`. ESP8266 full build is recorded separately above; ESP8266 runtime and C3 Arduino full firmware operation remain unestablished |
 | New Cool Control receiver | Host-tested parsing/stale expiry; no fresh physical validation |
 
 The compiler syntax check is not a complete firmware link or flash test. The
