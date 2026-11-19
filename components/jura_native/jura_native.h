@@ -143,12 +143,14 @@ class JuraNative : public PollingComponent, public uart::UARTDevice, public Jura
   void setup() override {
     if (cooler_override_switch_) cooler_override_switch_->restore_state();
     begin(millis());
-    if (cooler_packet_)
+    if (cooler_packet_) {
       ESP_LOGD("jura_native", "Cool Control direct packet bridge enabled: reporting=%s, timeout=%u ms",
                cooler_reporting_.c_str(), unsigned(cooler_timeout_));
-    if (cooler_raw_ && cooler_counter_ && cooler_online_)
+    }
+    if (cooler_raw_ && cooler_counter_ && cooler_online_) {
       ESP_LOGD("jura_native", "Cool Control bridge enabled: reporting=%s, timeout=%u ms, coalesce=%u ms",
                cooler_reporting_.c_str(), unsigned(cooler_timeout_), unsigned(cooler_coalesce_));
+    }
   }
   void loop() override {
     uint8_t raw;

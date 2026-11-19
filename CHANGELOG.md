@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fix empty-body compiler warnings when DEBUG logging is disabled by bracing
+  both cooler setup logging blocks (#39). Add a native adapter regression run
+  with DEBUG logging compiled out and empty-body warnings enabled.
+
 ## Components 1.2.1 — 2026-11-19
 
 See [release notes](docs/releases/components-v1.2.1.md) for ESPHome 2026.11

@@ -18,6 +18,7 @@ and queue tests without changing either component's firmware.
 | Portable C++ controller tests | Pass with C++17, `-Wall -Wextra -Werror` |
 | All 75 profile records | Parse, longest EF match and active default recipe validation |
 | ESP8266 flash reader | Same host suite with `USE_ESP8266` and a pgmspace shim; not an ESP8266 binary |
+| DEBUG-disabled logging | Native adapter suite also compiles and runs with DEBUG calls removed. The warning regression reproduces both original setup warnings with ESP8266 GCC 10.3.0 using `-Werror -Wempty-body`; the braced logging blocks pass. Diagnostic-only unused locals/parameters are exempted in this mode |
 | Native adapter tests | Pass with lightweight ESPHome headers; include AT handshake and typed recipe controls |
 | ESPHome schemas | Native C3 IDF/Arduino and ESP8266, monitor-only/profile hint, separate Cool Control UART; legacy C3 IDF/Arduino, ESP8266 and model button examples |
 | Legacy queue tests | FIFO, limits, poll coalescing, wire encoding, split RX, publishing, timeouts, recovery, invalid input and rollover |
